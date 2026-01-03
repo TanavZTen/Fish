@@ -1,211 +1,1331 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>Literature (Authors) – No Communication</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <title>Literature – Poker Table</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    :root {
+      --felt: #0b5c2a;
+      --felt-dark: #08411e;
+      --accent: #ffd35a;
+      --accent-soft: #ffe7a0;
+      --danger: #f25f5c;
+      --text-main: #f5f5f5;
+      --text-muted: #b0b0b0;
+      --card: #ffffff;
+      --card-back: #1f3b72;
+      --card-border: #111;
+      --panel-bg: #101318;
+      --panel-border: #272b34;
+      --chip-blue: #3a7bd5;
+      --chip-red: #ef476f;
+      --chip-white: #f8f9fa;
+      --timer-ok: #4caf50;
+      --timer-warn: #ff9800;
+      --timer-bad: #f44336;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+        sans-serif;
+    }
+    body {
+      background: radial-gradient(circle at top, #1c2833 0, #050608 55%);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      align-items: stretch;
+      justify-content: center;
+    }
+    #root {
+      width: 100%;
+      max-width: 1300px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+    }
 
-<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-<script src="https://cdn.tailwindcss.com"></script>
+    /******** LOBBY ********/
+    #lobby {
+      margin: 20px auto;
+      width: 100%;
+      max-width: 900px;
+      background: rgba(8, 10, 15, 0.96);
+      border-radius: 16px;
+      border: 1px solid var(--panel-border);
+      padding: 20px 24px 24px;
+      box-shadow: 0 18px 40px rgba(0, 0, 0, 0.55);
+    }
+    #lobby h1 {
+      font-size: 26px;
+      margin-bottom: 6px;
+    }
+    #lobby p {
+      color: var(--text-muted);
+      font-size: 14px;
+      margin-bottom: 16px;
+    }
+    .lobby-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px;
+      margin-bottom: 18px;
+      align-items: center;
+    }
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    label {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+    input[type="text"],
+    select {
+      background: #05070c;
+      border-radius: 8px;
+      border: 1px solid var(--panel-border);
+      padding: 8px 10px;
+      color: var(--text-main);
+      min-width: 180px;
+    }
+    input[type="text"]::placeholder {
+      color: #555b65;
+    }
+    button {
+      border-radius: 999px;
+      border: none;
+      padding: 9px 18px;
+      font-weight: 600;
+      font-size: 14px;
+      cursor: pointer;
+      background: linear-gradient(135deg, #ffb347, #ffcc33);
+      color: #1b1308;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+      transition: transform 0.08s ease, box-shadow 0.08s ease,
+        filter 0.1s ease;
+      white-space: nowrap;
+    }
+    button:disabled {
+      opacity: 0.45;
+      cursor: default;
+      box-shadow: none;
+      filter: grayscale(0.4);
+    }
+    button:not(:disabled):active {
+      transform: translateY(1px);
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.65);
+      filter: brightness(0.95);
+    }
+    .btn-secondary {
+      background: #151921;
+      color: var(--text-main);
+      border: 1px solid #343a45;
+    }
+    .btn-danger {
+      background: #f25f5c;
+      color: #fff;
+    }
+    .options-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px 24px;
+      margin-bottom: 10px;
+      font-size: 13px;
+    }
+    .options-row > div {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .options-row select {
+      min-width: 80px;
+    }
+    .teams {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 30px;
+      font-size: 13px;
+    }
+    .teams-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 4px;
+    }
+    .teams-pill {
+      border-radius: 999px;
+      padding: 2px 9px;
+      font-size: 12px;
+      border: 1px solid #373d49;
+      background: #0c1017;
+    }
+    .teams-pill.self {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px rgba(255, 209, 91, 0.5);
+    }
+    .teams-pill.t1 {
+      color: #ff9f1c;
+    }
+    .teams-pill.t2 {
+      color: #40c4ff;
+    }
+    .room-code-display {
+      font-family: "SF Mono", Menlo, Consolas, monospace;
+      font-size: 18px;
+      letter-spacing: 0.12em;
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1px dashed #525866;
+      background: #05070c;
+      margin-left: 6px;
+    }
+    .room-code-display span {
+      color: var(--accent-soft);
+    }
+    .status-line {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-top: 8px;
+    }
 
-<style>
-body {
-  margin: 0;
-  background: radial-gradient(circle at center, #1f7a4a, #0b3b22);
-  font-family: Arial, Helvetica, sans-serif;
-}
-.felt {
-  background: radial-gradient(circle, #2e8b57, #14532d);
-}
-.seat {
-  position: absolute;
-  width: 120px;
-  text-align: center;
-  color: white;
-}
-.card {
-  width: 42px;
-  height: 60px;
-  background: white;
-  border-radius: 6px;
-  border: 2px solid black;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: bold;
-}
-.card-back {
-  width: 32px;
-  height: 44px;
-  background: linear-gradient(#2563eb, #1e3a8a);
-  border-radius: 4px;
-  border: 2px solid white;
-}
-</style>
+    /******** TABLE LAYOUT ********/
+    #table-wrapper {
+      display: none;
+      flex: 1;
+      padding: 16px;
+      padding-bottom: 26px;
+    }
+    .table-shell {
+      background: radial-gradient(circle at 30% -40%, #3fa34d 0, #0b5c2a 42%, #02160a 100%);
+      border-radius: 50px;
+      border: 8px solid #442b13;
+      box-shadow: 0 28px 70px rgba(0, 0, 0, 0.75);
+      position: relative;
+      min-height: 540px;
+      overflow: hidden;
+    }
+    .table-inner-ring {
+      position: absolute;
+      inset: 30px;
+      border-radius: 40px;
+      border: 4px solid rgba(255, 255, 255, 0.06);
+      pointer-events: none;
+    }
+    .table-center {
+      position: absolute;
+      top: 48%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      color: var(--accent-soft);
+    }
+    .table-center h2 {
+      font-size: 22px;
+      margin-bottom: 4px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .table-center p {
+      font-size: 13px;
+      color: #f7f1d4;
+    }
+    .table-center-underline {
+      width: 140px;
+      height: 2px;
+      margin: 6px auto 10px;
+      background: linear-gradient(
+        90deg,
+        transparent,
+        rgba(255, 255, 255, 0.8),
+        transparent
+      );
+    }
+    .timer-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      padding: 3px 10px;
+      border-radius: 999px;
+      background: rgba(0, 0, 0, 0.45);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+    }
+    .timer-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 999px;
+      background: var(--timer-ok);
+    }
+
+    /******** SEATS ********/
+    .seats-layer {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: stretch;
+      justify-content: stretch;
+      padding: 24px 32px 96px;
+      pointer-events: none;
+    }
+    .seats-grid {
+      position: relative;
+      width: 100%;
+      height: 100%;
+    }
+    .seat {
+      position: absolute;
+      width: 180px;
+      max-width: 26%;
+      pointer-events: auto;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+    .seat-top {
+      top: 0;
+      left: 50%;
+      transform: translateX(-50%);
+    }
+    .seat-bottom {
+      bottom: 0;
+      left: 50%;
+      transform: translate(-50%, 5px);
+    }
+    .seat-left {
+      left: 0;
+      top: 52%;
+      transform: translate(-4px, -50%);
+    }
+    .seat-right {
+      right: 0;
+      top: 52%;
+      transform: translate(4px, -50%);
+    }
+    .seat-plate {
+      background: rgba(0, 0, 0, 0.6);
+      border-radius: 999px;
+      padding: 5px 11px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      min-width: 120px;
+      justify-content: center;
+    }
+    .seat-plate.self {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px rgba(255, 209, 91, 0.55);
+    }
+    .seat-name {
+      font-size: 13px;
+      white-space: nowrap;
+      max-width: 98px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .seat-team-pill {
+      font-size: 11px;
+      padding: 1px 7px;
+      border-radius: 999px;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      background: rgba(0, 0, 0, 0.4);
+    }
+    .seat-team-pill.t1 {
+      color: #ffd35a;
+    }
+    .seat-team-pill.t2 {
+      color: #7ae0ff;
+    }
+    .seat-team-pill.spec {
+      color: #e0e0e0;
+      border-style: dashed;
+    }
+    .seat-active-ring {
+      width: 90px;
+      height: 18px;
+      border-radius: 999px;
+      margin-top: 2px;
+      background: radial-gradient(circle at top, #ffe89a, transparent);
+      opacity: 0;
+    }
+    .seat-active-ring.active {
+      opacity: 0.9;
+    }
+    .seat-stats {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+    .chip-stack {
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+    }
+    .chip {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      border: 1px solid rgba(0, 0, 0, 0.6);
+    }
+    .chip.blue {
+      background: var(--chip-blue);
+    }
+    .chip.red {
+      background: var(--chip-red);
+    }
+    .chip.white {
+      background: var(--chip-white);
+    }
+    .cards-back-row {
+      display: flex;
+      margin-top: 4px;
+      gap: 4px;
+    }
+    .card-back-mini {
+      width: 16px;
+      height: 22px;
+      border-radius: 3px;
+      background: radial-gradient(circle at 30% 20%, #678dde, #1b305b);
+      border: 1px solid rgba(0, 0, 0, 0.9);
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
+    }
+
+    /******** BOTTOM PANEL ********/
+    .bottom-panel {
+      position: absolute;
+      left: 26px;
+      right: 26px;
+      bottom: 18px;
+      background: linear-gradient(180deg, #080a10, #05060a);
+      border-radius: 16px;
+      border: 1px solid #262c36;
+      box-shadow: 0 10px 32px rgba(0, 0, 0, 0.75);
+      padding: 10px 12px 9px;
+      display: grid;
+      grid-template-columns: minmax(0, 2.2fr) minmax(0, 1.4fr) minmax(0, 1.6fr);
+      gap: 10px;
+      align-items: center;
+    }
+    @media (max-width: 880px) {
+      .bottom-panel {
+        grid-template-columns: minmax(0, 2fr);
+        grid-template-rows: auto auto auto;
+        padding-bottom: 10px;
+      }
+    }
+    .hand-row {
+      display: flex;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      padding-bottom: 2px;
+      gap: 6px;
+    }
+    .card {
+      width: 58px;
+      height: 82px;
+      background: var(--card);
+      border-radius: 6px;
+      border: 1px solid var(--card-border);
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.6);
+      padding: 4px;
+      position: relative;
+      cursor: pointer;
+      user-select: none;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      justify-content: space-between;
+      color: #111;
+      font-size: 13px;
+    }
+    .card.selected {
+      transform: translateY(-5px);
+      box-shadow: 0 5px 12px rgba(0, 0, 0, 0.9);
+      border-color: #ffb347;
+    }
+    .card-rank {
+      font-weight: 700;
+    }
+    .card-suit {
+      font-size: 14px;
+    }
+    .suit-red {
+      color: #c62828;
+    }
+    .suit-black {
+      color: #111;
+    }
+    .card-corner-bottom {
+      position: absolute;
+      right: 4px;
+      bottom: 4px;
+      font-size: 10px;
+      opacity: 0.7;
+    }
+    .action-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      justify-content: center;
+    }
+    .action-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+    }
+    .action-label {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-right: 2px;
+    }
+    .target-select {
+      min-width: 120px;
+      background: #05070c;
+      border-radius: 999px;
+      border: 1px solid #303642;
+      padding: 4px 9px;
+      color: var(--text-main);
+      font-size: 13px;
+    }
+    .ask-btn {
+      padding-inline: 14px;
+    }
+    .call-btn {
+      padding-inline: 12px;
+    }
+    .log-panel {
+      background: #05070c;
+      border-radius: 10px;
+      border: 1px solid #252a34;
+      padding: 6px 8px;
+      max-height: 82px;
+      overflow-y: auto;
+      font-size: 11px;
+    }
+    .log-entry {
+      margin-bottom: 2px;
+      color: #d9d9d9;
+    }
+    .log-entry span.meta {
+      color: var(--text-muted);
+    }
+    .log-entry .fail {
+      color: #ffb3b3;
+    }
+    .log-entry .success {
+      color: #a5ffb3;
+    }
+
+    /******** TOAST ********/
+    #toast {
+      position: fixed;
+      bottom: 18px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #11151f;
+      color: #f5f5f5;
+      border-radius: 999px;
+      padding: 7px 16px;
+      border: 1px solid #323846;
+      font-size: 13px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.18s ease, transform 0.18s ease;
+      z-index: 999;
+      max-width: 80vw;
+      text-align: center;
+      white-space: nowrap;
+    }
+    #toast.show {
+      opacity: 1;
+      transform: translate(-50%, -4px);
+    }
+  </style>
 </head>
-
 <body>
-<div id="root"></div>
+<div id="root">
+  <!-- LOBBY / ROOM SETUP -->
+  <section id="lobby">
+    <h1>Literature – Poker Table</h1>
+    <p>Host or join a room; the game runs on your existing Fish backend with strict Literature rules and failure‑driven turns.</p>
 
-<script type="text/babel">
-const { useState, useEffect } = React;
-
-/* ===================== CONSTANTS ===================== */
-
-const SETS = [
-  ["2♠","3♠","4♠","5♠","6♠","7♠"],
-  ["9♠","10♠","J♠","Q♠","K♠","A♠"],
-  ["2♥","3♥","4♥","5♥","6♥","7♥"],
-  ["9♥","10♥","J♥","Q♥","K♥","A♥"],
-  ["2♣","3♣","4♣","5♣","6♣","7♣"],
-  ["9♣","10♣","J♣","Q♣","K♣","A♣"],
-  ["2♦","3♦","4♦","5♦","6♦","7♦"],
-  ["9♦","10♦","J♦","Q♦","K♦","A♦"],
-  ["8♠","8♥","8♣","8♦","RJ","BJ"]
-];
-
-const ALL_CARDS = SETS.flat();
-
-/* ===================== HELPERS ===================== */
-
-function shuffle(a){
-  for(let i=a.length-1;i>0;i--){
-    const j=Math.floor(Math.random()*(i+1));
-    [a[i],a[j]]=[a[j],a[i]];
-  }
-}
-
-/* ===================== APP ===================== */
-
-function App(){
-  const [players,setPlayers]=useState([]);
-  const [hands,setHands]=useState({});
-  const [currentAsker,setCurrentAsker]=useState(null);
-  const [currentTeam,setCurrentTeam]=useState(null);
-  const [recentAsks,setRecentAsks]=useState([]);
-  const [options,setOptions]=useState({
-    showCounts:true,
-    recentAskCount:2,
-    timeLimit:0
-  });
-  const [timer,setTimer]=useState(null);
-
-  /* ===================== SETUP ===================== */
-
-  function startGame(){
-    const deck=[...ALL_CARDS];
-    shuffle(deck);
-
-    const h={};
-    players.forEach(p=>h[p.id]=[]);
-
-    deck.forEach((c,i)=>{
-      h[players[i%players.length].id].push(c);
-    });
-
-    setHands(h);
-    setCurrentAsker(players[0].id);
-    setCurrentTeam(players[0].team);
-  }
-
-  /* ===================== TIMER ===================== */
-
-  useEffect(()=>{
-    if(!options.timeLimit || !currentAsker) return;
-    setTimer(options.timeLimit);
-    const i=setInterval(()=>{
-      setTimer(t=>{
-        if(t===1){
-          forceTurnLoss();
-          return null;
-        }
-        return t-1;
-      });
-    },1000);
-    return()=>clearInterval(i);
-  },[currentAsker]);
-
-  function forceTurnLoss(){
-    const opponents=players.filter(p=>p.team!==currentTeam);
-    if(opponents.length){
-      setCurrentAsker(opponents[0].id);
-      setCurrentTeam(opponents[0].team);
-    }
-  }
-
-  /* ===================== ASK LOGIC ===================== */
-
-  function askCard(fromId,card){
-    const asker=currentAsker;
-    const has=hands[fromId].includes(card);
-
-    setRecentAsks(a=>[
-      {from:asker,to:fromId,card,success:has},
-      ...a
-    ].slice(0,options.recentAskCount));
-
-    if(has){
-      setHands(h=>{
-        const nh={...h};
-        nh[fromId]=nh[fromId].filter(c=>c!==card);
-        nh[asker]=[...nh[asker],card];
-        return nh;
-      });
-    }else{
-      setCurrentAsker(fromId);
-      setCurrentTeam(players.find(p=>p.id===fromId).team);
-    }
-  }
-
-  /* ===================== UI ===================== */
-
-  return (
-    <div className="felt min-h-screen relative">
-      <div className="absolute top-4 left-4 text-white">
-        Current Team: {currentTeam}
-        {timer && <div>Time: {timer}</div>}
+    <div class="lobby-row">
+      <div class="field">
+        <label for="name-input">Your name</label>
+        <input id="name-input" type="text" placeholder="e.g. Deja" />
       </div>
-
-      {/* RECENT ASKS */}
-      <div className="absolute top-4 right-4 bg-black bg-opacity-50 p-2 text-white rounded">
-        {recentAsks.map((a,i)=>(
-          <div key={i}>
-            {a.from} → {a.to} : {a.card} {a.success?"✓":"✗"}
+      <div class="field">
+        <label for="team-select">Team</label>
+        <select id="team-select">
+          <option value="t1">Team 1 (Left)</option>
+          <option value="t2">Team 2 (Right)</option>
+          <option value="spec">Spectator</option>
+        </select>
+      </div>
+      <div style="display:flex;gap:8px;align-items:flex-end;">
+        <button id="create-room-btn">Create room</button>
+        <div class="field">
+          <label for="join-code-input">Join room</label>
+          <div style="display:flex;gap:4px;">
+            <input id="join-code-input" type="text" placeholder="ROOM" maxlength="8" style="width:110px;text-transform:uppercase;" />
+            <button id="join-room-btn" class="btn-secondary">Join</button>
           </div>
-        ))}
-      </div>
-
-      {/* TABLE */}
-      <div className="w-[600px] h-[600px] mx-auto relative mt-20">
-        {players.map((p,i)=>{
-          const ang=i/players.length*2*Math.PI;
-          return (
-            <div key={p.id}
-              className="seat"
-              style={{
-                left:300+Math.cos(ang)*230,
-                top:300+Math.sin(ang)*230
-              }}>
-              <div className="bg-red-700 rounded px-2">
-                {p.name}
-              </div>
-              <div className="flex justify-center mt-1">
-                {options.showCounts
-                  ? <div>{hands[p.id]?.length||0} cards</div>
-                  : <div className="card-back"></div>}
-              </div>
-            </div>
-          );
-        })}
+        </div>
       </div>
     </div>
-  );
-}
 
-/* ===================== RENDER ===================== */
-ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+    <div class="options-row">
+      <div>
+        <label for="recent-asks-select">Recent asks</label>
+        <select id="recent-asks-select">
+          <option value="2">Show last 2</option>
+          <option value="3">Show last 3</option>
+        </select>
+      </div>
+      <div>
+        <label for="card-counts-select">Card counts</label>
+        <select id="card-counts-select">
+          <option value="on">Show counts</option>
+          <option value="off">Hide counts</option>
+        </select>
+      </div>
+      <div>
+        <label for="timer-select">Timer</label>
+        <select id="timer-select">
+          <option value="none">No limit</option>
+          <option value="60">1 minute</option>
+          <option value="120">2 minutes</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="teams">
+      <div>
+        Teams:
+        <div class="teams-list" id="teams-display">
+          <!-- filled dynamically -->
+        </div>
+      </div>
+      <div>
+        Room:
+        <span id="room-code-shell" style="display:none;">
+          <span class="room-code-display">Code: <span id="room-code-text"></span></span>
+        </span>
+        <span id="room-status" class="status-line">No room yet.</span>
+      </div>
+      <div style="margin-left:auto;">
+        <button id="start-game-btn" class="btn-danger" disabled>Start game</button>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- TABLE / GAME -->
+  <section id="table-wrapper">
+    <div class="table-shell">
+      <div class="table-inner-ring"></div>
+
+      <div class="table-center">
+        <h2>Literature</h2>
+        <div class="table-center-underline"></div>
+        <p id="center-status">Waiting for host to start…</p>
+        <div style="margin-top:8px;">
+          <span class="timer-badge">
+            <span class="timer-dot" id="timer-dot"></span>
+            <span id="timer-label">Timer: none</span>
+          </span>
+        </div>
+      </div>
+
+      <div class="seats-layer">
+        <div class="seats-grid">
+          <!-- seats injected dynamically -->
+          <div class="seat seat-top" data-pos="top"></div>
+          <div class="seat seat-left" data-pos="left"></div>
+          <div class="seat seat-right" data-pos="right"></div>
+          <div class="seat seat-bottom" data-pos="bottom"></div>
+        </div>
+      </div>
+
+      <div class="bottom-panel">
+        <div>
+          <div class="action-label" style="margin-bottom:4px;">Your hand</div>
+          <div id="hand-row" class="hand-row"></div>
+        </div>
+        <div class="action-panel">
+          <div class="action-row">
+            <span class="action-label">Target</span>
+            <select id="ask-target" class="target-select"></select>
+            <button id="ask-btn" class="ask-btn">Ask for card</button>
+          </div>
+          <div class="action-row">
+            <button id="call-set-btn" class="call-btn btn-secondary">Call set</button>
+            <button id="retry-lobby-btn" class="btn-secondary" style="margin-left:auto;">Back to lobby</button>
+          </div>
+        </div>
+        <div>
+          <div class="action-label" style="margin-bottom:3px;">Recent asks</div>
+          <div id="log-panel" class="log-panel"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<div id="toast"></div>
+
+<script type="module">
+  /*************** SUPABASE CLIENT ***************/
+  // Using your provided Supabase URL and anon key.[conversation_history:1]
+  const SUPABASE_URL = "https://vngdiukjrfmzwlbefmjf.supabase.co";
+  const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZuZ2RpdWtqcmZtendsYmVmbWpmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc0Njk5MDUsImV4cCI6MjA4MzA0NTkwNX0.XBr7aEzSPj-Iw0HYf27T8yXo1nbZ01MhBVa-VIdNZG4";
+
+  const { createClient } = window.supabase || {};
+  let supabase = null;
+  if (createClient) {
+    supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+  }
+
+  /*************** STATE ***************/
+  const lobbyEl = document.getElementById("lobby");
+  const tableWrapperEl = document.getElementById("table-wrapper");
+  const nameInput = document.getElementById("name-input");
+  const teamSelect = document.getElementById("team-select");
+  const recentAsksSelect = document.getElementById("recent-asks-select");
+  const cardCountsSelect = document.getElementById("card-counts-select");
+  const timerSelect = document.getElementById("timer-select");
+  const createRoomBtn = document.getElementById("create-room-btn");
+  const joinCodeInput = document.getElementById("join-code-input");
+  const joinRoomBtn = document.getElementById("join-room-btn");
+  const startGameBtn = document.getElementById("start-game-btn");
+  const roomStatus = document.getElementById("room-status");
+  const roomCodeShell = document.getElementById("room-code-shell");
+  const roomCodeText = document.getElementById("room-code-text");
+  const teamsDisplay = document.getElementById("teams-display");
+
+  const seatNodes = {
+    top: document.querySelector('.seat[data-pos="top"]'),
+    left: document.querySelector('.seat[data-pos="left"]'),
+    right: document.querySelector('.seat[data-pos="right"]'),
+    bottom: document.querySelector('.seat[data-pos="bottom"]'),
+  };
+
+  const handRow = document.getElementById("hand-row");
+  const askTargetSelect = document.getElementById("ask-target");
+  const askBtn = document.getElementById("ask-btn");
+  const callSetBtn = document.getElementById("call-set-btn");
+  const retryLobbyBtn = document.getElementById("retry-lobby-btn");
+  const logPanel = document.getElementById("log-panel");
+  const centerStatus = document.getElementById("center-status");
+  const timerLabel = document.getElementById("timer-label");
+  const timerDot = document.getElementById("timer-dot");
+  const toastEl = document.getElementById("toast");
+
+  let roomId = null;
+  let roomCode = null;
+  let isHost = false;
+  let localPlayerId = null;
+  let players = [];
+  let gameState = null;
+
+  let selectedCard = null;
+  let askLog = [];
+
+  let pollInterval = null;
+  let timerInterval = null;
+  let remainingSeconds = null;
+  let currentTurnPlayerId = null;
+  let lastAskedOpponentId = null;
+
+  /*************** UTIL ***************/
+  function showToast(msg, ms = 2000) {
+    toastEl.textContent = msg;
+    toastEl.classList.add("show");
+    setTimeout(() => toastEl.classList.remove("show"), ms);
+  }
+
+  function generateRoomCode() {
+    const alphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+    let out = "";
+    for (let i = 0; i < 4; i++) {
+      out += alphabet[Math.floor(Math.random() * alphabet.length)];
+    }
+    return out;
+  }
+
+  function seatOrderFor(players, selfId) {
+    const self = players.find((p) => p.id === selfId);
+    const others = players.filter((p) => p.id !== selfId && !p.isSpectator);
+    const spectators = players.filter((p) => p.isSpectator);
+    const order = { bottom: self || null, top: null, left: null, right: null };
+
+    if (others.length === 1) {
+      order.top = others[0];
+    } else if (others.length === 2) {
+      order.left = others[0];
+      order.right = others[1];
+    } else if (others.length >= 3) {
+      order.left = others[0];
+      order.top = others[1];
+      order.right = others[2];
+    }
+
+    return { order, spectators };
+  }
+
+  function formatCardSymbol(card) {
+    if (card.code === "RJ") return "RJ";
+    if (card.code === "BJ") return "BJ";
+    return card.rank + card.suit;
+  }
+
+  function cardSuitColor(suit) {
+    if (suit === "♥" || suit === "♦") return "suit-red";
+    return "suit-black";
+  }
+
+  function updateTimerUI() {
+    const timerOpt = gameState?.options?.timer || "none";
+    if (timerOpt === "none") {
+      timerLabel.textContent = "Timer: none";
+      timerDot.style.background = "#777";
+      return;
+    }
+    if (remainingSeconds == null) {
+      timerLabel.textContent = "Timer: --";
+      timerDot.style.background = "#777";
+      return;
+    }
+    timerLabel.textContent = `Timer: ${remainingSeconds}s`;
+    const total = parseInt(timerOpt, 10);
+    const frac = remainingSeconds / total;
+    if (frac > 0.5) {
+      timerDot.style.background = "var(--timer-ok)";
+    } else if (frac > 0.2) {
+      timerDot.style.background = "var(--timer-warn)";
+    } else {
+      timerDot.style.background = "var(--timer-bad)";
+    }
+  }
+
+  /*************** RENDER LOBBY ***************/
+  function renderLobbyPlayers() {
+    teamsDisplay.innerHTML = "";
+    const t1 = players.filter((p) => p.team === "t1" && !p.isSpectator);
+    const t2 = players.filter((p) => p.team === "t2" && !p.isSpectator);
+    const specs = players.filter((p) => p.isSpectator);
+    function pill(p) {
+      const span = document.createElement("span");
+      span.className = "teams-pill " +
+        (p.team === "t1" ? "t1" : p.team === "t2" ? "t2" : "spec") +
+        (p.id === localPlayerId ? " self" : "");
+      span.textContent = p.name;
+      return span;
+    }
+    const t1Wrap = document.createElement("div");
+    t1Wrap.textContent = "Team 1: ";
+    t1.forEach((p) => t1Wrap.appendChild(pill(p)));
+    const t2Wrap = document.createElement("div");
+    t2Wrap.textContent = "Team 2: ";
+    t2.forEach((p) => t2Wrap.appendChild(pill(p)));
+    const sWrap = document.createElement("div");
+    sWrap.textContent = "Spectators: ";
+    specs.forEach((p) => sWrap.appendChild(pill(p)));
+    teamsDisplay.appendChild(t1Wrap);
+    teamsDisplay.appendChild(t2Wrap);
+    teamsDisplay.appendChild(sWrap);
+  }
+
+  /*************** RENDER TABLE ***************/
+  function renderSeats() {
+    Object.values(seatNodes).forEach((node) => (node.innerHTML = ""));
+    const { order } = seatOrderFor(players, localPlayerId);
+
+    for (const [pos, player] of Object.entries(order)) {
+      const node = seatNodes[pos];
+      if (!node) continue;
+      if (!player) {
+        node.innerHTML = "";
+        continue;
+      }
+      const plate = document.createElement("div");
+      plate.className =
+        "seat-plate" + (player.id === localPlayerId ? " self" : "");
+      const nameSpan = document.createElement("span");
+      nameSpan.className = "seat-name";
+      nameSpan.textContent = player.name;
+      const teamSpan = document.createElement("span");
+      teamSpan.className =
+        "seat-team-pill " +
+        (player.isSpectator
+          ? "spec"
+          : player.team === "t1"
+          ? "t1"
+          : "t2");
+      teamSpan.textContent = player.isSpectator
+        ? "Spec"
+        : player.team === "t1"
+        ? "T1"
+        : "T2";
+      plate.appendChild(nameSpan);
+      plate.appendChild(teamSpan);
+      node.appendChild(plate);
+
+      const activeRing = document.createElement("div");
+      activeRing.className =
+        "seat-active-ring" +
+        (currentTurnPlayerId === player.id ? " active" : "");
+      node.appendChild(activeRing);
+
+      const stats = document.createElement("div");
+      stats.className = "seat-stats";
+      if (gameState?.options?.showCounts && !player.isSpectator) {
+        const span = document.createElement("span");
+        span.textContent = `${player.cardCount ?? "?"} cards`;
+        stats.appendChild(span);
+      }
+      const chips = document.createElement("div");
+      chips.className = "chip-stack";
+      ["blue", "red", "white"].forEach((c) => {
+        const dot = document.createElement("span");
+        dot.className = "chip " + c;
+        chips.appendChild(dot);
+      });
+      stats.appendChild(chips);
+      node.appendChild(stats);
+
+      if (player.id !== localPlayerId && !player.isSpectator) {
+        const backs = document.createElement("div");
+        backs.className = "cards-back-row";
+        const count =
+          gameState?.options?.showCounts && player.cardCount
+            ? Math.min(player.cardCount, 6)
+            : 3;
+        for (let i = 0; i < count; i++) {
+          const b = document.createElement("div");
+          b.className = "card-back-mini";
+          backs.appendChild(b);
+        }
+        node.appendChild(backs);
+      }
+    }
+  }
+
+  function renderHand() {
+    handRow.innerHTML = "";
+    const myHand = gameState?.hands?.[localPlayerId] || [];
+    myHand.forEach((card) => {
+      const div = document.createElement("div");
+      div.className =
+        "card" +
+        (selectedCard && selectedCard.code === card.code ? " selected" : "");
+      const top = document.createElement("div");
+      top.className = "card-rank";
+      top.textContent = card.rank;
+      const suit = document.createElement("div");
+      suit.className = "card-suit " + cardSuitColor(card.suit);
+      suit.innerHTML = card.suit;
+      const corner = document.createElement("div");
+      corner.className =
+        "card-corner-bottom " + cardSuitColor(card.suit);
+      corner.textContent = card.rank + card.suit;
+
+      div.appendChild(top);
+      div.appendChild(suit);
+      div.appendChild(corner);
+      div.addEventListener("click", () => {
+        if (!isMyTurn()) {
+          showToast("Not your turn.");
+          return;
+        }
+        selectedCard =
+          selectedCard && selectedCard.code === card.code ? null : card;
+        renderHand();
+      });
+      handRow.appendChild(div);
+    });
+  }
+
+  function renderTargets() {
+    askTargetSelect.innerHTML = "";
+    const eligible = players.filter(
+      (p) =>
+        p.id !== localPlayerId &&
+        !p.isSpectator &&
+        p.team !== getLocalTeam()
+    );
+    if (!eligible.length) {
+      const opt = document.createElement("option");
+      opt.value = "";
+      opt.textContent = "No opponents";
+      askTargetSelect.appendChild(opt);
+      return;
+    }
+    eligible.forEach((p) => {
+      const opt = document.createElement("option");
+      opt.value = p.id;
+      opt.textContent = `${p.name} (${p.team === "t1" ? "T1" : "T2"})`;
+      askTargetSelect.appendChild(opt);
+    });
+  }
+
+  function renderAskLog() {
+    logPanel.innerHTML = "";
+    const limit = gameState?.options?.recentAsks || 2;
+    const slice = askLog.slice(-limit);
+    slice.forEach((entry) => {
+      const div = document.createElement("div");
+      div.className = "log-entry";
+      const txt = document.createElement("span");
+      const meta = document.createElement("span");
+      meta.className = "meta";
+      const cardStr = formatCardSymbol(entry.card);
+      if (entry.success) {
+        txt.innerHTML = `<span class="success">${entry.asker}</span> asked ${entry.target} for ${cardStr} – hit`;
+      } else {
+        txt.innerHTML = `<span class="fail">${entry.asker}</span> asked ${entry.target} for ${cardStr} – miss`;
+      }
+      meta.textContent = `  ·  ${entry.team}`;
+      div.appendChild(txt);
+      div.appendChild(meta);
+      logPanel.appendChild(div);
+    });
+    logPanel.scrollTop = logPanel.scrollHeight;
+  }
+
+  function renderEverything() {
+    if (!gameState) return;
+    currentTurnPlayerId = gameState.currentAsker;
+    lastAskedOpponentId = gameState.lastAskedOpponent || null;
+    centerStatus.textContent = gameState.centerMessage || "Game in progress";
+    renderSeats();
+    renderHand();
+    renderTargets();
+    renderAskLog();
+    updateTimerUI();
+    askBtn.disabled = !isMyTurn();
+    callSetBtn.disabled = !isMyTurn();
+  }
+
+  function getLocalTeam() {
+    const me = players.find((p) => p.id === localPlayerId);
+    return me?.team || null;
+  }
+
+  function isMyTurn() {
+    return currentTurnPlayerId === localPlayerId;
+  }
+
+  /*************** TIMER ***************/
+  function startTurnTimer(seconds) {
+    clearInterval(timerInterval);
+    if (!seconds || seconds === "none") {
+      remainingSeconds = null;
+      updateTimerUI();
+      return;
+    }
+    remainingSeconds = seconds;
+    updateTimerUI();
+    timerInterval = setInterval(() => {
+      remainingSeconds -= 1;
+      if (remainingSeconds <= 0) {
+        clearInterval(timerInterval);
+        remainingSeconds = 0;
+        updateTimerUI();
+        if (isMyTurn()) {
+          sendTimeoutPass();
+        }
+      } else {
+        updateTimerUI();
+      }
+    }, 1000);
+  }
+
+  /*************** BACKEND SYNC SHELL ***************/
+  async function createRoom() {
+    if (!supabase) {
+      showToast("Supabase client missing.");
+      return;
+    }
+    const code = generateRoomCode();
+    const name = nameInput.value.trim() || "Player";
+    const team = teamSelect.value;
+
+    const { data, error } = await supabase
+      .from("rooms")
+      .insert({
+        code,
+        host_name: name,
+        options: {
+          recentAsks: parseInt(recentAsksSelect.value, 10),
+          showCounts: cardCountsSelect.value === "on",
+          timer: timerSelect.value === "none"
+            ? "none"
+            : parseInt(timerSelect.value, 10),
+        },
+      })
+      .select()
+      .single();
+    if (error) {
+      console.error(error);
+      showToast("Error creating room.");
+      return;
+    }
+    roomId = data.id;
+    roomCode = data.code;
+    isHost = true;
+
+    await joinRoomInternal(data.id, data.code, name, team);
+  }
+
+  async function joinRoomByCode() {
+    if (!supabase) {
+      showToast("Supabase client missing.");
+      return;
+    }
+    const code = joinCodeInput.value.trim().toUpperCase();
+    if (!code) {
+      showToast("Enter a room code.");
+      return;
+    }
+    const { data, error } = await supabase
+      .from("rooms")
+      .select("*")
+      .eq("code", code)
+      .maybeSingle();
+    if (error || !data) {
+      showToast("Room not found.");
+      return;
+    }
+    const name = nameInput.value.trim() || "Player";
+    const team = teamSelect.value;
+    roomId = data.id;
+    roomCode = data.code;
+    isHost = false;
+    await joinRoomInternal(data.id, data.code, name, team, data.options);
+  }
+
+  async function joinRoomInternal(id, code, name, team, optionsFromRoom) {
+    const { data: player, error } = await supabase
+      .from("players")
+      .insert({
+        room_id: id,
+        name,
+        team,
+        is_spectator: team === "spec",
+      })
+      .select()
+      .single();
+    if (error) {
+      console.error(error);
+      showToast("Error joining room.");
+      return;
+    }
+    localPlayerId = player.id;
+    players = [];
+    roomStatus.textContent = `Joined room ${code}. Waiting for sync…`;
+    roomCodeShell.style.display = "inline-block";
+    roomCodeText.textContent = code;
+    if (optionsFromRoom) {
+      recentAsksSelect.value = (optionsFromRoom.recentAsks || 2).toString();
+      cardCountsSelect.value = optionsFromRoom.showCounts ? "on" : "off";
+      if (optionsFromRoom.timer === "none") {
+        timerSelect.value = "none";
+      } else {
+        timerSelect.value = String(optionsFromRoom.timer || "none");
+      }
+      recentAsksSelect.disabled = true;
+      cardCountsSelect.disabled = true;
+      timerSelect.disabled = true;
+    }
+    startGameBtn.disabled = !isHost;
+    nameInput.disabled = true;
+    teamSelect.disabled = true;
+    createRoomBtn.disabled = true;
+    joinRoomBtn.disabled = true;
+    joinCodeInput.disabled = true;
+
+    beginPolling();
+  }
+
+  async function beginPolling() {
+    if (!supabase || !roomId) return;
+    clearInterval(pollInterval);
+    await pullStateOnce();
+    pollInterval = setInterval(pullStateOnce, 900);
+  }
+
+  async function pullStateOnce() {
+    if (!roomId) return;
+    try {
+      const { data: room, error: roomErr } = await supabase
+        .from("rooms")
+        .select("*")
+        .eq("id", roomId)
+        .single();
+      if (roomErr) throw roomErr;
+
+      const { data: pRows, error: pErr } = await supabase
+        .from("players")
+        .select("*")
+        .eq("room_id", roomId);
+      if (pErr) throw pErr;
+
+      players = pRows.map((r) => ({
+        id: r.id,
+        name: r.name,
+        team: r.team,
+        isSpectator: r.is_spectator,
+        cardCount: r.card_count,
+      }));
+      renderLobbyPlayers();
+      startGameBtn.disabled = !isHost || room.state === "started";
+
+      if (room.state === "started") {
+        lobbyEl.style.display = "none";
+        tableWrapperEl.style.display = "block";
+      }
+
+      const { data: gState, error: gErr } = await supabase
+        .from("game_states")
+        .select("*")
+        .eq("room_id", roomId)
+        .maybeSingle();
+      if (gErr) throw gErr;
+      if (gState) {
+        gameState = gState.state_json || gState.state || gState;
+        askLog = gameState.askLog || askLog;
+        const tOpt = gameState.options?.timer || "none";
+        if (tOpt === "none") {
+          startTurnTimer(null);
+        } else if (gameState.turnRemaining != null) {
+          remainingSeconds = gameState.turnRemaining;
+          updateTimerUI();
+        }
+      }
+      renderEverything();
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  async function hostStartGame() {
+    if (!isHost || !roomId) return;
+    const options = {
+      recentAsks: parseInt(recentAsksSelect.value, 10),
+      showCounts: cardCountsSelect.value === "on",
+      timer:
+        timerSelect.value === "none"
+          ? "none"
+          : parseInt(timerSelect.value, 10),
+    };
+    await supabase.rpc("start_literature_game", {
+      p_room_id: roomId,
+      p_options: options,
+    });
+    recentAsksSelect.disabled = true;
+    cardCountsSelect.disabled = true;
+    timerSelect.disabled = true;
+    startGameBtn.disabled = true;
+    await pullStateOnce();
+  }
+
+  async function sendAsk() {
+    if (!isMyTurn()) {
+      showToast("Not your turn.");
+      return;
+    }
+    const targetId = askTargetSelect.value;
+    if (!targetId) {
+      showToast("Choose an opponent.");
+      return;
+    }
+    if (!selectedCard) {
+      showToast("Select a card in your hand.");
+      return;
+    }
+    await supabase.rpc("literature_ask", {
+      p_room_id: roomId,
+      p_asker_id: localPlayerId,
+      p_target_id: targetId,
+      p_card_code: selectedCard.code,
+    });
+    selectedCard = null;
+    await pullStateOnce();
+  }
+
+  async function sendCallSet() {
+    if (!isMyTurn()) {
+      showToast("Not your turn.");
+      return;
+    }
+    await supabase.rpc("literature_call_set", {
+      p_room_id: roomId,
+      p_player_id: localPlayerId,
+    });
+    await pullStateOnce();
+  }
+
+  async function sendTimeoutPass() {
+    await supabase.rpc("literature_timeout_pass", {
+      p_room_id: roomId,
+      p_player_id: localPlayerId,
+    });
+    await pullStateOnce();
+  }
+
+  /*************** EVENTS ***************/
+  createRoomBtn.addEventListener("click", () => {
+    if (!nameInput.value.trim()) {
+      showToast("Enter your name first.");
+      return;
+    }
+    createRoom();
+  });
+
+  joinRoomBtn.addEventListener("click", () => {
+    if (!nameInput.value.trim()) {
+      showToast("Enter your name first.");
+      return;
+    }
+    joinRoomByCode();
+  });
+
+  startGameBtn.addEventListener("click", () => {
+    hostStartGame();
+  });
+
+  askBtn.addEventListener("click", () => {
+    sendAsk();
+  });
+
+  callSetBtn.addEventListener("click", () => {
+    sendCallSet();
+  });
+
+  retryLobbyBtn.addEventListener("click", () => {
+    tableWrapperEl.style.display = "none";
+    lobbyEl.style.display = "block";
+  });
+
+  window.addEventListener("beforeunload", () => {
+    clearInterval(pollInterval);
+    clearInterval(timerInterval);
+  });
+
+  renderLobbyPlayers();
 </script>
+
+<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 </body>
 </html>
