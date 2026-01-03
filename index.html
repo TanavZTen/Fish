@@ -1,413 +1,272 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Literature Pro - Stable Edition</title>
-  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;900&display=swap');
-    body { font-family: 'Outfit', sans-serif; background: #064e3b; overflow-x: hidden; }
-    .glass { background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.1); }
-    .card-shadow { box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.3); }
-    .suit-red { color: #ef4444; }
-    .animate-float { animation: float 3s ease-in-out infinite; }
-    @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
-  </style>
+<meta charset="UTF-8" />
+<title>Literature – Poker Table</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<style>
+body {
+  background: radial-gradient(circle at center, #1e7f4a, #0b3b22);
+}
+.felt {
+  background: radial-gradient(circle at center, #2f9e63, #14532d);
+}
+.seat {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  text-align: center;
+}
+.turn {
+  box-shadow: 0 0 20px gold;
+}
+</style>
 </head>
+
 <body>
-  <div id="root"></div>
-  <script type="text/babel">
-    const { useState, useEffect, useMemo, useRef, useCallback } = React;
+<div id="root"></div>
 
-    const SUPABASE_URL = 'https://vngdiukjrfmzwlbefmjf.supabase.co';
-    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZuZ2RpdWtqcmZtendsYmVmbWpmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc0Njk5MDUsImV4cCI6MjA4MzA0NTkwNX0.XBr7aEzSPj-Iw0HYf27T8yXo1nbZ01MhBVa-VIdNZG4';
-    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+<script type="text/babel">
+const { useState, useEffect, useMemo } = React;
 
-    const SETS = [
-      { id: 'SL', name: 'Spades Low', cards: ['2♠', '3♠', '4♠', '5♠', '6♠', '7♠'] },
-      { id: 'SH', name: 'Spades High', cards: ['9♠', '10♠', 'J♠', 'Q♠', 'K♠', 'A♠'] },
-      { id: 'HL', name: 'Hearts Low', cards: ['2♥', '3♥', '4♥', '5♥', '6♥', '7♥'] },
-      { id: 'HH', name: 'Hearts High', cards: ['9♥', '10♥', 'J♥', 'Q♥', 'K♥', 'A♥'] },
-      { id: 'CL', name: 'Clubs Low', cards: ['2♣', '3♣', '4♣', '5♣', '6♣', '7♣'] },
-      { id: 'CH', name: 'Clubs High', cards: ['9♣', '10♣', 'J♣', 'Q♣', 'K♣', 'A♣'] },
-      { id: 'DL', name: 'Diamonds Low', cards: ['2♦', '3♦', '4♦', '5♦', '6♦', '7♦'] },
-      { id: 'DH', name: 'Diamonds High', cards: ['9♦', '10♦', 'J♦', 'Q♦', 'K♦', 'A♦'] },
-      { id: 'JO', name: '8s & Jokers', cards: ['8♥', '8♦', '8♠', '8♣', 'RJ', 'BJ'] }
-    ];
+/* ================= SUPABASE ================= */
+const supabase = window.supabase.createClient(
+  "https://vngdiukjrfmzwlbefmjf.supabase.co",
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZuZ2RpdWtqcmZtendsYmVmbWpmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc0Njk5MDUsImV4cCI6MjA4MzA0NTkwNX0.XBr7aEzSPj-Iw0HYf27T8yXo1nbZ01MhBVa-VIdNZG4"
+);
 
-    const getClientId = () => {
-      let id = localStorage.getItem('lit-pro-id');
-      if (!id) { id = 'u-' + Math.random().toString(36).substr(2, 9); localStorage.setItem('lit-pro-id', id); }
-      return id;
+/* ================= CLIENT ID ================= */
+const CID_KEY = "literature-cid";
+function getCID() {
+  let id = localStorage.getItem(CID_KEY);
+  if (!id) {
+    id = crypto.randomUUID();
+    localStorage.setItem(CID_KEY, id);
+  }
+  return id;
+}
+
+/* ================= CARD SETS ================= */
+const SETS = [
+  { name:"Spades 2-7", cards:["2♠","3♠","4♠","5♠","6♠","7♠"] },
+  { name:"Spades 9-A", cards:["9♠","10♠","J♠","Q♠","K♠","A♠"] },
+  { name:"Hearts 2-7", cards:["2♥","3♥","4♥","5♥","6♥","7♥"] },
+  { name:"Hearts 9-A", cards:["9♥","10♥","J♥","Q♥","K♥","A♥"] },
+  { name:"Clubs 2-7", cards:["2♣","3♣","4♣","5♣","6♣","7♣"] },
+  { name:"Clubs 9-A", cards:["9♣","10♣","J♣","Q♣","K♣","A♣"] },
+  { name:"Diamonds 2-7", cards:["2♦","3♦","4♦","5♦","6♦","7♦"] },
+  { name:"Diamonds 9-A", cards:["9♦","10♦","J♦","Q♦","K♦","A♦"] },
+  { name:"8s + Jokers", cards:["8♠","8♥","8♦","8♣","RJ","BJ"] }
+];
+
+const shuffle = d => d.sort(()=>Math.random()-0.5);
+const findSet = c => SETS.find(s=>s.cards.includes(c));
+
+/* ================= BOT AI ================= */
+function createBot(players) {
+  let n=1;
+  while(players.some(p=>p.name===`Bot ${n}`)) n++;
+  return {
+    id:"bot-"+crypto.randomUUID(),
+    name:`Bot ${n}`,
+    role:"player",
+    team:null,
+    hand:[],
+    isBot:true,
+    memory:{}
+  };
+}
+
+function botDecision(bot, game) {
+  let options=[];
+  bot.hand.forEach(card=>{
+    const set=findSet(card);
+    if(set) {
+      set.cards.forEach(c=>{
+        if(!bot.hand.includes(c)) options.push(c);
+      });
+    }
+  });
+  if(!options.length) return null;
+  const card=options[Math.floor(Math.random()*options.length)];
+  const opp=game.players.filter(p=>p.team!==bot.team && p.role==="player");
+  if(!opp.length) return null;
+  return { card, target: opp[Math.floor(Math.random()*opp.length)] };
+}
+
+/* ================= APP ================= */
+function App(){
+  const myId=useMemo(getCID,[]);
+  const [view,setView]=useState("home");
+  const [room,setRoom]=useState("");
+  const [name,setName]=useState("");
+  const [team,setTeam]=useState("");
+  const [game,setGame]=useState(null);
+
+  async function save(g){
+    await supabase.from("games").upsert({
+      room_code: room,
+      game_data: g,
+      updated_at:new Date().toISOString()
+    });
+    setGame({...g});
+  }
+
+  async function load(){
+    const {data}=await supabase.from("games")
+      .select("game_data")
+      .eq("room_code",room)
+      .single();
+    if(data) setGame(data.game_data);
+  }
+
+  useEffect(()=>{
+    if(!room) return;
+    load();
+    const i=setInterval(load,2000);
+    return()=>clearInterval(i);
+  },[room]);
+
+  /* CREATE */
+  function createRoom(){
+    const code=Math.random().toString(36).substring(2,8).toUpperCase();
+    setRoom(code);
+    setView("team");
+  }
+
+  async function confirmCreate(){
+    const g={
+      phase:"lobby",
+      hostId:myId,
+      players:[{id:myId,name,team,role:"player",hand:[],isBot:false}],
+      spectators:[],
+      currentTurn:null,
+      scores:{team1:0,team2:0},
+      settings:{askCount:2}
     };
+    await save(g);
+    setView("lobby");
+  }
 
-    const App = () => {
-      const myId = useMemo(() => getClientId(), []);
-      
-      // UI States
-      const [view, setView] = useState('home');
-      const [roomCode, setRoomCode] = useState('');
-      const [playerName, setPlayerName] = useState('');
-      const [gameData, setGameData] = useState(null);
-      const [isSyncing, setIsSyncing] = useState(false);
-      const [error, setError] = useState(null);
+  /* JOIN */
+  async function joinRoom(){
+    const {data}=await supabase.from("games")
+      .select("game_data")
+      .eq("room_code",room)
+      .single();
+    if(!data) return alert("Room not found");
+    setView("team");
+  }
 
-      // In-Game Interaction States
-      const [targetPlayer, setTargetPlayer] = useState('');
-      const [targetCard, setTargetCard] = useState('');
-      const [callModal, setCallModal] = useState(false);
-      const [callSetIdx, setCallSetIdx] = useState(0);
-      const [callMap, setCallMap] = useState({});
+  async function confirmJoin(){
+    const g={...game};
+    const even = g.phase==="game" &&
+      g.players.filter(p=>p.team==="team1").length ===
+      g.players.filter(p=>p.team==="team2").length;
 
-      // Ref to prevent "one character at a time" typing bug
-      const inputRef = useRef(null);
+    if(even){
+      g.spectators.push({id:myId,name});
+    } else {
+      g.players.push({id:myId,name,team,role:"player",hand:[],isBot:false});
+    }
+    await save(g);
+    setView(g.phase==="game"?"game":"lobby");
+  }
 
-      /* --- DATABASE SYNC ENGINE --- */
-      const syncToDB = async (data) => {
-        if (!roomCode) return;
-        setIsSyncing(true);
-        const { error } = await supabase.from('games').upsert({
-          room_code: roomCode,
-          game_data: data,
-          updated_at: new Date().toISOString()
-        });
-        if (error) setError("Sync failed. Check connection.");
-        else setGameData(data);
-        setIsSyncing(false);
-      };
+  /* START */
+  async function startGame(){
+    let deck=[];
+    SETS.forEach(s=>deck.push(...s.cards));
+    shuffle(deck);
+    game.players.forEach((p,i)=>p.hand=deck.filter((_,j)=>j%game.players.length===i));
+    game.phase="game";
+    game.currentTurn=game.players[0].id;
+    await save(game);
+    setView("game");
+  }
 
-      const pollDB = useCallback(async () => {
-        if (!roomCode || isSyncing) return;
-        const { data } = await supabase.from('games').select('game_data').eq('room_code', roomCode).single();
-        if (data?.game_data) {
-          // Only update if changes exist to avoid React re-render loops
-          if (JSON.stringify(data.game_data) !== JSON.stringify(gameData)) {
-            setGameData(data.game_data);
-          }
-        }
-      }, [roomCode, gameData, isSyncing]);
+  /* RETRY */
+  async function retry(){
+    game.phase="lobby";
+    game.players.forEach(p=>p.hand=[]);
+    game.currentTurn=null;
+    await save(game);
+    setView("lobby");
+  }
 
-      useEffect(() => {
-        const interval = setInterval(pollDB, 3000);
-        return () => clearInterval(interval);
-      }, [pollDB]);
+  /* UI */
+  if(view==="home") return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="bg-white p-6 rounded-xl w-80">
+        <h1 className="text-3xl text-center mb-4">Literature</h1>
+        <input className="w-full border p-2 mb-2" placeholder="Name" value={name} onChange={e=>setName(e.target.value)}/>
+        <button onClick={createRoom} className="w-full bg-green-600 text-white py-2 mb-2">Create</button>
+        <input className="w-full border p-2 mb-2" placeholder="Room Code" value={room} onChange={e=>setRoom(e.target.value.toUpperCase())}/>
+        <button onClick={joinRoom} className="w-full bg-blue-600 text-white py-2">Join</button>
+      </div>
+    </div>
+  );
 
-      /* --- ACTION HANDLERS --- */
-      const handleCreate = async () => {
-        if (!playerName) return setError("Name is required");
-        const code = Math.random().toString(36).substr(2, 6).toUpperCase();
-        const initial = {
-          hostId: myId,
-          phase: 'lobby',
-          players: [{ id: myId, name: playerName, hand: [], isBot: false }],
-          teams: { team1: [myId], team2: [] },
-          scores: { team1: 0, team2: 0 },
-          log: ["Room created. Waiting for players..."],
-          history: [],
-          claimed: [],
-          currentTurn: ''
-        };
-        setRoomCode(code);
-        await syncToDB(initial);
-        setView('lobby');
-      };
+  if(view==="team") return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="bg-white p-6 rounded-xl w-80">
+        <h2 className="text-xl mb-4">Choose Team</h2>
+        <button onClick={()=>setTeam("team1")} className="w-full bg-blue-500 text-white py-2 mb-2">Team 1</button>
+        <button onClick={()=>setTeam("team2")} className="w-full bg-red-500 text-white py-2 mb-4">Team 2</button>
+        <button onClick={game?confirmJoin:confirmCreate} className="w-full bg-green-600 text-white py-2">Confirm</button>
+      </div>
+    </div>
+  );
 
-      const handleJoin = async () => {
-        if (!roomCode || !playerName) return setError("Fill all fields");
-        const { data } = await supabase.from('games').select('game_data').eq('room_code', roomCode).single();
-        if (!data) return setError("Room not found");
+  if(view==="lobby" && game) return (
+    <div className="min-h-screen p-6 text-white">
+      <h1 className="text-3xl mb-4">Room {room}</h1>
+      <div className="mb-4">
+        {game.players.map(p=>(
+          <div key={p.id}>{p.name} – {p.team}</div>
+        ))}
+      </div>
+      {game.hostId===myId && (
+        <>
+          <button onClick={()=>{game.players.push(createBot(game.players));save(game)}} className="bg-gray-800 px-4 py-2 mr-2">Add Bot</button>
+          <button onClick={startGame} className="bg-green-600 px-4 py-2">Start</button>
+        </>
+      )}
+    </div>
+  );
 
-        const updated = {...data.game_data};
-        if (!updated.players.find(p => p.id === myId)) {
-          updated.players.push({ id: myId, name: playerName, hand: [], isBot: false });
-          // Auto-balance teams
-          if (updated.teams.team1.length <= updated.teams.team2.length) updated.teams.team1.push(myId);
-          else updated.teams.team2.push(myId);
-        }
-        await syncToDB(updated);
-        setView('lobby');
-      };
-
-      const startGame = async () => {
-        const updated = {...gameData};
-        let deck = [];
-        SETS.forEach(s => deck.push(...s.cards));
-        deck.sort(() => Math.random() - 0.5);
-
-        updated.players.forEach((p, i) => {
-          p.hand = deck.filter((_, idx) => idx % updated.players.length === i);
-        });
-        updated.phase = 'game';
-        updated.currentTurn = myId;
-        updated.log.unshift("Game started! Team 1 vs Team 2");
-        await syncToDB(updated);
-      };
-
-      const askCard = async () => {
-        if (!targetPlayer || !targetCard) return;
-        const updated = JSON.parse(JSON.stringify(gameData));
-        const victim = updated.players.find(p => p.id === targetPlayer);
-        const me = updated.players.find(p => p.id === myId);
-
-        if (victim.hand.includes(targetCard)) {
-          victim.hand = victim.hand.filter(c => c !== targetCard);
-          me.hand.push(targetCard);
-          updated.log.unshift(`${playerName} successfully took ${targetCard} from ${victim.name}`);
-        } else {
-          updated.currentTurn = targetPlayer;
-          updated.log.unshift(`${playerName} failed. Turn passes to ${victim.name}`);
-        }
-        setTargetCard('');
-        await syncToDB(updated);
-      };
-
-      const submitCall = async () => {
-        const updated = JSON.parse(JSON.stringify(gameData));
-        const set = SETS[callSetIdx];
-        let isCorrect = true;
-
-        set.cards.forEach(c => {
-          const actualOwner = updated.players.find(p => p.hand.includes(c));
-          if (!actualOwner || actualOwner.id !== callMap[c]) isCorrect = false;
-        });
-
-        const myTeamKey = updated.teams.team1.includes(myId) ? 'team1' : 'team2';
-        const oppTeamKey = myTeamKey === 'team1' ? 'team2' : 'team1';
-
-        if (isCorrect) {
-          updated.scores[myTeamKey]++;
-          updated.log.unshift(`${playerName} called the ${set.name} PERFECTLY!`);
-        } else {
-          updated.scores[oppTeamKey]++;
-          updated.log.unshift(`${playerName} miscalled the ${set.name}. Point to opponents.`);
-        }
-
-        updated.claimed.push(set.name);
-        set.cards.forEach(c => {
-          updated.players.forEach(p => p.hand = p.hand.filter(hc => hc !== c));
-        });
-
-        setCallModal(false);
-        await syncToDB(updated);
-      };
-
-      /* --- COMPONENTS --- */
-      const Home = () => (
-        <div className="min-h-screen flex flex-col items-center justify-center p-6">
-          <div className="glass p-10 rounded-[40px] w-full max-w-md shadow-2xl animate-float">
-            <h1 className="text-6xl font-black text-white text-center mb-2 italic tracking-tighter">LIT</h1>
-            <p className="text-center text-emerald-300 text-xs tracking-[0.4em] uppercase mb-10">Professional Poker Edition</p>
-            
-            <div className="space-y-4">
-              <input 
-                className="w-full bg-black/20 border border-white/10 p-5 rounded-2xl text-white outline-none focus:border-emerald-400 transition-all"
-                placeholder="Enter Nickname"
-                value={playerName}
-                onChange={e => setPlayerName(e.target.value)}
-              />
-              <button onClick={handleCreate} className="w-full bg-emerald-500 text-white font-bold py-5 rounded-2xl shadow-lg hover:bg-emerald-400 transition-all">HOST PRIVATE TABLE</button>
-              
-              <div className="flex items-center gap-4 py-4">
-                <div className="h-[1px] bg-white/10 flex-1"></div>
-                <span className="text-white/20 text-[10px] font-bold uppercase tracking-widest">or</span>
-                <div className="h-[1px] bg-white/10 flex-1"></div>
+  if(view==="game" && game){
+    const r=200;
+    const seats=game.players;
+    return (
+      <div className="min-h-screen felt flex items-center justify-center relative">
+        <div className="w-[500px] h-[500px] bg-green-700 rounded-full relative">
+          {seats.map((p,i)=>{
+            const a=i/seats.length*2*Math.PI;
+            return (
+              <div key={p.id}
+                className={`seat ${game.currentTurn===p.id?"turn":""}`}
+                style={{left:250+Math.cos(a)*r,top:250+Math.sin(a)*r}}>
+                <div className="bg-white text-black px-3 py-1 rounded">{p.name}</div>
               </div>
-
-              <input 
-                className="w-full bg-black/20 border border-white/10 p-5 rounded-2xl text-white text-center font-mono text-xl tracking-widest uppercase outline-none"
-                placeholder="ROOM CODE"
-                value={roomCode}
-                onChange={e => setRoomCode(e.target.value.toUpperCase())}
-              />
-              <button onClick={handleJoin} className="w-full bg-white/5 border border-white/10 text-white font-bold py-5 rounded-2xl hover:bg-white/10">JOIN TABLE</button>
-            </div>
-            {error && <p className="text-red-400 text-center text-xs mt-6 font-bold">{error}</p>}
-          </div>
+            );
+          })}
         </div>
-      );
+        <button onClick={retry} className="absolute bottom-4 bg-yellow-500 px-4 py-2">Retry</button>
+      </div>
+    );
+  }
 
-      const Lobby = () => (
-        <div className="min-h-screen p-8 max-w-5xl mx-auto">
-          <div className="flex justify-between items-end mb-12">
-            <div>
-              <p className="text-emerald-400 text-xs font-black tracking-widest uppercase mb-1">Invite Players</p>
-              <h1 className="text-7xl font-black text-white font-mono">{roomCode}</h1>
-            </div>
-            <div className="text-right">
-              <span className="px-4 py-2 bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 rounded-full text-[10px] font-black uppercase">Live Connection Active</span>
-            </div>
-          </div>
+  return null;
+}
 
-          <div className="grid grid-cols-2 gap-10 mb-10">
-            <div className="glass p-8 rounded-[32px]">
-              <h2 className="text-blue-400 font-black uppercase tracking-widest mb-6">Team Blue</h2>
-              <div className="space-y-3">
-                {gameData?.teams.team1.map(id => (
-                  <div key={id} className="p-4 bg-white/5 rounded-2xl border border-white/5 text-white font-bold flex justify-between">
-                    {gameData.players.find(p => p.id === id)?.name}
-                    {id === myId && <span className="text-[10px] bg-emerald-500 text-black px-2 py-0.5 rounded">YOU</span>}
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="glass p-8 rounded-[32px]">
-              <h2 className="text-red-400 font-black uppercase tracking-widest mb-6">Team Red</h2>
-              <div className="space-y-3">
-                {gameData?.teams.team2.map(id => (
-                  <div key={id} className="p-4 bg-white/5 rounded-2xl border border-white/5 text-white font-bold flex justify-between">
-                    {gameData.players.find(p => p.id === id)?.name}
-                    {id === myId && <span className="text-[10px] bg-emerald-500 text-black px-2 py-0.5 rounded">YOU</span>}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {gameData?.hostId === myId ? (
-            <button onClick={startGame} className="w-full bg-white text-emerald-900 font-black py-8 rounded-[32px] text-2xl shadow-2xl hover:scale-[1.01] transition-all">DEAL THE DECK</button>
-          ) : (
-            <div className="w-full border-2 border-dashed border-white/20 text-white/30 text-center py-8 rounded-[32px] font-bold uppercase tracking-widest">Waiting for host to deal...</div>
-          )}
-        </div>
-      );
-
-      const Game = () => {
-        const me = gameData.players.find(p => p.id === myId);
-        const myTeam = gameData.teams.team1.includes(myId) ? 'team1' : 'team2';
-        const isMyTurn = gameData.currentTurn === myId;
-
-        return (
-          <div className="min-h-screen p-6 flex flex-col">
-            <div className="flex justify-between items-start mb-10">
-              <div className="flex gap-10">
-                <div className="text-center">
-                  <p className="text-blue-400 text-[10px] font-black uppercase mb-1">Team Blue</p>
-                  <div className="text-4xl font-black text-white">{gameData.scores.team1}</div>
-                </div>
-                <div className="text-center">
-                  <p className="text-red-400 text-[10px] font-black uppercase mb-1">Team Red</p>
-                  <div className="text-4xl font-black text-white">{gameData.scores.team2}</div>
-                </div>
-              </div>
-              <div className="glass px-6 py-2 rounded-full text-white text-xs font-bold uppercase tracking-widest">Room: {roomCode}</div>
-            </div>
-
-            <div className="flex-1 flex gap-10">
-              {/* Main Arena */}
-              <div className="flex-1 flex flex-col justify-between">
-                <div className="flex flex-wrap gap-4">
-                  {gameData.players.map(p => {
-                    const isOpp = !gameData.teams[myTeam].includes(p.id);
-                    return (
-                      <div key={p.id} className={`glass p-5 rounded-3xl min-w-[150px] border-b-4 ${gameData.currentTurn === p.id ? 'border-emerald-500 scale-105' : 'border-transparent'}`}>
-                        <p className="text-[10px] font-black opacity-40 uppercase mb-2">{p.name}</p>
-                        <div className="flex items-end justify-between">
-                          <span className="text-3xl font-black text-white">{p.hand.length}</span>
-                          <span className="text-[9px] font-bold text-white/20 uppercase tracking-tighter">Cards Left</span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* My Hand */}
-                <div className="py-10">
-                  <div className="flex gap-2 justify-center">
-                    {me?.hand.sort().map((c, i) => (
-                      <div key={i} className={`bg-white w-20 h-32 rounded-xl flex flex-col justify-between p-3 font-black text-xl card-shadow ${c.includes('♥') || c.includes('♦') ? 'text-red-600' : 'text-slate-900'} hover:-translate-y-10 transition-all cursor-pointer`}>
-                        <span className="text-left">{c}</span>
-                        <span className="text-right rotate-180">{c}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* Controls */}
-              <div className="w-80 flex flex-col gap-6">
-                <div className="glass p-6 rounded-[32px] flex-1 overflow-hidden flex flex-col">
-                  <h3 className="text-white text-[10px] font-black uppercase tracking-widest mb-4">Table History</h3>
-                  <div className="flex-1 overflow-y-auto space-y-3 scrollbar-hide">
-                    {gameData.log.map((l, i) => (
-                      <p key={i} className={`text-[11px] leading-relaxed ${i === 0 ? 'text-emerald-400 font-bold' : 'text-white/40'}`}>{l}</p>
-                    ))}
-                  </div>
-                </div>
-
-                {isMyTurn && (
-                  <div className="glass p-6 rounded-[32px] space-y-4 border border-emerald-500/30">
-                    <select value={targetPlayer} onChange={e => setTargetPlayer(e.target.value)} className="w-full bg-black/40 text-white p-3 rounded-xl border border-white/10 outline-none text-xs">
-                      <option value="">WHO TO ASK?</option>
-                      {gameData.players.filter(p => !gameData.teams[myTeam].includes(p.id)).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                    </select>
-
-                    <select value={targetCard} onChange={e => setTargetCard(e.target.value)} className="w-full bg-black/40 text-white p-3 rounded-xl border border-white/10 outline-none text-xs">
-                      <option value="">WHICH CARD?</option>
-                      {SETS.filter(s => s.cards.some(c => me.hand.includes(c)))
-                           .flatMap(s => s.cards)
-                           .filter(c => !me.hand.includes(c))
-                           .map(c => <option key={c} value={c}>{c}</option>)}
-                    </select>
-
-                    <button onClick={askCard} className="w-full bg-emerald-500 text-white font-black py-4 rounded-2xl shadow-lg hover:bg-emerald-400">ASK ACTION</button>
-                    <button onClick={() => setCallModal(true)} className="w-full border border-white/20 text-white/60 font-black py-4 rounded-2xl hover:bg-white/5">CALL SET</button>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {callModal && (
-              <div className="fixed inset-0 bg-black/80 backdrop-blur-xl z-50 flex items-center justify-center p-6">
-                <div className="glass p-10 rounded-[40px] w-full max-w-2xl shadow-2xl">
-                  <h2 className="text-3xl font-black text-white italic mb-2">Claim Full Set</h2>
-                  <p className="text-white/40 text-[10px] uppercase tracking-widest mb-8">You must assign all 6 cards to teammates</p>
-                  
-                  <select value={callSetIdx} onChange={e => setCallSetIdx(Number(e.target.value))} className="w-full bg-black/40 text-white p-4 rounded-2xl border border-white/10 mb-8 outline-none">
-                    {SETS.map((s, i) => <option key={i} value={i}>{s.name}</option>)}
-                  </select>
-
-                  <div className="grid grid-cols-2 gap-4 mb-10 h-64 overflow-y-auto pr-4">
-                    {SETS[callSetIdx].cards.map(c => (
-                      <div key={c} className="flex items-center justify-between bg-white/5 p-4 rounded-2xl border border-white/5">
-                        <span className={`font-black text-lg ${c.includes('♥') || c.includes('♦') ? 'text-red-500' : 'text-white'}`}>{c}</span>
-                        <select 
-                          className="bg-black/40 text-white text-[10px] p-2 rounded-lg outline-none"
-                          value={callMap[c] || ''}
-                          onChange={e => setCallMap({...callMap, [c]: e.target.value})}
-                        >
-                          <option value="">WHO HAS IT?</option>
-                          {gameData.players.filter(p => gameData.teams[myTeam].includes(p.id)).map(p => (
-                            <option key={p.id} value={p.id}>{p.name}</option>
-                          ))}
-                        </select>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="flex gap-4">
-                    <button onClick={submitCall} className="flex-1 bg-white text-black font-black py-5 rounded-2xl text-lg hover:scale-[1.02] transition-all">SUBMIT CLAIM</button>
-                    <button onClick={() => setCallModal(false)} className="flex-1 border border-white/10 text-white font-black py-5 rounded-2xl">CANCEL</button>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        );
-      };
-
-      if (view === 'home') return <Home />;
-      if (view === 'lobby') return <Lobby />;
-      if (view === 'game' || gameData?.phase === 'game') return <Game />;
-
-      return null;
-    };
-
-    ReactDOM.render(<App />, document.getElementById('root'));
-  </script>
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
 </body>
 </html>
