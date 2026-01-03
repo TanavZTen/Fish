@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Fish Card Game</title>
+  <title>Literature Card Game</title>
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -142,6 +142,20 @@
         }
       };
 
+      const cleanupOldRooms = async () => {
+        try {
+          const yesterday = new Date();
+          yesterday.setHours(yesterday.getHours() - 24);
+          
+          await supabase
+            .from('games')
+            .delete()
+            .lt('updated_at', yesterday.toISOString());
+        } catch (e) {
+          console.error('Cleanup error:', e);
+        }
+      };
+
       const loadGame = async () => {
         if (!roomCode) return;
         try {
@@ -184,6 +198,11 @@
           console.error('Load error:', e);
         }
       };
+
+      // Cleanup old rooms on mount
+      useEffect(() => {
+        cleanupOldRooms();
+      }, []);
 
       useEffect(() => {
         if (!roomCode) return;
@@ -346,8 +365,9 @@
           gameData.players.push(bot);
           gameData.teams[team].push(bot.id);
           await saveGame(gameData);
-          loadGame();
+          await loadGame();
         } catch (e) {
+          console.error('Error adding bot:', e);
           alert('Error adding bot');
         }
       };
@@ -365,9 +385,58 @@
           gameData.teams.team1 = gameData.teams.team1.filter(id => id !== playerId);
           gameData.teams.team2 = gameData.teams.team2.filter(id => id !== playerId);
           await saveGame(gameData);
-          loadGame();
+          await loadGame();
         } catch (e) {
+          console.error('Error removing player:', e);
           alert('Error removing player');
+        }
+      };
+
+      /* ========================= LEAVE/DELETE ROOM ========================= */
+      const leaveRoom = async () => {
+        if (!confirm('Are you sure you want to leave this room?')) {
+          return;
+        }
+
+        try {
+          const { data } = await supabase
+            .from('games')
+            .select('game_data')
+            .eq('room_code', roomCode)
+            .single();
+
+          if (data) {
+            const gameData = data.game_data;
+            
+            // Remove current player from the game
+            gameData.players = gameData.players.filter(p => p.id !== myId);
+            gameData.teams.team1 = gameData.teams.team1.filter(id => id !== myId);
+            gameData.teams.team2 = gameData.teams.team2.filter(id => id !== myId);
+
+            // If no players left, delete the room entirely
+            if (gameData.players.length === 0) {
+              await supabase
+                .from('games')
+                .delete()
+                .eq('room_code', roomCode);
+              
+              localStorage.removeItem(`game:${roomCode}`);
+            } else {
+              // If host left, assign new host
+              if (gameData.hostId === myId) {
+                gameData.hostId = gameData.players[0].id;
+              }
+              await saveGame(gameData);
+            }
+          }
+
+          // Reset local state
+          setRoomCode('');
+          setGameData(null);
+          setView('home');
+        } catch (e) {
+          console.error('Error leaving room:', e);
+          alert('Error leaving room');
         }
       };
 
@@ -426,8 +495,9 @@
           const gameData = data.game_data;
           gameData.settings.showAskHistory = !gameData.settings.showAskHistory;
           await saveGame(gameData);
-          loadGame();
+          await loadGame();
         } catch (e) {
+          console.error('Error toggling setting:', e);
           alert('Error toggling setting');
         }
       };
@@ -443,8 +513,9 @@
           const gameData = data.game_data;
           gameData.settings.showCardCounts = !gameData.settings.showCardCounts;
           await saveGame(gameData);
-          loadGame();
+          await loadGame();
         } catch (e) {
+          console.error('Error toggling setting:', e);
           alert('Error toggling setting');
         }
       };
@@ -460,8 +531,9 @@
           const gameData = data.game_data;
           gameData.settings.askHistoryCount = count;
           await saveGame(gameData);
-          loadGame();
+          await loadGame();
         } catch (e) {
+          console.error('Error changing setting:', e);
           alert('Error changing setting');
         }
       };
@@ -477,8 +549,9 @@
           const gameData = data.game_data;
           gameData.settings.turnTimeLimit = seconds;
           await saveGame(gameData);
-          loadGame();
+          await loadGame();
         } catch (e) {
+          console.error('Error changing setting:', e);
           alert('Error changing setting');
         }
       };
@@ -764,6 +837,7 @@
 
       if (view === 'lobby' && gameData) {
         const isHost = gameData.hostId === myId;
+        const myTeamName = gameData.teams.team1.includes(myId) ? 'Team 1' : 'Team 2';
 
         return (
           <div className="min-h-screen bg-gradient-to-br from-green-700 to-green-900 p-4">
@@ -772,6 +846,7 @@
                 <div className="text-center mb-6">
                   <h2 className="text-3xl font-bold mb-2">Room Code</h2>
                   <div className="text-5xl font-mono font-bold text-green-600">{roomCode}</div>
+                  <div className="text-lg text-gray-600 mt-2">You're on {myTeamName}</div>
                 </div>
 
                 <div className="mb-6">
@@ -898,13 +973,20 @@
                 {isHost && (
                   <button
                     onClick={startGame}
-                    className="w-full bg-green-600 text-white py-4 rounded-lg font-bold text-xl hover:bg-green-700"
+                    className="w-full bg-green-600 text-white py-4 rounded-lg font-bold text-xl hover:bg-green-700 mb-3"
                   >
                     {gameData.players.length < 4
                       ? `Waiting for ${4 - gameData.players.length} more players...`
                       : 'Start Game'}
                   </button>
                 )}
+
+                <button
+                  onClick={leaveRoom}
+                  className="w-full bg-red-600 text-white py-2 rounded-lg font-semibold hover:bg-red-700"
+                >
+                  Leave Room
+                </button>
               </div>
             </div>
           </div>
@@ -956,7 +1038,15 @@
             <div className="max-w-7xl mx-auto">
               <div className="bg-white rounded-2xl shadow-2xl p-6 mb-4">
                 <div className="flex justify-between items-center mb-4">
-                  <h1 className="text-2xl font-bold">Room {roomCode}</h1>
+                  <div>
+                    <h1 className="text-2xl font-bold">Room {roomCode}</h1>
+                    <button
+                      onClick={leaveRoom}
+                      className="text-sm text-red-600 hover:text-red-800 mt-1"
+                    >
+                      Leave Room
+                    </button>
+                  </div>
                   <div className="text-right">
                     <div className="text-sm text-gray-600">Current Turn: {currentPlayer?.name}</div>
                     {gameData.settings.turnTimeLimit > 0 && timeRemaining !== null && (
