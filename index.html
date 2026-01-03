@@ -3,160 +3,110 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Literature Card Game</title>
+  <title>Literature - Pro Table Edition</title>
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    body { background-color: #052e16; overflow: hidden; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    .felt-table {
+      background: radial-gradient(circle, #065f46 0%, #064e3b 70%, #022c22 100%);
+      border: 14px solid #3d2b1f;
+      border-radius: 50%;
+      box-shadow: inset 0 0 80px rgba(0,0,0,0.8), 0 20px 50px rgba(0,0,0,0.5);
+      position: relative;
+    }
+    .player-seat { position: absolute; transform: translate(-50%, -50%); transition: all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1); z-index: 10; }
+    .wood-panel { background: linear-gradient(to bottom, #5d4037, #3e2723); border: 1px solid #2d1a12; }
+    .card-rect {
+      width: 45px; height: 65px; background: white; border-radius: 4px;
+      border: 1px solid #ccc; display: flex; align-items: center; justify-content: center;
+      font-weight: bold; font-size: 0.9rem; box-shadow: 2px 2px 5px rgba(0,0,0,0.3);
+      user-select: none;
+    }
+    .status-badge { font-size: 0.65rem; padding: 2px 6px; border-radius: 10px; text-transform: uppercase; font-weight: 800; }
+  </style>
 </head>
 <body>
   <div id="root"></div>
   <script type="text/babel">
-    const { useState, useEffect, useMemo } = React;
+    const { useState, useEffect, useMemo, useCallback, useRef } = React;
 
     /* ============================================================
-       SUPABASE CONFIGURATION
+       CONFIG & CONSTANTS
        ============================================================ */
     const SUPABASE_URL = 'https://vngdiukjrfmzwlbefmjf.supabase.co';
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZuZ2RpdWtqcmZtendsYmVmbWpmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc0Njk5MDUsImV4cCI6MjA4MzA0NTkwNX0.XBr7aEzSPj-Iw0HYf27T8yXo1nbZ01MhBVa-VIdNZG4';
-    
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    /* ============================================================
-       PERSISTENT CLIENT ID
-       ============================================================ */
-    const CLIENT_ID_KEY = 'literature-client-id';
-    function getClientId() {
-      let id = localStorage.getItem(CLIENT_ID_KEY);
-      if (!id) {
-        id = crypto.randomUUID();
-        localStorage.setItem(CLIENT_ID_KEY, id);
-      }
-      return id;
-    }
-
-    /* ============================================================
-       SET DEFINITIONS
-       ============================================================ */
+    const CLIENT_ID_KEY = 'lit-pro-id-v2';
     const SETS = [
-      { name: 'Spades 2-7', cards: ['2♠', '3♠', '4♠', '5♠', '6♠', '7♠'] },
-      { name: 'Spades 9-A', cards: ['9♠', '10♠', 'J♠', 'Q♠', 'K♠', 'A♠'] },
-      { name: 'Hearts 2-7', cards: ['2♥', '3♥', '4♥', '5♥', '6♥', '7♥'] },
-      { name: 'Hearts 9-A', cards: ['9♥', '10♥', 'J♥', 'Q♥', 'K♥', 'A♥'] },
-      { name: 'Clubs 2-7', cards: ['2♣', '3♣', '4♣', '5♣', '6♣', '7♣'] },
-      { name: 'Clubs 9-A', cards: ['9♣', '10♣', 'J♣', 'Q♣', 'K♣', 'A♣'] },
-      { name: 'Diamonds 2-7', cards: ['2♦', '3♦', '4♦', '5♦', '6♦', '7♦'] },
-      { name: 'Diamonds 9-A', cards: ['9♦', '10♦', 'J♦', 'Q♦', 'K♦', 'A♦'] },
-      { name: '8s + Jokers', cards: ['8♥', '8♦', '8♠', '8♣', 'RJ', 'BJ'] }
+      { id: 0, name: 'Spades Low', cards: ['2♠', '3♠', '4♠', '5♠', '6♠', '7♠'] },
+      { id: 1, name: 'Spades High', cards: ['9♠', '10♠', 'J♠', 'Q♠', 'K♠', 'A♠'] },
+      { id: 2, name: 'Hearts Low', cards: ['2♥', '3♥', '4♥', '5♥', '6♥', '7♥'] },
+      { id: 3, name: 'Hearts High', cards: ['9♥', '10♥', 'J♥', 'Q♥', 'K♥', 'A♥'] },
+      { id: 4, name: 'Clubs Low', cards: ['2♣', '3♣', '4♣', '5♣', '6♣', '7♣'] },
+      { id: 5, name: 'Clubs High', cards: ['9♣', '10♣', 'J♣', 'Q♣', 'K♣', 'A♣'] },
+      { id: 6, name: 'Diamonds Low', cards: ['2♦', '3♦', '4♦', '5♦', '6♦', '7♦'] },
+      { id: 7, name: 'Diamonds High', cards: ['9♦', '10♦', 'J♦', 'Q♦', 'K♦', 'A♦'] },
+      { id: 8, name: '8s & Jokers', cards: ['8♥', '8♦', '8♠', '8♣', 'RJ', 'BJ'] }
     ];
 
-    const findSet = card => SETS.find(s => s.cards.includes(card));
-
-    const shuffle = deck => {
-      for (let i = deck.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [deck[i], deck[j]] = [deck[j], deck[i]];
-      }
+    /* ============================================================
+       HELPERS
+       ============================================================ */
+    const getMyId = () => {
+      try {
+        let id = localStorage.getItem(CLIENT_ID_KEY);
+        if (!id) { id = crypto.randomUUID(); localStorage.setItem(CLIENT_ID_KEY, id); }
+        return id;
+      } catch(e) { return 'fallback-id-' + Math.random(); }
     };
 
-    /* ============================================================
-       BOT LOGIC
-       ============================================================ */
-    function createBot(players) {
-      let n = 1;
-      while (players.some(p => p.name === `Bot ${n}`)) n++;
-      return {
-        id: `bot-${crypto.randomUUID()}`,
-        name: `Bot ${n}`,
-        hand: [],
-        isBot: true,
-        memory: {}
-      };
-    }
-
-    function botDecide(bot, gameData) {
-      const myTeam = gameData.teams.team1.includes(bot.id) ? 'team1' : 'team2';
-      const oppTeam = myTeam === 'team1' ? 'team2' : 'team1';
-      const opponents = gameData.players.filter(p => gameData.teams[oppTeam].includes(p.id));
-
-      let askableCards = [];
-      bot.hand.forEach(card => {
-        const set = findSet(card);
-        if (set) {
-          set.cards.forEach(c => {
-            if (!bot.hand.includes(c) && !askableCards.includes(c)) {
-              askableCards.push(c);
-            }
-          });
-        }
-      });
-
-      if (askableCards.length === 0) {
-        return null;
-      }
-
-      const card = askableCards[Math.floor(Math.random() * askableCards.length)];
-      const target = opponents[Math.floor(Math.random() * opponents.length)];
-
-      return { targetId: target.id, card };
-    }
-
-    /* ============================================================
-       MAIN APP
-       ============================================================ */
     const App = () => {
-      const myId = useMemo(() => getClientId(), []);
-      
-      const [view, setView] = useState('home');
+      const myId = useMemo(() => getMyId(), []);
+      const [view, setView] = useState('home'); // home, lobby, game
       const [roomCode, setRoomCode] = useState('');
       const [playerName, setPlayerName] = useState('');
-      const [selectedTeam, setSelectedTeam] = useState('');
       const [gameData, setGameData] = useState(null);
+      const [errorMsg, setErrorMsg] = useState('');
+      const [isProcessing, setIsProcessing] = useState(false);
 
-      const [selectedOpponent, setSelectedOpponent] = useState('');
-      const [selectedCard, setSelectedCard] = useState('');
+      // UI States
       const [showCallModal, setShowCallModal] = useState(false);
       const [callSetIndex, setCallSetIndex] = useState(0);
-      const [callCards, setCallCards] = useState({});
+      const [callAssignments, setCallAssignments] = useState({});
+      const [askTarget, setAskTarget] = useState('');
+      const [askCard, setAskCard] = useState('');
 
-      /* ========================= SAVE/LOAD ========================= */
-      const saveGame = async (data) => {
+      /* ========================= ERROR HANDLING SYNC ========================= */
+      const syncToCloud = async (newData) => {
+        if (!roomCode) return;
+        setIsProcessing(true);
         try {
-          if (!roomCode) return;
-          localStorage.setItem(`game:${roomCode}`, JSON.stringify(data));
-          
           const { error } = await supabase
             .from('games')
             .upsert({ 
               room_code: roomCode, 
-              game_data: data,
-              updated_at: new Date().toISOString()
+              game_data: newData, 
+              updated_at: new Date().toISOString() 
             });
           
-          if (error) {
-            console.error('Supabase save error:', error);
-          }
-        } catch (e) {
-          console.error('saveGame error', e);
+          if (error) throw error;
+          setGameData(newData);
+        } catch (err) {
+          console.error("Sync Error:", err);
+          setErrorMsg("Connection lost. Retrying sync...");
+          // Background retry logic
+          setTimeout(() => syncToCloud(newData), 2000);
+        } finally {
+          setIsProcessing(false);
         }
       };
 
-      const cleanupOldRooms = async () => {
-        try {
-          const yesterday = new Date();
-          yesterday.setHours(yesterday.getHours() - 24);
-          
-          await supabase
-            .from('games')
-            .delete()
-            .lt('updated_at', yesterday.toISOString());
-        } catch (e) {
-          console.error('Cleanup error:', e);
-        }
-      };
-
-      const loadGame = async () => {
+      const fetchLatest = useCallback(async () => {
         if (!roomCode) return;
         try {
           const { data, error } = await supabase
@@ -165,1171 +115,401 @@
             .eq('room_code', roomCode)
             .single();
           
-          if (!error && data) {
-            const gameData = data.game_data;
-            localStorage.setItem(`game:${roomCode}`, JSON.stringify(gameData));
-            setGameData(gameData);
-
-            if (gameData.phase === 'game' && !gameData.botThinking) {
-              const current = gameData.players.find(p => p.id === gameData.currentTurn);
-              if (current?.isBot) {
-                gameData.botThinking = true;
-                await saveGame(gameData);
-                setTimeout(() => executeBotTurn(current, gameData), 2500);
-              }
-            }
-            return;
+          if (error) throw error;
+          if (data) {
+            setGameData(data.game_data);
+            if (data.game_data.phase === 'game' && view !== 'game') setView('game');
           }
-          
-          const raw = localStorage.getItem(`game:${roomCode}`);
-          if (!raw) return;
-          const localData = JSON.parse(raw);
-          setGameData(localData);
-
-          if (localData.phase === 'game' && !localData.botThinking) {
-            const current = localData.players.find(p => p.id === localData.currentTurn);
-            if (current?.isBot) {
-              localData.botThinking = true;
-              await saveGame(localData);
-              setTimeout(() => executeBotTurn(current, localData), 2500);
-            }
-          }
-        } catch (e) {
-          console.error('Load error:', e);
+        } catch (err) {
+          console.warn("Polling fetch failed (normal if room is new)");
         }
-      };
-
-      // Cleanup old rooms on mount
-      useEffect(() => {
-        cleanupOldRooms();
-      }, []);
+      }, [roomCode, view]);
 
       useEffect(() => {
-        if (!roomCode) return;
+        const poller = setInterval(fetchLatest, 3000);
+        return () => clearInterval(poller);
+      }, [fetchLatest]);
 
-        loadGame();
-
-        const interval = setInterval(async () => {
-          try {
-            const { data, error } = await supabase
-              .from('games')
-              .select('game_data')
-              .eq('room_code', roomCode)
-              .single();
-            
-            if (!error && data && data.game_data) {
-              const val = data.game_data;
-              localStorage.setItem(`game:${roomCode}`, JSON.stringify(val));
-              setGameData(val);
-
-              if (val.phase === 'game' && !val.botThinking) {
-                const current = val.players.find(p => p.id === val.currentTurn);
-                if (current?.isBot) {
-                  val.botThinking = true;
-                  await saveGame(val);
-                  setTimeout(() => executeBotTurn(current, val), 2500);
-                }
-              }
-            }
-          } catch (e) {
-            console.error('Polling error:', e);
-          }
-        }, 2000);
-
-        return () => clearInterval(interval);
-      }, [roomCode]);
-
-      /* ========================= CREATE ROOM ========================= */
-      const createRoom = () => {
-        if (!playerName.trim()) {
-          alert('Please enter your name');
-          return;
-        }
+      /* ========================= GAME LOGIC ========================= */
+      const createRoom = async () => {
+        if (!playerName.trim()) return setErrorMsg("Name is required");
         const code = Math.random().toString(36).substring(2, 8).toUpperCase();
-        setRoomCode(code);
-        setView('teamSelect');
-      };
-
-      const confirmTeamCreate = async () => {
-        if (!selectedTeam) {
-          alert('Please select a team');
-          return;
-        }
-
-        const initialData = {
+        const initial = {
           hostId: myId,
           phase: 'lobby',
           players: [{ id: myId, name: playerName, hand: [], isBot: false }],
-          teams: {
-            team1: selectedTeam === 'team1' ? [myId] : [],
-            team2: selectedTeam === 'team2' ? [myId] : []
-          },
-          currentTurn: '',
+          teams: { team1: [myId], team2: [] },
           scores: { team1: 0, team2: 0 },
+          gameLog: [`Room created by ${playerName}`],
           claimedSets: [],
-          askHistory: [],
-          gameLog: [],
-          lastAskedPlayer: '',
-          botThinking: false,
-          turnStartTime: null,
-          settings: {
-            showAskHistory: true,
-            askHistoryCount: 2,
-            showCardCounts: false,
-            turnTimeLimit: 0
-          }
+          currentTurn: '',
+          botActive: false
         };
-
-        await saveGame(initialData);
+        setRoomCode(code);
+        await syncToCloud(initial);
         setView('lobby');
-        loadGame();
       };
 
-      /* ========================= JOIN ROOM ========================= */
       const joinRoom = async () => {
-        if (!playerName.trim()) {
-          alert('Please enter your name');
-          return;
-        }
-        if (!roomCode.trim()) {
-          alert('Please enter room code');
-          return;
-        }
-
+        if (!playerName.trim() || !roomCode.trim()) return setErrorMsg("Name and Code required");
         try {
-          const { data, error } = await supabase
-            .from('games')
-            .select('game_data')
-            .eq('room_code', roomCode)
-            .single();
-
-          if (error || !data) {
-            alert('Room not found!');
-            return;
-          }
-
-          const gameData = data.game_data;
+          const { data, error } = await supabase.from('games').select('game_data').eq('room_code', roomCode).single();
+          if (error || !data) return setErrorMsg("Room not found");
           
-          if (gameData.players.some(p => p.id === myId)) {
-            setView('lobby');
-            loadGame();
-            return;
+          const updated = { ...data.game_data };
+          if (!updated.players.find(p => p.id === myId)) {
+            updated.players.push({ id: myId, name: playerName, hand: [], isBot: false });
+            // Balance teams
+            if (updated.teams.team1.length <= updated.teams.team2.length) updated.teams.team1.push(myId);
+            else updated.teams.team2.push(myId);
           }
-
-          if (gameData.players.some(p => p.name.toLowerCase() === playerName.toLowerCase())) {
-            alert('Name already taken!');
-            return;
-          }
-
-          setView('teamSelect');
-        } catch (e) {
-          alert('Error joining room');
-        }
-      };
-
-      const confirmTeamJoin = async () => {
-        if (!selectedTeam) {
-          alert('Please select a team');
-          return;
-        }
-
-        try {
-          const { data } = await supabase
-            .from('games')
-            .select('game_data')
-            .eq('room_code', roomCode)
-            .single();
-
-          const gameData = data.game_data;
-          gameData.players.push({ id: myId, name: playerName, hand: [], isBot: false });
-          gameData.teams[selectedTeam].push(myId);
-          await saveGame(gameData);
+          await syncToCloud(updated);
           setView('lobby');
-          loadGame();
-        } catch (e) {
-          alert('Error joining room');
-        }
+        } catch(e) { setErrorMsg("Failed to join room"); }
       };
 
-      /* ========================= ADD BOTS ========================= */
       const addBot = async (team) => {
-        try {
-          const { data } = await supabase
-            .from('games')
-            .select('game_data')
-            .eq('room_code', roomCode)
-            .single();
-
-          if (!data) return;
-
-          const gameData = data.game_data;
-          const bot = createBot(gameData.players);
-          gameData.players.push(bot);
-          gameData.teams[team].push(bot.id);
-          await saveGame(gameData);
-          
-          setTimeout(() => loadGame(), 100);
-        } catch (e) {
-          console.error('Error adding bot:', e);
-        }
+        if (!gameData) return;
+        const updated = { ...gameData };
+        const botId = `bot-${Date.now()}`;
+        const botName = `Bot ${updated.players.filter(p => p.isBot).length + 1}`;
+        updated.players.push({ id: botId, name: botName, hand: [], isBot: true });
+        updated.teams[team].push(botId);
+        await syncToCloud(updated);
       };
 
-      const removePlayer = async (playerId) => {
-        try {
-          const { data } = await supabase
-            .from('games')
-            .select('game_data')
-            .eq('room_code', roomCode)
-            .single();
-
-          const gameData = data.game_data;
-          gameData.players = gameData.players.filter(p => p.id !== playerId);
-          gameData.teams.team1 = gameData.teams.team1.filter(id => id !== playerId);
-          gameData.teams.team2 = gameData.teams.team2.filter(id => id !== playerId);
-          await saveGame(gameData);
-          await loadGame();
-        } catch (e) {
-          console.error('Error removing player:', e);
-          alert('Error removing player');
-        }
-      };
-
-      /* ========================= LEAVE/DELETE ROOM ========================= */
-      const leaveRoom = async () => {
-        if (!confirm('Are you sure you want to leave this room?')) {
-          return;
-        }
-
-        try {
-          const { data } = await supabase
-            .from('games')
-            .select('game_data')
-            .eq('room_code', roomCode)
-            .single();
-
-          if (data) {
-            const gameData = data.game_data;
-            
-            // If game is in progress, replace player with a bot
-            if (gameData.phase === 'game') {
-              const me = gameData.players.find(p => p.id === myId);
-              if (me) {
-                const bot = createBot(gameData.players);
-                bot.hand = me.hand; // Transfer cards to bot
-                bot.name = `${me.name} (Bot)`;
-                
-                // Replace player with bot
-                const playerIndex = gameData.players.findIndex(p => p.id === myId);
-                gameData.players[playerIndex] = bot;
-                
-                // Update team
-                if (gameData.teams.team1.includes(myId)) {
-                  gameData.teams.team1 = gameData.teams.team1.map(id => id === myId ? bot.id : id);
-                } else {
-                  gameData.teams.team2 = gameData.teams.team2.map(id => id === myId ? bot.id : id);
-                }
-                
-                // If it was this player's turn, give it to the bot
-                if (gameData.currentTurn === myId) {
-                  gameData.currentTurn = bot.id;
-                }
-                
-                gameData.gameLog.unshift(`${me.name} left and was replaced by a bot`);
-                await saveGame(gameData);
-              }
-            } else {
-              // In lobby, just remove the player
-              gameData.players = gameData.players.filter(p => p.id !== myId);
-              gameData.teams.team1 = gameData.teams.team1.filter(id => id !== myId);
-              gameData.teams.team2 = gameData.teams.team2.filter(id => id !== myId);
-
-              // If no players left, delete the room entirely
-              if (gameData.players.length === 0) {
-                await supabase
-                  .from('games')
-                  .delete()
-                  .eq('room_code', roomCode);
-                
-                localStorage.removeItem(`game:${roomCode}`);
-              } else {
-                // If host left, assign new host
-                if (gameData.hostId === myId) {
-                  gameData.hostId = gameData.players[0].id;
-                }
-                await saveGame(gameData);
-              }
-            }
+      const leaveTable = async () => {
+        if (!gameData) return;
+        const updated = { ...gameData };
+        if (updated.phase === 'game') {
+          // Robust Replacement: Replace human with bot state
+          const idx = updated.players.findIndex(p => p.id === myId);
+          if (idx !== -1) {
+            updated.players[idx].isBot = true;
+            updated.players[idx].name += " (Bot)";
+            updated.gameLog.unshift(`${playerName} disconnected. Bot taking over.`);
           }
-
-          // Reset local state
-          setRoomCode('');
-          setGameData(null);
-          setView('home');
-        } catch (e) {
-          console.error('Error leaving room:', e);
-          alert('Error leaving room');
-        }
-      };
-
-      /* ========================= START GAME ========================= */
-      const startGame = async () => {
-        try {
-          const { data } = await supabase
-            .from('games')
-            .select('game_data')
-            .eq('room_code', roomCode)
-            .single();
-
-          const gameData = data.game_data;
-          
-          if (gameData.players.length < 4) {
-            alert('Need at least 4 players to start!');
-            return;
-          }
-
-          if (gameData.teams.team1.length === 0 || gameData.teams.team2.length === 0) {
-            alert('Both teams need at least one player!');
-            return;
-          }
-
-          let deck = [];
-          SETS.forEach(set => deck.push(...set.cards));
-          shuffle(deck);
-
-          const cardsPerPlayer = Math.floor(deck.length / gameData.players.length);
-          gameData.players.forEach((p, idx) => {
-            p.hand = deck.slice(idx * cardsPerPlayer, (idx + 1) * cardsPerPlayer);
-          });
-
-          gameData.phase = 'game';
-          gameData.currentTurn = gameData.players[0].id;
-          gameData.turnStartTime = Date.now();
-          gameData.gameLog.unshift('Game started!');
-
-          await saveGame(gameData);
-          setView('game');
-          loadGame();
-        } catch (e) {
-          alert('Error starting game');
-        }
-      };
-
-      /* ========================= SETTINGS ========================= */
-      const toggleAskHistory = async () => {
-        try {
-          const { data } = await supabase
-            .from('games')
-            .select('game_data')
-            .eq('room_code', roomCode)
-            .single();
-
-          if (!data) return;
-
-          const gameData = data.game_data;
-          gameData.settings.showAskHistory = !gameData.settings.showAskHistory;
-          
-          await saveGame(gameData);
-          setGameData({...gameData});
-        } catch (e) {
-          console.error('Error toggling setting:', e);
-        }
-      };
-
-      const toggleCardCounts = async () => {
-        try {
-          const { data } = await supabase
-            .from('games')
-            .select('game_data')
-            .eq('room_code', roomCode)
-            .single();
-
-          if (!data) return;
-
-          const gameData = data.game_data;
-          gameData.settings.showCardCounts = !gameData.settings.showCardCounts;
-          
-          await saveGame(gameData);
-          setGameData({...gameData});
-        } catch (e) {
-          console.error('Error toggling setting:', e);
-        }
-      };
-
-      const setAskHistoryCount = async (count) => {
-        try {
-          const { data } = await supabase
-            .from('games')
-            .select('game_data')
-            .eq('room_code', roomCode)
-            .single();
-
-          if (!data) return;
-
-          const gameData = data.game_data;
-          gameData.settings.askHistoryCount = count;
-          
-          await saveGame(gameData);
-          setGameData({...gameData});
-        } catch (e) {
-          console.error('Error changing setting:', e);
-        }
-      };
-
-      const setTurnTimeLimit = async (seconds) => {
-        try {
-          const { data } = await supabase
-            .from('games')
-            .select('game_data')
-            .eq('room_code', roomCode)
-            .single();
-
-          if (!data) return;
-
-          const gameData = data.game_data;
-          gameData.settings.turnTimeLimit = seconds;
-          
-          await saveGame(gameData);
-          setGameData({...gameData});
-        } catch (e) {
-          console.error('Error changing setting:', e);
-        }
-      };
-
-      /* ========================= ASK FOR CARD ========================= */
-      const askForCard = async () => {
-        if (!selectedOpponent || !selectedCard) {
-          alert('Select opponent and card!');
-          return;
-        }
-
-        try {
-          const { data } = await supabase
-            .from('games')
-            .select('game_data')
-            .eq('room_code', roomCode)
-            .single();
-
-          const gameData = data.game_data;
-          const opponent = gameData.players.find(p => p.id === selectedOpponent);
-          const me = gameData.players.find(p => p.id === myId);
-
-          if (!opponent || !me) return;
-
-          const hasCard = opponent.hand.includes(selectedCard);
-
-          if (hasCard) {
-            opponent.hand = opponent.hand.filter(c => c !== selectedCard);
-            me.hand.push(selectedCard);
-            gameData.gameLog.unshift(`${me.name} asked ${opponent.name} - SUCCESS!`);
-            gameData.askHistory.unshift({ from: me.name, to: opponent.name, card: selectedCard, success: true });
-          } else {
-            gameData.currentTurn = opponent.id;
-            gameData.gameLog.unshift(`${me.name} asked ${opponent.name} - FAILED`);
-            gameData.askHistory.unshift({ from: me.name, to: opponent.name, card: selectedCard, success: false });
-          }
-
-          gameData.askHistory = gameData.askHistory.slice(0, 2);
-
-          await saveGame(gameData);
-          setSelectedCard('');
-          setSelectedOpponent('');
-          loadGame();
-        } catch (e) {
-          alert('Error making move');
-        }
-      };
-
-      /* ========================= BOT TURN ========================= */
-      const executeBotTurn = async (bot, data) => {
-        const decision = botDecide(bot, data);
-        
-        if (!decision) {
-          const myTeam = data.teams.team1.includes(bot.id) ? 'team1' : 'team2';
-          const oppTeam = myTeam === 'team1' ? 'team2' : 'team1';
-          data.currentTurn = data.teams[oppTeam][0];
-          data.turnStartTime = Date.now();
-          data.botThinking = false;
-          await saveGame(data);
-          loadGame();
-          return;
-        }
-
-        const target = data.players.find(p => p.id === decision.targetId);
-        const hasCard = target.hand.includes(decision.card);
-
-        if (hasCard) {
-          target.hand = target.hand.filter(c => c !== decision.card);
-          bot.hand.push(decision.card);
-          data.gameLog.unshift(`${bot.name} asked ${target.name} - SUCCESS!`);
-          data.askHistory.unshift({ from: bot.name, to: target.name, card: decision.card, success: true });
-          data.lastAskedPlayer = target.id;
-          data.turnStartTime = Date.now();
         } else {
-          data.currentTurn = target.id;
-          data.turnStartTime = Date.now();
-          data.lastAskedPlayer = '';
-          data.gameLog.unshift(`${bot.name} asked ${target.name} - FAILED`);
-          data.askHistory.unshift({ from: bot.name, to: target.name, card: decision.card, success: false });
+          updated.players = updated.players.filter(p => p.id !== myId);
+          updated.teams.team1 = updated.teams.team1.filter(id => id !== myId);
+          updated.teams.team2 = updated.teams.team2.filter(id => id !== myId);
+          if (updated.hostId === myId && updated.players.length > 0) updated.hostId = updated.players[0].id;
         }
-
-        data.askHistory = data.askHistory.slice(0, data.settings.askHistoryCount);
-        data.botThinking = false;
-        await saveGame(data);
-        loadGame();
+        await syncToCloud(updated);
+        setView('home');
+        setRoomCode('');
       };
 
-      /* ========================= CALL SET ========================= */
+      const startGame = async () => {
+        if (gameData.players.length < 2) return setErrorMsg("Need more players");
+        const updated = { ...gameData };
+        let deck = []; SETS.forEach(s => deck.push(...s.cards));
+        deck.sort(() => Math.random() - 0.5);
+        
+        updated.players.forEach((p, i) => {
+          p.hand = deck.filter((_, idx) => idx % updated.players.length === i);
+        });
+        
+        updated.phase = 'game';
+        updated.currentTurn = myId;
+        updated.gameLog.unshift("Game Started! Team 1 vs Team 2");
+        await syncToCloud(updated);
+      };
+
+      const handleAsk = async () => {
+        if (!askTarget || !askCard) return;
+        const updated = { ...gameData };
+        const target = updated.players.find(p => p.id === askTarget);
+        const me = updated.players.find(p => p.id === myId);
+
+        if (target.hand.includes(askCard)) {
+          target.hand = target.hand.filter(c => c !== askCard);
+          me.hand.push(askCard);
+          updated.gameLog.unshift(`${me.name} successfully took ${askCard} from ${target.name}`);
+        } else {
+          updated.currentTurn = target.id;
+          updated.gameLog.unshift(`${me.name} failed to get ${askCard} from ${target.name}. Turn switches.`);
+          // Trigger Bot Turn if applicable
+          if (target.isBot) setTimeout(() => runBotTurn(target.id), 1500);
+        }
+        setAskCard('');
+        await syncToCloud(updated);
+      };
+
+      const runBotTurn = async (botId) => {
+        // Simple Bot Logic with delay for realism
+        const { data } = await supabase.from('games').select('game_data').eq('room_code', roomCode).single();
+        const updated = data.game_data;
+        if (updated.currentTurn !== botId) return;
+
+        const bot = updated.players.find(p => p.id === botId);
+        const myTeam = updated.teams.team1.includes(botId) ? 'team1' : 'team2';
+        const opponents = updated.players.filter(p => !updated.teams[myTeam].includes(p.id) && p.hand.length > 0);
+        
+        if (opponents.length === 0) return;
+
+        // Bot picks a random card from a set it partially owns
+        const botSet = SETS.find(s => s.cards.some(c => bot.hand.includes(c)));
+        const targetCard = botSet.cards.find(c => !bot.hand.includes(c));
+        const targetOpp = opponents[0];
+
+        if (targetOpp.hand.includes(targetCard)) {
+          targetOpp.hand = targetOpp.hand.filter(c => c !== targetCard);
+          bot.hand.push(targetCard);
+          updated.gameLog.unshift(`[Bot] ${bot.name} took ${targetCard} from ${targetOpp.name}`);
+          await syncToCloud(updated);
+          setTimeout(() => runBotTurn(botId), 2000); // Bot continues
+        } else {
+          updated.currentTurn = targetOpp.id;
+          updated.gameLog.unshift(`[Bot] ${bot.name} asked ${targetOpp.name} for ${targetCard} and failed.`);
+          await syncToCloud(updated);
+        }
+      };
+
       const submitCall = async () => {
+        const updated = { ...gameData };
         const set = SETS[callSetIndex];
-        if (Object.values(callCards).length !== set.cards.length) {
-          alert('Must assign all cards in the set!');
-          return;
-        }
+        let isCorrect = true;
 
-        try {
-          const { data } = await supabase
-            .from('games')
-            .select('game_data')
-            .eq('room_code', roomCode)
-            .single();
-
-          const gameData = data.game_data;
-          let correct = true;
-          const actualLocations = {};
-
-          set.cards.forEach(card => {
-            const holder = gameData.players.find(p => p.hand.includes(card));
-            if (holder) actualLocations[card] = holder.id;
-          });
-
-          set.cards.forEach(card => {
-            if (callCards[card] !== actualLocations[card]) {
-              correct = false;
-            }
-          });
-
-          const me = gameData.players.find(p => p.id === myId);
-          const myTeam = gameData.teams.team1.includes(myId) ? 'team1' : 'team2';
-          const oppTeam = myTeam === 'team1' ? 'team2' : 'team1';
-
-          if (correct) {
-            gameData.scores[myTeam]++;
-            gameData.gameLog.unshift(`${me.name} correctly called ${set.name}! ${myTeam === 'team1' ? 'Team 1' : 'Team 2'} scores!`);
-            gameData.claimedSets.push(set.name);
-          } else {
-            gameData.scores[oppTeam]++;
-            gameData.gameLog.unshift(`${me.name} INCORRECTLY called ${set.name}! ${oppTeam === 'team1' ? 'Team 1' : 'Team 2'} gets the set!`);
-            gameData.claimedSets.push(set.name);
-          }
-
-          set.cards.forEach(card => {
-            gameData.players.forEach(p => {
-              p.hand = p.hand.filter(c => c !== card);
-            });
-          });
-
-          await saveGame(gameData);
-          setShowCallModal(false);
-          setCallCards({});
-          loadGame();
-
-          if (gameData.scores.team1 + gameData.scores.team2 === 9) {
-            setTimeout(() => {
-              alert(`Game Over! ${gameData.scores.team1 > gameData.scores.team2 ? 'Team 1' : 'Team 2'} wins ${gameData.scores.team1}-${gameData.scores.team2}!`);
-            }, 500);
-          }
-        } catch (e) {
-          alert('Error submitting call');
-        }
-      };
-
-      /* ========================= GET ASKABLE CARDS ========================= */
-      const getAskableCards = () => {
-        if (!gameData) return [];
-        const me = gameData.players.find(p => p.id === myId);
-        if (!me || !me.hand.length) return [];
-
-        let askable = [];
-        me.hand.forEach(card => {
-          const set = findSet(card);
-          if (set) {
-            set.cards.forEach(c => {
-              if (!me.hand.includes(c) && !askable.includes(c)) {
-                askable.push(c);
-              }
-            });
+        set.cards.forEach(card => {
+          const actualOwner = updated.players.find(p => p.hand.includes(card));
+          if (!actualOwner || actualOwner.id !== callAssignments[card]) {
+            isCorrect = false;
           }
         });
-        return askable;
+
+        const myTeam = updated.teams.team1.includes(myId) ? 'team1' : 'team2';
+        const oppTeam = myTeam === 'team1' ? 'team2' : 'team1';
+
+        if (isCorrect) {
+          updated.scores[myTeam]++;
+          updated.gameLog.unshift(`YES! Correct call by ${playerName}. ${set.name} goes to ${myTeam}.`);
+        } else {
+          updated.scores[oppTeam]++;
+          updated.gameLog.unshift(`NO! Incorrect call by ${playerName}. ${set.name} awarded to ${oppTeam}.`);
+        }
+
+        updated.claimedSets.push(set.name);
+        set.cards.forEach(c => updated.players.forEach(p => p.hand = p.hand.filter(hc => hc !== c)));
+        setShowCallModal(false);
+        await syncToCloud(updated);
       };
 
-      /* ========================= RENDER VIEWS ========================= */
+      // Effect to auto-populate call assignments for cards YOU hold
+      useEffect(() => {
+        if (showCallModal && gameData) {
+          const me = gameData.players.find(p => p.id === myId);
+          const currentSetCards = SETS[callSetIndex].cards;
+          let newAssigns = {};
+          currentSetCards.forEach(c => {
+            if (me.hand.includes(c)) newAssigns[c] = myId;
+          });
+          setCallAssignments(newAssigns);
+        }
+      }, [showCallModal, callSetIndex]);
 
-      if (view === 'home') {
-        return (
-          <div className="min-h-screen bg-gradient-to-br from-green-700 via-green-800 to-green-900 flex items-center justify-center p-4">
-            <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-md w-full">
-              <div className="text-center mb-8">
-                <h1 className="text-5xl font-bold text-green-800 mb-2">Literature</h1>
-                <p className="text-gray-600">Card Game - 9 Sets</p>
-              </div>
-
-              <input
-                type="text"
-                placeholder="Your Name"
-                value={playerName}
-                onChange={(e) => setPlayerName(e.target.value)}
-                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg mb-4 focus:outline-none focus:border-green-600"
-              />
-
-              <button
-                onClick={createRoom}
-                disabled={!playerName.trim()}
-                className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 disabled:bg-gray-300 mb-4"
-              >
-                Create New Game
-              </button>
-
-              <div className="relative my-6">
-                <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-gray-300"></div>
-                </div>
-                <div className="relative flex justify-center text-sm">
-                  <span className="px-2 bg-white text-gray-500">or</span>
-                </div>
-              </div>
-
-              <input
-                type="text"
-                placeholder="Room Code"
-                value={roomCode}
-                onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
-                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg mb-4 focus:outline-none focus:border-green-600"
-              />
-
-              <button
-                onClick={joinRoom}
-                disabled={!playerName.trim() || !roomCode.trim()}
-                className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 disabled:bg-gray-300"
-              >
-                Join Game
-              </button>
-            </div>
+      /* ========================= RENDERING ========================= */
+      if (view === 'home') return (
+        <div className="flex flex-col items-center justify-center min-h-screen text-white p-6">
+          <div className="wood-panel p-10 rounded-3xl shadow-2xl w-full max-w-md border-4 border-[#2d1a12]">
+            <h1 className="text-5xl font-black text-center mb-2 italic tracking-tighter text-yellow-500">LITERATURE</h1>
+            <p className="text-center text-xs uppercase tracking-widest mb-8 opacity-60">Professional Card Table</p>
+            
+            {errorMsg && <div className="bg-red-500/20 text-red-200 p-3 rounded-lg text-sm mb-4 border border-red-500">{errorMsg}</div>}
+            
+            <input className="w-full p-4 rounded-xl bg-black/40 border border-white/10 mb-4 outline-none focus:border-yellow-500 transition-all" placeholder="Enter Your Name" value={playerName} onChange={e => setPlayerName(e.target.value)} />
+            <button onClick={createRoom} className="w-full bg-yellow-600 text-black font-black py-4 rounded-xl mb-4 hover:bg-yellow-500 shadow-lg active:scale-95 transition-all">CREATE NEW TABLE</button>
+            <div className="flex items-center gap-4 mb-4"><div className="h-px bg-white/10 flex-1"></div><span className="text-xs opacity-40">JOIN EXISTING</span><div className="h-px bg-white/10 flex-1"></div></div>
+            <input className="w-full p-4 rounded-xl bg-black/40 border border-white/10 mb-3 outline-none uppercase font-mono text-center text-xl tracking-widest" placeholder="6-CHAR CODE" value={roomCode} onChange={e => setRoomCode(e.target.value.toUpperCase())} />
+            <button onClick={joinRoom} className="w-full bg-emerald-600 font-black py-4 rounded-xl hover:bg-emerald-500 active:scale-95 transition-all">JOIN TABLE</button>
           </div>
-        );
-      }
+        </div>
+      );
 
-      if (view === 'teamSelect') {
-        return (
-          <div className="min-h-screen bg-gradient-to-br from-green-700 to-green-900 flex items-center justify-center p-4">
-            <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full">
-              <h2 className="text-2xl font-bold text-center mb-6">Choose Your Team</h2>
-
-              <div className="space-y-4">
-                <button
-                  onClick={() => setSelectedTeam('team1')}
-                  className={`w-full p-6 rounded-lg border-4 transition-all ${
-                    selectedTeam === 'team1'
-                      ? 'border-blue-600 bg-blue-50'
-                      : 'border-gray-300 bg-white hover:border-blue-400'
-                  }`}
-                >
-                  <div className="text-2xl font-bold text-blue-600 mb-2">Team 1</div>
-                  <div className="text-sm text-gray-600">Blue Team</div>
-                </button>
-
-                <button
-                  onClick={() => setSelectedTeam('team2')}
-                  className={`w-full p-6 rounded-lg border-4 transition-all ${
-                    selectedTeam === 'team2'
-                      ? 'border-red-600 bg-red-50'
-                      : 'border-gray-300 bg-white hover:border-red-400'
-                  }`}
-                >
-                  <div className="text-2xl font-bold text-red-600 mb-2">Team 2</div>
-                  <div className="text-sm text-gray-600">Red Team</div>
-                </button>
+      if (view === 'lobby' && gameData) return (
+        <div className="p-8 text-white max-w-4xl mx-auto h-screen flex flex-col">
+          <div className="wood-panel rounded-3xl p-8 border-4 border-[#2d1a12] shadow-2xl flex-1 flex flex-col">
+            <div className="flex justify-between items-center mb-10">
+              <div>
+                <h2 className="text-xs uppercase tracking-[0.3em] opacity-50 mb-1">Table Code</h2>
+                <h1 className="text-6xl font-black text-yellow-500 font-mono tracking-tighter">{roomCode}</h1>
               </div>
-
-              <button
-                onClick={gameData ? confirmTeamJoin : confirmTeamCreate}
-                disabled={!selectedTeam}
-                className="w-full mt-6 bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 disabled:bg-gray-300"
-              >
-                Confirm Team
-              </button>
-
-              <button
-                onClick={() => {
-                  setView('home');
-                  setSelectedTeam('');
-                  setRoomCode('');
-                }}
-                className="w-full mt-2 bg-gray-300 text-gray-700 py-2 rounded-lg font-semibold hover:bg-gray-400"
-              >
-                Cancel
-              </button>
+              {gameData.hostId === myId ? (
+                <button onClick={startGame} className="bg-emerald-500 text-black px-12 py-5 rounded-2xl font-black text-xl shadow-[0_0_20px_rgba(16,185,129,0.4)] hover:scale-105 active:scale-95 transition-all">START GAME</button>
+              ) : (
+                <div className="text-right"><div className="animate-pulse text-emerald-400 font-bold">Waiting for host...</div></div>
+              )}
             </div>
-          </div>
-        );
-      }
 
-      if (view === 'lobby' && gameData) {
-        const isHost = gameData.hostId === myId;
-        const myTeamKey = gameData.teams.team1.includes(myId) ? 'team1' : 'team2';
-        const myTeamName = myTeamKey === 'team1' ? 'Team 1' : 'Team 2';
-
-        return (
-          <div className="min-h-screen bg-gradient-to-br from-green-700 to-green-900 p-4">
-            <div className="max-w-4xl mx-auto">
-              <div className="bg-white rounded-3xl shadow-2xl p-8">
-                <div className="text-center mb-6">
-                  <h2 className="text-3xl font-bold mb-2">Room Code</h2>
-                  <div className="text-5xl font-mono font-bold text-green-600">{roomCode}</div>
-                  <div className="text-lg text-gray-600 mt-2">You're on {myTeamName}</div>
-                </div>
-
-                <div className="mb-6">
-                  <div className="space-y-3">
-                    <label className="flex items-center justify-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={gameData.settings.showAskHistory}
-                        onChange={toggleAskHistory}
-                        disabled={!isHost}
-                        className="w-5 h-5"
-                      />
-                      <span className="font-semibold">Show Ask History {!isHost && '(Host only)'}</span>
-                    </label>
-
-                    {gameData.settings.showAskHistory && (
-                      <div className="flex items-center justify-center gap-2">
-                        <span className="text-sm">Number of asks to show:</span>
-                        <select
-                          value={gameData.settings.askHistoryCount}
-                          onChange={(e) => setAskHistoryCount(Number(e.target.value))}
-                          disabled={!isHost}
-                          className="px-3 py-1 border-2 border-gray-300 rounded text-gray-800 disabled:bg-gray-100"
-                        >
-                          <option value={2}>2</option>
-                          <option value={3}>3</option>
-                        </select>
-                      </div>
-                    )}
-
-                    <label className="flex items-center justify-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={gameData.settings.showCardCounts}
-                        onChange={toggleCardCounts}
-                        disabled={!isHost}
-                        className="w-5 h-5"
-                      />
-                      <span className="font-semibold">Show Card Counts {!isHost && '(Host only)'}</span>
-                    </label>
-
-                    <div className="flex items-center justify-center gap-2">
-                      <span className="text-sm">Turn Time Limit:</span>
-                      <select
-                        value={gameData.settings.turnTimeLimit}
-                        onChange={(e) => setTurnTimeLimit(Number(e.target.value))}
-                        disabled={!isHost}
-                        className="px-3 py-1 border-2 border-gray-300 rounded text-gray-800 disabled:bg-gray-100"
-                      >
-                        <option value={0}>No Limit</option>
-                        <option value={60}>1 Minute</option>
-                        <option value={120}>2 Minutes</option>
-                      </select>
+            <div className="grid grid-cols-2 gap-10 flex-1">
+              <div className="bg-blue-900/20 rounded-3xl p-6 border border-blue-500/20 relative">
+                <div className="absolute -top-3 left-6 bg-blue-600 px-4 py-1 rounded-full text-xs font-black">TEAM ONE</div>
+                <div className="space-y-3 mt-4">
+                  {gameData.teams.team1.map(id => {
+                    const p = gameData.players.find(x => x.id === id);
+                    return <div key={id} className="flex justify-between items-center bg-black/20 p-3 rounded-xl border border-white/5">
+                      <span className="font-bold">{p?.name} {id === myId && " (You)"}</span>
+                      {p?.isBot && <span className="status-badge bg-gray-500">BOT</span>}
                     </div>
-                  </div>
+                  })}
+                  {gameData.hostId === myId && <button onClick={() => addBot('team1')} className="w-full py-2 border-2 border-dashed border-blue-500/30 rounded-xl text-xs opacity-50 hover:opacity-100">+ Add Bot Player</button>}
                 </div>
+              </div>
 
-                <div className="grid md:grid-cols-2 gap-6 mb-6">
-                  <div>
-                    <h3 className="font-bold text-xl mb-3 text-blue-600 text-center">
-                      Team 1 ({gameData.teams.team1.length})
-                    </h3>
-                    {gameData.players
-                      .filter(p => gameData.teams.team1.includes(p.id))
-                      .map(p => (
-                        <div
-                          key={p.id}
-                          className="bg-blue-50 px-4 py-3 rounded-lg mb-2 flex items-center justify-between"
-                        >
-                          <span>
-                            {p.name} {p.id === myId && '(You)'}
-                          </span>
-                          {isHost && p.isBot && (
-                            <button
-                              onClick={() => removePlayer(p.id)}
-                              className="text-red-600 hover:text-red-800 text-sm"
-                            >
-                              Remove
-                            </button>
-                          )}
-                        </div>
-                      ))}
-                    {isHost && (
-                      <button
-                        onClick={() => addBot('team1')}
-                        className="w-full bg-blue-600 text-white py-2 rounded-lg mt-2 hover:bg-blue-700"
-                      >
-                        + Add Bot
-                      </button>
-                    )}
-                  </div>
-
-                  <div>
-                    <h3 className="font-bold text-xl mb-3 text-red-600 text-center">
-                      Team 2 ({gameData.teams.team2.length})
-                    </h3>
-                    {gameData.players
-                      .filter(p => gameData.teams.team2.includes(p.id))
-                      .map(p => (
-                        <div
-                          key={p.id}
-                          className="bg-red-50 px-4 py-3 rounded-lg mb-2 flex items-center justify-between"
-                        >
-                          <span>
-                            {p.name} {p.id === myId && '(You)'}
-                          </span>
-                          {isHost && p.isBot && (
-                            <button
-                              onClick={() => removePlayer(p.id)}
-                              className="text-red-600 hover:text-red-800 text-sm"
-                            >
-                              Remove
-                            </button>
-                          )}
-                        </div>
-                      ))}
-                    {isHost && (
-                      <button
-                        onClick={() => addBot('team2')}
-                        className="w-full bg-red-600 text-white py-2 rounded-lg mt-2 hover:bg-red-700"
-                      >
-                        + Add Bot
-                      </button>
-                    )}
-                  </div>
+              <div className="bg-red-900/20 rounded-3xl p-6 border border-red-500/20 relative">
+                <div className="absolute -top-3 left-6 bg-red-600 px-4 py-1 rounded-full text-xs font-black">TEAM TWO</div>
+                <div className="space-y-3 mt-4">
+                  {gameData.teams.team2.map(id => {
+                    const p = gameData.players.find(x => x.id === id);
+                    return <div key={id} className="flex justify-between items-center bg-black/20 p-3 rounded-xl border border-white/5">
+                      <span className="font-bold">{p?.name} {id === myId && " (You)"}</span>
+                      {p?.isBot && <span className="status-badge bg-gray-500">BOT</span>}
+                    </div>
+                  })}
+                  {gameData.hostId === myId && <button onClick={() => addBot('team2')} className="w-full py-2 border-2 border-dashed border-red-500/30 rounded-xl text-xs opacity-50 hover:opacity-100">+ Add Bot Player</button>}
                 </div>
-
-                {isHost && (
-                  <button
-                    onClick={startGame}
-                    className="w-full bg-green-600 text-white py-4 rounded-lg font-bold text-xl hover:bg-green-700 mb-3"
-                  >
-                    {gameData.players.length < 4
-                      ? `Waiting for ${4 - gameData.players.length} more players...`
-                      : 'Start Game'}
-                  </button>
-                )}
-
-                <button
-                  onClick={leaveRoom}
-                  className="w-full bg-red-600 text-white py-2 rounded-lg font-semibold hover:bg-red-700"
-                >
-                  Leave Room
-                </button>
               </div>
             </div>
+            
+            <button onClick={leaveTable} className="mt-8 text-white/30 hover:text-red-400 transition-colors text-sm uppercase font-bold">Leave Table</button>
           </div>
-        );
-      }
+        </div>
+      );
 
       if (view === 'game' && gameData) {
         const me = gameData.players.find(p => p.id === myId);
-        const myTeam = gameData.teams.team1.includes(myId) ? 'team1' : 'team2';
         const isMyTurn = gameData.currentTurn === myId;
-        const currentPlayer = gameData.players.find(p => p.id === gameData.currentTurn);
-
-        const [timeRemaining, setTimeRemaining] = useState(null);
-        
-        useEffect(() => {
-          if (!gameData.settings.turnTimeLimit || !gameData.turnStartTime) return;
-          
-          const interval = setInterval(async () => {
-            const elapsed = Math.floor((Date.now() - gameData.turnStartTime) / 1000);
-            const remaining = gameData.settings.turnTimeLimit - elapsed;
-            setTimeRemaining(remaining);
-
-            if (remaining <= 0 && isMyTurn) {
-              try {
-                const { data } = await supabase
-                  .from('games')
-                  .select('game_data')
-                  .eq('room_code', roomCode)
-                  .single();
-
-                const updatedData = data.game_data;
-                const oppTeam = myTeam === 'team1' ? 'team2' : 'team1';
-                updatedData.currentTurn = updatedData.teams[oppTeam][0];
-                updatedData.turnStartTime = Date.now();
-                updatedData.gameLog.unshift(`${me.name}'s turn timed out!`);
-                await saveGame(updatedData);
-                loadGame();
-              } catch (e) {
-                console.error('Error timing out turn:', e);
-              }
-            }
-          }, 1000);
-
-          return () => clearInterval(interval);
-        }, [gameData.turnStartTime, isMyTurn]);
+        const myTeam = gameData.teams.team1.includes(myId) ? 'team1' : 'team2';
 
         return (
-          <div className="min-h-screen bg-gradient-to-br from-green-700 to-green-900 p-4">
-            <div className="max-w-7xl mx-auto">
-              <div className="bg-white rounded-2xl shadow-2xl p-6 mb-4">
-                <div className="flex justify-between items-center mb-4">
-                  <div className="flex items-center gap-4">
-                    <h1 className="text-2xl font-bold">Room {roomCode}</h1>
-                    <button
-                      onClick={leaveRoom}
-                      className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-semibold hover:bg-red-700"
-                    >
-                      Leave Game
-                    </button>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-sm text-gray-600">Current Turn: {currentPlayer?.name}</div>
-                    {gameData.settings.turnTimeLimit > 0 && timeRemaining !== null && (
-                      <div className={`text-lg font-bold ${timeRemaining <= 10 ? 'text-red-600' : 'text-green-600'}`}>
-                        {Math.max(0, timeRemaining)}s
-                      </div>
-                    )}
-                  </div>
+          <div className="h-screen w-screen relative flex items-center justify-center p-4">
+            {/* The Table */}
+            <div className="felt-table w-[1000px] h-[600px] shadow-2xl">
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-10">
+                <h1 className="text-9xl font-black italic">LITERATURE</h1>
+              </div>
+
+              {/* Scores In Center */}
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex gap-12">
+                <div className="text-center">
+                  <div className="text-blue-400 font-black text-4xl">{gameData.scores.team1}</div>
+                  <div className="text-[10px] uppercase font-bold text-blue-400/50">Team 1</div>
                 </div>
+                <div className="text-center">
+                  <div className="text-red-400 font-black text-4xl">{gameData.scores.team2}</div>
+                  <div className="text-[10px] uppercase font-bold text-red-400/50">Team 2</div>
+                </div>
+              </div>
 
-                <div className="grid md:grid-cols-3 gap-4 mb-4">
-                  <div className="bg-blue-50 p-4 rounded-lg">
-                    <h3 className="font-bold text-blue-600 mb-2">Team 1: {gameData.scores.team1}</h3>
-                    {gameData.players
-                      .filter(p => gameData.teams.team1.includes(p.id))
-                      .map(p => (
-                        <div key={p.id} className="text-sm mb-1">
-                          {gameData.currentTurn === p.id && '(Current Asker) '}
-                          {gameData.lastAskedPlayer === p.id && '(Interrogated) '}
-                          {p.name} {p.id === myId && '(You)'}
-                          {gameData.settings.showCardCounts && ` - ${p.hand.length} cards`}
-                        </div>
-                      ))}
-                  </div>
+              {/* Position Players Circulary */}
+              {gameData.players.map((p, idx) => {
+                const angle = (idx / gameData.players.length) * Math.PI * 2;
+                const x = 50 + Math.cos(angle) * 44;
+                const y = 50 + Math.sin(angle) * 40;
+                const active = gameData.currentTurn === p.id;
 
-                  <div className="bg-red-50 p-4 rounded-lg">
-                    <h3 className="font-bold text-red-600 mb-2">Team 2: {gameData.scores.team2}</h3>
-                    {gameData.players
-                      .filter(p => gameData.teams.team2.includes(p.id))
-                      .map(p => (
-                        <div key={p.id} className="text-sm mb-1">
-                          {gameData.currentTurn === p.id && '(Current Asker) '}
-                          {gameData.lastAskedPlayer === p.id && '(Interrogated) '}
-                          {p.name} {p.id === myId && '(You)'}
-                          {gameData.settings.showCardCounts && ` - ${p.hand.length} cards`}
-                        </div>
-                      ))}
-                  </div>
-
-                  <div className="bg-gray-50 p-4 rounded-lg">
-                    <h3 className="font-bold mb-2">Game Log</h3>
-                    <div className="text-sm max-h-24 overflow-y-auto">
-                      {gameData.gameLog.slice(0, 5).map((log, i) => (
-                        <div key={i} className="mb-1">{log}</div>
-                      ))}
+                return (
+                  <div key={p.id} className="player-seat" style={{ left: `${x}%`, top: `${y}%` }}>
+                    <div className={`w-32 p-3 rounded-2xl border-2 transition-all ${active ? 'bg-yellow-500 text-black border-white scale-110 shadow-[0_0_20px_rgba(255,255,255,0.3)]' : 'bg-black/60 text-white border-white/10'}`}>
+                      <div className="text-[10px] font-black uppercase opacity-60 truncate">{p.id === myId ? "You" : p.name}</div>
+                      <div className="font-bold text-sm truncate">{p.hand.length} Cards</div>
+                      <div className="flex gap-[-10px] justify-center mt-1">
+                        {[...Array(Math.min(p.hand.length, 4))].map((_, i) => (
+                           <div key={i} className="w-2 h-3 bg-white/20 rounded-sm border border-white/10 -ml-1"></div>
+                        ))}
+                      </div>
                     </div>
                   </div>
+                );
+              })}
+            </div>
+
+            {/* User Interface Overlays */}
+            <div className="fixed bottom-0 left-0 right-0 p-8 flex justify-between items-end pointer-events-none">
+              {/* Activity Log */}
+              <div className="w-72 bg-black/80 backdrop-blur-xl p-5 rounded-3xl border border-white/10 pointer-events-auto shadow-2xl">
+                <div className="text-[10px] font-black text-yellow-500 uppercase mb-3 tracking-widest border-b border-white/5 pb-2">Recent Plays</div>
+                <div className="h-40 overflow-y-auto space-y-3 pr-2 scrollbar-hide">
+                  {gameData.gameLog.map((log, i) => (
+                    <div key={i} className={`text-xs leading-relaxed ${i === 0 ? 'text-white font-bold' : 'text-white/40'}`}>
+                      <span className="text-yellow-500/50 mr-2">●</span>{log}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Hand & Actions */}
+              <div className="flex flex-col items-center gap-6 pointer-events-auto">
+                <div className="flex gap-2">
+                  {me.hand.sort().map((c, i) => (
+                    <div key={c} className="card-rect transform hover:-translate-y-8 hover:rotate-2 transition-all cursor-default text-emerald-900">
+                      {c}
+                    </div>
+                  ))}
                 </div>
 
-                {gameData.settings.showAskHistory && gameData.askHistory.length > 0 && (
-                  <div className="bg-yellow-50 border-2 border-yellow-400 p-4 rounded-lg mb-4">
-                    <h3 className="font-bold mb-2">Recent Asks (Last {gameData.settings.askHistoryCount})</h3>
-                    {gameData.askHistory.map((ask, i) => (
-                      <div key={i} className="text-sm mb-1">
-                        <span className="font-semibold">{ask.from}</span> asked{' '}
-                        <span className="font-semibold">{ask.to}</span> for{' '}
-                        <span className="font-bold text-blue-600">{ask.card}</span>
-                        {ask.success ? (
-                          <span className="text-green-600 font-bold"> ✓ SUCCESS</span>
-                        ) : (
-                          <span className="text-red-600 font-bold"> ✗ FAILED</span>
-                        )}
-                      </div>
-                    ))}
+                {isMyTurn && (
+                  <div className="bg-white p-2 rounded-2xl flex gap-2 shadow-2xl animate-bounce-in">
+                    <select className="bg-gray-100 p-3 rounded-xl text-black text-sm font-bold border-none outline-none" value={askTarget} onChange={e => setAskTarget(e.target.value)}>
+                      <option value="">Ask Opponent...</option>
+                      {gameData.players.filter(p => !gameData.teams[myTeam].includes(p.id) && p.hand.length > 0).map(p => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                    </select>
+                    <select className="bg-gray-100 p-3 rounded-xl text-black text-sm font-bold border-none outline-none w-36" value={askCard} onChange={e => setAskCard(e.target.value)}>
+                      <option value="">Which Card?</option>
+                      {SETS.filter(s => s.cards.some(c => me.hand.includes(c)))
+                           .flatMap(s => s.cards)
+                           .filter(c => !me.hand.includes(c))
+                           .map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                    <button onClick={handleAsk} disabled={!askCard || !askTarget} className="bg-emerald-600 text-white px-6 py-3 rounded-xl font-black disabled:opacity-20 hover:bg-emerald-500">ASK</button>
+                    <button onClick={() => setShowCallModal(true)} className="bg-yellow-500 text-black px-6 py-3 rounded-xl font-black hover:bg-yellow-400">CALL SET</button>
                   </div>
                 )}
               </div>
 
-              <div className="grid md:grid-cols-2 gap-4">
-                <div className="bg-white rounded-2xl shadow-2xl p-6">
-                  <h2 className="text-xl font-bold mb-4">Your Hand ({me?.hand.length || 0} cards)</h2>
-                  <div className="flex flex-wrap gap-2 mb-6">
-                    {me?.hand.sort().map((card, i) => (
-                      <div
-                        key={i}
-                        className="bg-gradient-to-br from-gray-50 to-gray-100 border-2 border-gray-300 rounded-lg px-4 py-3 font-bold text-lg shadow-sm"
-                      >
-                        {card}
-                      </div>
-                    ))}
-                  </div>
-
-                  {isMyTurn && (
-                    <div className="space-y-4">
-                      <div>
-                        <label className="block font-semibold mb-2">Select Opponent:</label>
-                        <select
-                          value={selectedOpponent}
-                          onChange={(e) => setSelectedOpponent(e.target.value)}
-                          className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg"
-                        >
-                          <option value="">Choose opponent...</option>
-                          {gameData.players
-                            .filter(
-                              p =>
-                                p.id !== myId &&
-                                gameData.teams[myTeam === 'team1' ? 'team2' : 'team1'].includes(p.id)
-                            )
-                            .map(p => (
-                              <option key={p.id} value={p.id}>
-                                {p.name}
-                              </option>
-                            ))}
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="block font-semibold mb-2">Ask for Card:</label>
-                        <select
-                          value={selectedCard}
-                          onChange={(e) => setSelectedCard(e.target.value)}
-                          className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg"
-                        >
-                          <option value="">Choose card...</option>
-                          {getAskableCards()
-                            .sort()
-                            .map(card => (
-                              <option key={card} value={card}>
-                                {card}
-                              </option>
-                            ))}
-                        </select>
-                      </div>
-
-                      <button
-                        onClick={askForCard}
-                        disabled={!selectedOpponent || !selectedCard}
-                        className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 disabled:bg-gray-300"
-                      >
-                        Ask for Card
-                      </button>
-
-                      <button
-                        onClick={() => {
-                          setShowCallModal(true);
-                          setCallCards({});
-                        }}
-                        className="w-full bg-yellow-600 text-white py-3 rounded-lg font-semibold hover:bg-yellow-700"
-                      >
-                        Call a Set
-                      </button>
-                    </div>
-                  )}
-
-                  {!isMyTurn && (
-                    <div className="bg-gray-100 p-4 rounded-lg text-center">
-                      <p className="font-semibold">Waiting for {currentPlayer?.name}...</p>
-                    </div>
-                  )}
-                </div>
-
-                <div className="bg-white rounded-2xl shadow-2xl p-6">
-                  <h2 className="text-xl font-bold mb-4">Sets Status</h2>
-                  <div className="space-y-3">
-                    {SETS.map((set, i) => (
-                      <div
-                        key={i}
-                        className={`border-2 rounded-lg p-3 ${
-                          gameData.claimedSets.includes(set.name)
-                            ? 'border-green-500 bg-green-50 opacity-50'
-                            : 'border-gray-200'
-                        }`}
-                      >
-                        <div className="font-semibold mb-1">
-                          {set.name}
-                          {gameData.claimedSets.includes(set.name) && (
-                            <span className="ml-2 text-green-600">✓ Claimed</span>
-                          )}
-                        </div>
-                        <div className="flex flex-wrap gap-1 text-sm">
-                          {set.cards.map(card => (
-                            <span key={card} className="bg-gray-100 px-2 py-1 rounded">
-                              {card}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
+              {/* Exit Button */}
+              <button onClick={leaveTable} className="bg-red-950/40 hover:bg-red-600 text-white/50 hover:text-white p-4 rounded-full border border-red-500/20 pointer-events-auto transition-all">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+              </button>
             </div>
 
+            {/* CALL MODAL */}
             {showCallModal && (
-              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-                <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-                  <h2 className="text-2xl font-bold mb-4">Call a Set</h2>
-
-                  <div className="mb-4">
-                    <label className="block font-semibold mb-2">Select Set:</label>
-                    <select
-                      value={callSetIndex}
-                      onChange={(e) => {
-                        setCallSetIndex(Number(e.target.value));
-                        setCallCards({});
-                      }}
-                      className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg"
-                    >
-                      {SETS.map((set, i) => (
-                        <option key={i} value={i}>
-                          {set.name}
-                        </option>
-                      ))}
-                    </select>
+              <div className="fixed inset-0 bg-black/95 backdrop-blur-md flex items-center justify-center z-[100] p-6">
+                <div className="wood-panel p-10 rounded-[3rem] border-4 border-[#2d1a12] w-full max-w-2xl shadow-[0_0_100px_rgba(0,0,0,1)]">
+                  <h2 className="text-4xl font-black text-white mb-2 italic tracking-tighter">CALL A SET</h2>
+                  <p className="text-white/40 text-xs mb-8 uppercase tracking-widest">Assign every card in the set to your teammates</p>
+                  
+                  <select className="w-full bg-black/40 text-white p-5 rounded-2xl border border-white/10 mb-8 font-bold text-xl outline-none focus:border-yellow-500" value={callSetIndex} onChange={e => setCallSetIndex(Number(e.target.value))}>
+                    {SETS.map((s, i) => !gameData.claimedSets.includes(s.name) && <option key={i} value={i}>{s.name}</option>)}
+                  </select>
+                  
+                  <div className="grid grid-cols-2 gap-4 mb-10 overflow-y-auto max-h-[40vh] pr-4">
+                    {SETS[callSetIndex].cards.map(card => {
+                      const amIHolder = me.hand.includes(card);
+                      return (
+                        <div key={card} className="bg-white/5 p-4 rounded-2xl border border-white/5 flex items-center gap-4">
+                          <span className="text-2xl font-black text-yellow-500 w-12">{card}</span>
+                          {amIHolder ? (
+                            <div className="text-xs font-black text-emerald-400 uppercase bg-emerald-400/10 px-4 py-2 rounded-lg flex-1">In Your Hand</div>
+                          ) : (
+                            <select className="flex-1 bg-white p-2 rounded-lg text-black font-bold text-sm outline-none" value={callAssignments[card] || ''} onChange={e => setCallAssignments({...callAssignments, [card]: e.target.value})}>
+                              <option value="">Choose...</option>
+                              {gameData.players.filter(p => gameData.teams[myTeam].includes(p.id) && p.id !== myId).map(p => (
+                                <option key={p.id} value={p.id}>{p.name}</option>
+                              ))}
+                            </select>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
 
-                  <div className="space-y-3 mb-4">
-                    {SETS[callSetIndex].cards.map(card => (
-                      <div key={card} className="flex items-center gap-3">
-                        <span className="font-bold w-16">{card}</span>
-                        <select
-                          value={callCards[card] || ''}
-                          onChange={(e) => setCallCards({ ...callCards, [card]: e.target.value })}
-                          className="flex-1 px-4 py-2 border-2 border-gray-300 rounded-lg"
-                        >
-                          <option value="">Who has this card?</option>
-                          {gameData.players.map(p => (
-                            <option key={p.id} value={p.id}>
-                              {p.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="flex gap-3">
-                    <button
-                      onClick={submitCall}
-                      className="flex-1 bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700"
-                    >
-                      Submit Call
-                    </button>
-                    <button
-                      onClick={() => setShowCallModal(false)}
-                      className="flex-1 bg-gray-300 text-gray-700 py-3 rounded-lg font-semibold hover:bg-gray-400"
-                    >
-                      Cancel
-                    </button>
+                  <div className="flex gap-4">
+                    <button onClick={submitCall} className="flex-1 bg-yellow-500 text-black py-5 rounded-2xl font-black text-xl hover:scale-105 transition-all">SUBMIT CLAIM</button>
+                    <button onClick={() => setShowCallModal(false)} className="px-10 bg-white/5 text-white py-5 rounded-2xl font-black hover:bg-white/10">CANCEL</button>
                   </div>
                 </div>
               </div>
