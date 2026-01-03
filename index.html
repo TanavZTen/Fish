@@ -1,30 +1,47 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<title>Literature – Poker Table</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta charset="UTF-8">
+<title>Literature (Authors) – No Communication</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
 <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 <script src="https://cdn.tailwindcss.com"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
 <style>
 body {
-  background: radial-gradient(circle at center, #1e7f4a, #0b3b22);
+  margin: 0;
+  background: radial-gradient(circle at center, #1f7a4a, #0b3b22);
+  font-family: Arial, Helvetica, sans-serif;
 }
 .felt {
-  background: radial-gradient(circle at center, #2f9e63, #14532d);
+  background: radial-gradient(circle, #2e8b57, #14532d);
 }
 .seat {
   position: absolute;
-  transform: translate(-50%, -50%);
+  width: 120px;
   text-align: center;
+  color: white;
 }
-.turn {
-  box-shadow: 0 0 20px gold;
+.card {
+  width: 42px;
+  height: 60px;
+  background: white;
+  border-radius: 6px;
+  border: 2px solid black;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+}
+.card-back {
+  width: 32px;
+  height: 44px;
+  background: linear-gradient(#2563eb, #1e3a8a);
+  border-radius: 4px;
+  border: 2px solid white;
 }
 </style>
 </head>
@@ -33,240 +50,162 @@ body {
 <div id="root"></div>
 
 <script type="text/babel">
-const { useState, useEffect, useMemo } = React;
+const { useState, useEffect } = React;
 
-/* ================= SUPABASE ================= */
-const supabase = window.supabase.createClient(
-  "https://vngdiukjrfmzwlbefmjf.supabase.co",
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZuZ2RpdWtqcmZtendsYmVmbWpmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc0Njk5MDUsImV4cCI6MjA4MzA0NTkwNX0.XBr7aEzSPj-Iw0HYf27T8yXo1nbZ01MhBVa-VIdNZG4"
-);
+/* ===================== CONSTANTS ===================== */
 
-/* ================= CLIENT ID ================= */
-const CID_KEY = "literature-cid";
-function getCID() {
-  let id = localStorage.getItem(CID_KEY);
-  if (!id) {
-    id = crypto.randomUUID();
-    localStorage.setItem(CID_KEY, id);
-  }
-  return id;
-}
-
-/* ================= CARD SETS ================= */
 const SETS = [
-  { name:"Spades 2-7", cards:["2♠","3♠","4♠","5♠","6♠","7♠"] },
-  { name:"Spades 9-A", cards:["9♠","10♠","J♠","Q♠","K♠","A♠"] },
-  { name:"Hearts 2-7", cards:["2♥","3♥","4♥","5♥","6♥","7♥"] },
-  { name:"Hearts 9-A", cards:["9♥","10♥","J♥","Q♥","K♥","A♥"] },
-  { name:"Clubs 2-7", cards:["2♣","3♣","4♣","5♣","6♣","7♣"] },
-  { name:"Clubs 9-A", cards:["9♣","10♣","J♣","Q♣","K♣","A♣"] },
-  { name:"Diamonds 2-7", cards:["2♦","3♦","4♦","5♦","6♦","7♦"] },
-  { name:"Diamonds 9-A", cards:["9♦","10♦","J♦","Q♦","K♦","A♦"] },
-  { name:"8s + Jokers", cards:["8♠","8♥","8♦","8♣","RJ","BJ"] }
+  ["2♠","3♠","4♠","5♠","6♠","7♠"],
+  ["9♠","10♠","J♠","Q♠","K♠","A♠"],
+  ["2♥","3♥","4♥","5♥","6♥","7♥"],
+  ["9♥","10♥","J♥","Q♥","K♥","A♥"],
+  ["2♣","3♣","4♣","5♣","6♣","7♣"],
+  ["9♣","10♣","J♣","Q♣","K♣","A♣"],
+  ["2♦","3♦","4♦","5♦","6♦","7♦"],
+  ["9♦","10♦","J♦","Q♦","K♦","A♦"],
+  ["8♠","8♥","8♣","8♦","RJ","BJ"]
 ];
 
-const shuffle = d => d.sort(()=>Math.random()-0.5);
-const findSet = c => SETS.find(s=>s.cards.includes(c));
+const ALL_CARDS = SETS.flat();
 
-/* ================= BOT AI ================= */
-function createBot(players) {
-  let n=1;
-  while(players.some(p=>p.name===`Bot ${n}`)) n++;
-  return {
-    id:"bot-"+crypto.randomUUID(),
-    name:`Bot ${n}`,
-    role:"player",
-    team:null,
-    hand:[],
-    isBot:true,
-    memory:{}
-  };
+/* ===================== HELPERS ===================== */
+
+function shuffle(a){
+  for(let i=a.length-1;i>0;i--){
+    const j=Math.floor(Math.random()*(i+1));
+    [a[i],a[j]]=[a[j],a[i]];
+  }
 }
 
-function botDecision(bot, game) {
-  let options=[];
-  bot.hand.forEach(card=>{
-    const set=findSet(card);
-    if(set) {
-      set.cards.forEach(c=>{
-        if(!bot.hand.includes(c)) options.push(c);
-      });
-    }
-  });
-  if(!options.length) return null;
-  const card=options[Math.floor(Math.random()*options.length)];
-  const opp=game.players.filter(p=>p.team!==bot.team && p.role==="player");
-  if(!opp.length) return null;
-  return { card, target: opp[Math.floor(Math.random()*opp.length)] };
-}
+/* ===================== APP ===================== */
 
-/* ================= APP ================= */
 function App(){
-  const myId=useMemo(getCID,[]);
-  const [view,setView]=useState("home");
-  const [room,setRoom]=useState("");
-  const [name,setName]=useState("");
-  const [team,setTeam]=useState("");
-  const [game,setGame]=useState(null);
+  const [players,setPlayers]=useState([]);
+  const [hands,setHands]=useState({});
+  const [currentAsker,setCurrentAsker]=useState(null);
+  const [currentTeam,setCurrentTeam]=useState(null);
+  const [recentAsks,setRecentAsks]=useState([]);
+  const [options,setOptions]=useState({
+    showCounts:true,
+    recentAskCount:2,
+    timeLimit:0
+  });
+  const [timer,setTimer]=useState(null);
 
-  async function save(g){
-    await supabase.from("games").upsert({
-      room_code: room,
-      game_data: g,
-      updated_at:new Date().toISOString()
+  /* ===================== SETUP ===================== */
+
+  function startGame(){
+    const deck=[...ALL_CARDS];
+    shuffle(deck);
+
+    const h={};
+    players.forEach(p=>h[p.id]=[]);
+
+    deck.forEach((c,i)=>{
+      h[players[i%players.length].id].push(c);
     });
-    setGame({...g});
+
+    setHands(h);
+    setCurrentAsker(players[0].id);
+    setCurrentTeam(players[0].team);
   }
 
-  async function load(){
-    const {data}=await supabase.from("games")
-      .select("game_data")
-      .eq("room_code",room)
-      .single();
-    if(data) setGame(data.game_data);
-  }
+  /* ===================== TIMER ===================== */
 
   useEffect(()=>{
-    if(!room) return;
-    load();
-    const i=setInterval(load,2000);
+    if(!options.timeLimit || !currentAsker) return;
+    setTimer(options.timeLimit);
+    const i=setInterval(()=>{
+      setTimer(t=>{
+        if(t===1){
+          forceTurnLoss();
+          return null;
+        }
+        return t-1;
+      });
+    },1000);
     return()=>clearInterval(i);
-  },[room]);
+  },[currentAsker]);
 
-  /* CREATE */
-  function createRoom(){
-    const code=Math.random().toString(36).substring(2,8).toUpperCase();
-    setRoom(code);
-    setView("team");
-  }
-
-  async function confirmCreate(){
-    const g={
-      phase:"lobby",
-      hostId:myId,
-      players:[{id:myId,name,team,role:"player",hand:[],isBot:false}],
-      spectators:[],
-      currentTurn:null,
-      scores:{team1:0,team2:0},
-      settings:{askCount:2}
-    };
-    await save(g);
-    setView("lobby");
-  }
-
-  /* JOIN */
-  async function joinRoom(){
-    const {data}=await supabase.from("games")
-      .select("game_data")
-      .eq("room_code",room)
-      .single();
-    if(!data) return alert("Room not found");
-    setView("team");
-  }
-
-  async function confirmJoin(){
-    const g={...game};
-    const even = g.phase==="game" &&
-      g.players.filter(p=>p.team==="team1").length ===
-      g.players.filter(p=>p.team==="team2").length;
-
-    if(even){
-      g.spectators.push({id:myId,name});
-    } else {
-      g.players.push({id:myId,name,team,role:"player",hand:[],isBot:false});
+  function forceTurnLoss(){
+    const opponents=players.filter(p=>p.team!==currentTeam);
+    if(opponents.length){
+      setCurrentAsker(opponents[0].id);
+      setCurrentTeam(opponents[0].team);
     }
-    await save(g);
-    setView(g.phase==="game"?"game":"lobby");
   }
 
-  /* START */
-  async function startGame(){
-    let deck=[];
-    SETS.forEach(s=>deck.push(...s.cards));
-    shuffle(deck);
-    game.players.forEach((p,i)=>p.hand=deck.filter((_,j)=>j%game.players.length===i));
-    game.phase="game";
-    game.currentTurn=game.players[0].id;
-    await save(game);
-    setView("game");
+  /* ===================== ASK LOGIC ===================== */
+
+  function askCard(fromId,card){
+    const asker=currentAsker;
+    const has=hands[fromId].includes(card);
+
+    setRecentAsks(a=>[
+      {from:asker,to:fromId,card,success:has},
+      ...a
+    ].slice(0,options.recentAskCount));
+
+    if(has){
+      setHands(h=>{
+        const nh={...h};
+        nh[fromId]=nh[fromId].filter(c=>c!==card);
+        nh[asker]=[...nh[asker],card];
+        return nh;
+      });
+    }else{
+      setCurrentAsker(fromId);
+      setCurrentTeam(players.find(p=>p.id===fromId).team);
+    }
   }
 
-  /* RETRY */
-  async function retry(){
-    game.phase="lobby";
-    game.players.forEach(p=>p.hand=[]);
-    game.currentTurn=null;
-    await save(game);
-    setView("lobby");
-  }
+  /* ===================== UI ===================== */
 
-  /* UI */
-  if(view==="home") return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="bg-white p-6 rounded-xl w-80">
-        <h1 className="text-3xl text-center mb-4">Literature</h1>
-        <input className="w-full border p-2 mb-2" placeholder="Name" value={name} onChange={e=>setName(e.target.value)}/>
-        <button onClick={createRoom} className="w-full bg-green-600 text-white py-2 mb-2">Create</button>
-        <input className="w-full border p-2 mb-2" placeholder="Room Code" value={room} onChange={e=>setRoom(e.target.value.toUpperCase())}/>
-        <button onClick={joinRoom} className="w-full bg-blue-600 text-white py-2">Join</button>
+  return (
+    <div className="felt min-h-screen relative">
+      <div className="absolute top-4 left-4 text-white">
+        Current Team: {currentTeam}
+        {timer && <div>Time: {timer}</div>}
       </div>
-    </div>
-  );
 
-  if(view==="team") return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="bg-white p-6 rounded-xl w-80">
-        <h2 className="text-xl mb-4">Choose Team</h2>
-        <button onClick={()=>setTeam("team1")} className="w-full bg-blue-500 text-white py-2 mb-2">Team 1</button>
-        <button onClick={()=>setTeam("team2")} className="w-full bg-red-500 text-white py-2 mb-4">Team 2</button>
-        <button onClick={game?confirmJoin:confirmCreate} className="w-full bg-green-600 text-white py-2">Confirm</button>
-      </div>
-    </div>
-  );
-
-  if(view==="lobby" && game) return (
-    <div className="min-h-screen p-6 text-white">
-      <h1 className="text-3xl mb-4">Room {room}</h1>
-      <div className="mb-4">
-        {game.players.map(p=>(
-          <div key={p.id}>{p.name} – {p.team}</div>
+      {/* RECENT ASKS */}
+      <div className="absolute top-4 right-4 bg-black bg-opacity-50 p-2 text-white rounded">
+        {recentAsks.map((a,i)=>(
+          <div key={i}>
+            {a.from} → {a.to} : {a.card} {a.success?"✓":"✗"}
+          </div>
         ))}
       </div>
-      {game.hostId===myId && (
-        <>
-          <button onClick={()=>{game.players.push(createBot(game.players));save(game)}} className="bg-gray-800 px-4 py-2 mr-2">Add Bot</button>
-          <button onClick={startGame} className="bg-green-600 px-4 py-2">Start</button>
-        </>
-      )}
+
+      {/* TABLE */}
+      <div className="w-[600px] h-[600px] mx-auto relative mt-20">
+        {players.map((p,i)=>{
+          const ang=i/players.length*2*Math.PI;
+          return (
+            <div key={p.id}
+              className="seat"
+              style={{
+                left:300+Math.cos(ang)*230,
+                top:300+Math.sin(ang)*230
+              }}>
+              <div className="bg-red-700 rounded px-2">
+                {p.name}
+              </div>
+              <div className="flex justify-center mt-1">
+                {options.showCounts
+                  ? <div>{hands[p.id]?.length||0} cards</div>
+                  : <div className="card-back"></div>}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
-
-  if(view==="game" && game){
-    const r=200;
-    const seats=game.players;
-    return (
-      <div className="min-h-screen felt flex items-center justify-center relative">
-        <div className="w-[500px] h-[500px] bg-green-700 rounded-full relative">
-          {seats.map((p,i)=>{
-            const a=i/seats.length*2*Math.PI;
-            return (
-              <div key={p.id}
-                className={`seat ${game.currentTurn===p.id?"turn":""}`}
-                style={{left:250+Math.cos(a)*r,top:250+Math.sin(a)*r}}>
-                <div className="bg-white text-black px-3 py-1 rounded">{p.name}</div>
-              </div>
-            );
-          })}
-        </div>
-        <button onClick={retry} className="absolute bottom-4 bg-yellow-500 px-4 py-2">Retry</button>
-      </div>
-    );
-  }
-
-  return null;
 }
 
-ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+/* ===================== RENDER ===================== */
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
 </script>
 </body>
 </html>
