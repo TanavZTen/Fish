@@ -125,10 +125,13 @@
           setGameData(data);
 
           // If current turn is a bot and game is running, trigger bot move
-          if (data.phase === 'game') {
+          if (data.phase === 'game' && !data.botThinking) {
             const current = data.players.find(p => p.id === data.currentTurn);
             if (current?.isBot) {
-              setTimeout(() => executeBotTurn(current, data), 1000);
+              // Mark that bot is thinking to prevent duplicate calls
+              data.botThinking = true;
+              localStorage.setItem(`game:${roomCode}`, JSON.stringify(data));
+              setTimeout(() => executeBotTurn(current, data), 2500);
             }
           }
         } catch (e) {
@@ -138,7 +141,7 @@
 
       useEffect(() => {
         if (!roomCode) return;
-        const interval = setInterval(loadGame, 1500);
+        const interval = setInterval(loadGame, 2000);
         return () => clearInterval(interval);
       }, [roomCode]);
 
@@ -172,8 +175,14 @@
           claimedSets: [],
           askHistory: [],
           gameLog: [],
+          lastAskedPlayer: '',
+          botThinking: false,
+          turnStartTime: null,
           settings: {
-            showAskHistory: true
+            showAskHistory: true,
+            askHistoryCount: 2,
+            showCardCounts: false,
+            turnTimeLimit: 0 // 0 = no limit, 60 = 1 min, 120 = 2 min
           }
         };
 
@@ -290,6 +299,7 @@
 
           data.phase = 'game';
           data.currentTurn = data.players[0].id;
+          data.turnStartTime = Date.now();
           data.gameLog.unshift('Game started!');
 
           localStorage.setItem(`game:${roomCode}`, JSON.stringify(data));
@@ -309,6 +319,39 @@
           loadGame();
         } catch (e) {
           alert('Error toggling setting');
+        }
+      };
+
+      const toggleCardCounts = () => {
+        try {
+          const data = JSON.parse(localStorage.getItem(`game:${roomCode}`));
+          data.settings.showCardCounts = !data.settings.showCardCounts;
+          localStorage.setItem(`game:${roomCode}`, JSON.stringify(data));
+          loadGame();
+        } catch (e) {
+          alert('Error toggling setting');
+        }
+      };
+
+      const setAskHistoryCount = (count) => {
+        try {
+          const data = JSON.parse(localStorage.getItem(`game:${roomCode}`));
+          data.settings.askHistoryCount = count;
+          localStorage.setItem(`game:${roomCode}`, JSON.stringify(data));
+          loadGame();
+        } catch (e) {
+          alert('Error changing setting');
+        }
+      };
+
+      const setTurnTimeLimit = (seconds) => {
+        try {
+          const data = JSON.parse(localStorage.getItem(`game:${roomCode}`));
+          data.settings.turnTimeLimit = seconds;
+          localStorage.setItem(`game:${roomCode}`, JSON.stringify(data));
+          loadGame();
+        } catch (e) {
+          alert('Error changing setting');
         }
       };
 
@@ -362,6 +405,8 @@
           const myTeam = data.teams.team1.includes(bot.id) ? 'team1' : 'team2';
           const oppTeam = myTeam === 'team1' ? 'team2' : 'team1';
           data.currentTurn = data.teams[oppTeam][0];
+          data.turnStartTime = Date.now();
+          data.botThinking = false;
           localStorage.setItem(`game:${roomCode}`, JSON.stringify(data));
           loadGame();
           return;
@@ -375,14 +420,19 @@
           bot.hand.push(decision.card);
           data.gameLog.unshift(`${bot.name} asked ${target.name} - SUCCESS!`);
           data.askHistory.unshift({ from: bot.name, to: target.name, card: decision.card, success: true });
+          data.lastAskedPlayer = target.id;
+          data.turnStartTime = Date.now();
         } else {
           // Failed - turn passes to the opponent who was asked
           data.currentTurn = target.id;
+          data.turnStartTime = Date.now();
+          data.lastAskedPlayer = '';
           data.gameLog.unshift(`${bot.name} asked ${target.name} - FAILED`);
           data.askHistory.unshift({ from: bot.name, to: target.name, card: decision.card, success: false });
         }
 
-        data.askHistory = data.askHistory.slice(0, 2);
+        data.askHistory = data.askHistory.slice(0, data.settings.askHistoryCount);
+        data.botThinking = false;
         localStorage.setItem(`game:${roomCode}`, JSON.stringify(data));
         loadGame();
       };
@@ -594,15 +644,54 @@
                 </div>
 
                 <div className="mb-6">
-                  <label className="flex items-center justify-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={gameData.settings.showAskHistory}
-                      onChange={toggleAskHistory}
-                      className="w-5 h-5"
-                    />
-                    <span className="font-semibold">Show Ask History (last 2 asks)</span>
-                  </label>
+                  <div className="space-y-3">
+                    <label className="flex items-center justify-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={gameData.settings.showAskHistory}
+                        onChange={toggleAskHistory}
+                        className="w-5 h-5"
+                      />
+                      <span className="font-semibold">Show Ask History</span>
+                    </label>
+
+                    {gameData.settings.showAskHistory && (
+                      <div className="flex items-center justify-center gap-2">
+                        <span className="text-sm">Number of asks to show:</span>
+                        <select
+                          value={gameData.settings.askHistoryCount}
+                          onChange={(e) => setAskHistoryCount(Number(e.target.value))}
+                          className="px-3 py-1 border-2 border-gray-300 rounded text-gray-800"
+                        >
+                          <option value={2}>2</option>
+                          <option value={3}>3</option>
+                        </select>
+                      </div>
+                    )}
+
+                    <label className="flex items-center justify-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={gameData.settings.showCardCounts}
+                        onChange={toggleCardCounts}
+                        className="w-5 h-5"
+                      />
+                      <span className="font-semibold">Show Card Counts</span>
+                    </label>
+
+                    <div className="flex items-center justify-center gap-2">
+                      <span className="text-sm">Turn Time Limit:</span>
+                      <select
+                        value={gameData.settings.turnTimeLimit}
+                        onChange={(e) => setTurnTimeLimit(Number(e.target.value))}
+                        className="px-3 py-1 border-2 border-gray-300 rounded text-gray-800"
+                      >
+                        <option value={0}>No Limit</option>
+                        <option value={60}>1 Minute</option>
+                        <option value={120}>2 Minutes</option>
+                      </select>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="grid md:grid-cols-2 gap-6 mb-6">
@@ -698,13 +787,50 @@
         const isMyTurn = gameData.currentTurn === myId;
         const currentPlayer = gameData.players.find(p => p.id === gameData.currentTurn);
 
+        // Calculate remaining time
+        const [timeRemaining, setTimeRemaining] = useState(null);
+        
+        useEffect(() => {
+          if (!gameData.settings.turnTimeLimit || !gameData.turnStartTime) return;
+          
+          const interval = setInterval(() => {
+            const elapsed = Math.floor((Date.now() - gameData.turnStartTime) / 1000);
+            const remaining = gameData.settings.turnTimeLimit - elapsed;
+            setTimeRemaining(remaining);
+
+            // Auto-pass turn if time runs out
+            if (remaining <= 0 && isMyTurn) {
+              try {
+                const data = JSON.parse(localStorage.getItem(`game:${roomCode}`));
+                const oppTeam = myTeam === 'team1' ? 'team2' : 'team1';
+                data.currentTurn = data.teams[oppTeam][0];
+                data.turnStartTime = Date.now();
+                data.gameLog.unshift(`${me.name}'s turn timed out!`);
+                localStorage.setItem(`game:${roomCode}`, JSON.stringify(data));
+                loadGame();
+              } catch (e) {
+                console.error('Error timing out turn:', e);
+              }
+            }
+          }, 1000);
+
+          return () => clearInterval(interval);
+        }, [gameData.turnStartTime, isMyTurn]);
+
         return (
           <div className="min-h-screen bg-gradient-to-br from-green-700 to-green-900 p-4">
             <div className="max-w-7xl mx-auto">
               <div className="bg-white rounded-2xl shadow-2xl p-6 mb-4">
                 <div className="flex justify-between items-center mb-4">
                   <h1 className="text-2xl font-bold">Room {roomCode}</h1>
-                  <div className="text-sm text-gray-600">Current Turn: {currentPlayer?.name}</div>
+                  <div className="text-right">
+                    <div className="text-sm text-gray-600">Current Turn: {currentPlayer?.name}</div>
+                    {gameData.settings.turnTimeLimit > 0 && timeRemaining !== null && (
+                      <div className={`text-lg font-bold ${timeRemaining <= 10 ? 'text-red-600' : 'text-green-600'}`}>
+                        {Math.max(0, timeRemaining)}s
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <div className="grid md:grid-cols-3 gap-4 mb-4">
@@ -714,8 +840,10 @@
                       .filter(p => gameData.teams.team1.includes(p.id))
                       .map(p => (
                         <div key={p.id} className="text-sm mb-1">
-                          {gameData.currentTurn === p.id && '👑 '}
+                          {gameData.currentTurn === p.id && '(Current Asker) '}
+                          {gameData.lastAskedPlayer === p.id && '(Interrogated) '}
                           {p.name} {p.id === myId && '(You)'}
+                          {gameData.settings.showCardCounts && ` - ${p.hand.length} cards`}
                         </div>
                       ))}
                   </div>
@@ -726,8 +854,10 @@
                       .filter(p => gameData.teams.team2.includes(p.id))
                       .map(p => (
                         <div key={p.id} className="text-sm mb-1">
-                          {gameData.currentTurn === p.id && '👑 '}
+                          {gameData.currentTurn === p.id && '(Current Asker) '}
+                          {gameData.lastAskedPlayer === p.id && '(Interrogated) '}
                           {p.name} {p.id === myId && '(You)'}
+                          {gameData.settings.showCardCounts && ` - ${p.hand.length} cards`}
                         </div>
                       ))}
                   </div>
@@ -744,7 +874,7 @@
 
                 {gameData.settings.showAskHistory && gameData.askHistory.length > 0 && (
                   <div className="bg-yellow-50 border-2 border-yellow-400 p-4 rounded-lg mb-4">
-                    <h3 className="font-bold mb-2">Recent Asks (Last 2)</h3>
+                    <h3 className="font-bold mb-2">Recent Asks (Last {gameData.settings.askHistoryCount})</h3>
                     {gameData.askHistory.map((ask, i) => (
                       <div key={i} className="text-sm mb-1">
                         <span className="font-semibold">{ask.from}</span> asked{' '}
