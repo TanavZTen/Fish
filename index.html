@@ -360,15 +360,17 @@
             .eq('room_code', roomCode)
             .single();
 
+          if (!data) return;
+
           const gameData = data.game_data;
           const bot = createBot(gameData.players);
           gameData.players.push(bot);
           gameData.teams[team].push(bot.id);
           await saveGame(gameData);
-          await loadGame();
+          
+          setTimeout(() => loadGame(), 100);
         } catch (e) {
           console.error('Error adding bot:', e);
-          alert('Error adding bot');
         }
       };
 
@@ -408,25 +410,54 @@
           if (data) {
             const gameData = data.game_data;
             
-            // Remove current player from the game
-            gameData.players = gameData.players.filter(p => p.id !== myId);
-            gameData.teams.team1 = gameData.teams.team1.filter(id => id !== myId);
-            gameData.teams.team2 = gameData.teams.team2.filter(id => id !== myId);
-
-            // If no players left, delete the room entirely
-            if (gameData.players.length === 0) {
-              await supabase
-                .from('games')
-                .delete()
-                .eq('room_code', roomCode);
-              
-              localStorage.removeItem(`game:${roomCode}`);
-            } else {
-              // If host left, assign new host
-              if (gameData.hostId === myId) {
-                gameData.hostId = gameData.players[0].id;
+            // If game is in progress, replace player with a bot
+            if (gameData.phase === 'game') {
+              const me = gameData.players.find(p => p.id === myId);
+              if (me) {
+                const bot = createBot(gameData.players);
+                bot.hand = me.hand; // Transfer cards to bot
+                bot.name = `${me.name} (Bot)`;
+                
+                // Replace player with bot
+                const playerIndex = gameData.players.findIndex(p => p.id === myId);
+                gameData.players[playerIndex] = bot;
+                
+                // Update team
+                if (gameData.teams.team1.includes(myId)) {
+                  gameData.teams.team1 = gameData.teams.team1.map(id => id === myId ? bot.id : id);
+                } else {
+                  gameData.teams.team2 = gameData.teams.team2.map(id => id === myId ? bot.id : id);
+                }
+                
+                // If it was this player's turn, give it to the bot
+                if (gameData.currentTurn === myId) {
+                  gameData.currentTurn = bot.id;
+                }
+                
+                gameData.gameLog.unshift(`${me.name} left and was replaced by a bot`);
+                await saveGame(gameData);
               }
-              await saveGame(gameData);
+            } else {
+              // In lobby, just remove the player
+              gameData.players = gameData.players.filter(p => p.id !== myId);
+              gameData.teams.team1 = gameData.teams.team1.filter(id => id !== myId);
+              gameData.teams.team2 = gameData.teams.team2.filter(id => id !== myId);
+
+              // If no players left, delete the room entirely
+              if (gameData.players.length === 0) {
+                await supabase
+                  .from('games')
+                  .delete()
+                  .eq('room_code', roomCode);
+                
+                localStorage.removeItem(`game:${roomCode}`);
+              } else {
+                // If host left, assign new host
+                if (gameData.hostId === myId) {
+                  gameData.hostId = gameData.players[0].id;
+                }
+                await saveGame(gameData);
+              }
             }
           }
 
@@ -492,13 +523,16 @@
             .eq('room_code', roomCode)
             .single();
 
+          if (!data) return;
+
           const gameData = data.game_data;
           gameData.settings.showAskHistory = !gameData.settings.showAskHistory;
           await saveGame(gameData);
-          await loadGame();
+          
+          // Force immediate reload
+          setTimeout(() => loadGame(), 100);
         } catch (e) {
           console.error('Error toggling setting:', e);
-          alert('Error toggling setting');
         }
       };
 
@@ -510,13 +544,15 @@
             .eq('room_code', roomCode)
             .single();
 
+          if (!data) return;
+
           const gameData = data.game_data;
           gameData.settings.showCardCounts = !gameData.settings.showCardCounts;
           await saveGame(gameData);
-          await loadGame();
+          
+          setTimeout(() => loadGame(), 100);
         } catch (e) {
           console.error('Error toggling setting:', e);
-          alert('Error toggling setting');
         }
       };
 
@@ -528,13 +564,15 @@
             .eq('room_code', roomCode)
             .single();
 
+          if (!data) return;
+
           const gameData = data.game_data;
           gameData.settings.askHistoryCount = count;
           await saveGame(gameData);
-          await loadGame();
+          
+          setTimeout(() => loadGame(), 100);
         } catch (e) {
           console.error('Error changing setting:', e);
-          alert('Error changing setting');
         }
       };
 
@@ -546,13 +584,15 @@
             .eq('room_code', roomCode)
             .single();
 
+          if (!data) return;
+
           const gameData = data.game_data;
           gameData.settings.turnTimeLimit = seconds;
           await saveGame(gameData);
-          await loadGame();
+          
+          setTimeout(() => loadGame(), 100);
         } catch (e) {
           console.error('Error changing setting:', e);
-          alert('Error changing setting');
         }
       };
 
@@ -856,9 +896,10 @@
                         type="checkbox"
                         checked={gameData.settings.showAskHistory}
                         onChange={toggleAskHistory}
+                        disabled={!isHost}
                         className="w-5 h-5"
                       />
-                      <span className="font-semibold">Show Ask History</span>
+                      <span className="font-semibold">Show Ask History {!isHost && '(Host only)'}</span>
                     </label>
 
                     {gameData.settings.showAskHistory && (
@@ -867,7 +908,8 @@
                         <select
                           value={gameData.settings.askHistoryCount}
                           onChange={(e) => setAskHistoryCount(Number(e.target.value))}
-                          className="px-3 py-1 border-2 border-gray-300 rounded text-gray-800"
+                          disabled={!isHost}
+                          className="px-3 py-1 border-2 border-gray-300 rounded text-gray-800 disabled:bg-gray-100"
                         >
                           <option value={2}>2</option>
                           <option value={3}>3</option>
@@ -880,9 +922,10 @@
                         type="checkbox"
                         checked={gameData.settings.showCardCounts}
                         onChange={toggleCardCounts}
+                        disabled={!isHost}
                         className="w-5 h-5"
                       />
-                      <span className="font-semibold">Show Card Counts</span>
+                      <span className="font-semibold">Show Card Counts {!isHost && '(Host only)'}</span>
                     </label>
 
                     <div className="flex items-center justify-center gap-2">
@@ -890,7 +933,8 @@
                       <select
                         value={gameData.settings.turnTimeLimit}
                         onChange={(e) => setTurnTimeLimit(Number(e.target.value))}
-                        className="px-3 py-1 border-2 border-gray-300 rounded text-gray-800"
+                        disabled={!isHost}
+                        className="px-3 py-1 border-2 border-gray-300 rounded text-gray-800 disabled:bg-gray-100"
                       >
                         <option value={0}>No Limit</option>
                         <option value={60}>1 Minute</option>
@@ -1038,13 +1082,13 @@
             <div className="max-w-7xl mx-auto">
               <div className="bg-white rounded-2xl shadow-2xl p-6 mb-4">
                 <div className="flex justify-between items-center mb-4">
-                  <div>
+                  <div className="flex items-center gap-4">
                     <h1 className="text-2xl font-bold">Room {roomCode}</h1>
                     <button
                       onClick={leaveRoom}
-                      className="text-sm text-red-600 hover:text-red-800 mt-1"
+                      className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-semibold hover:bg-red-700"
                     >
-                      Leave Room
+                      Leave Game
                     </button>
                   </div>
                   <div className="text-right">
