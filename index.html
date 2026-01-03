@@ -8,6 +8,20 @@
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Optional: Firebase for cross-client room syncing. Provide a `window.FIREBASE_CONFIG` object to enable. -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
+  <script>
+    window.FIREBASE_CONFIG = {
+      apiKey: "AIzaSyBaKOUESxxkb60averQ6T2YhUDlUcMFhCk",
+      authDomain: "fish-368fe.firebaseapp.com",
+      databaseURL: "https://fish-368fe-default-rtdb.firebaseio.com",
+      projectId: "fish-368fe",
+      storageBucket: "fish-368fe.firebasestorage.app",
+      messagingSenderId: "421214386924",
+      appId: "1:421214386924:web:a6157129cfcc85d7a743c9"
+    };
+  </script>
 </head>
 <body>
   <div id="root"></div>
@@ -26,6 +40,17 @@
       }
       return id;
     }
+
+    /* ============================================================
+       REMOTE SYNC LAYER (optional - Firebase Realtime Database)
+       - If you set `window.FIREBASE_CONFIG = { apiKey: ..., authDomain: ..., databaseURL: ..., ... }`
+         the app will mirror the `game:{roomCode}` key to Firebase at `/games/{roomCode}`.
+       - If not provided, behavior falls back to the original localStorage-only implementation.
+    */
+
+    // Helper to detect whether remote sync is available
+    const REMOTE_ENABLED = typeof window.FIREBASE_CONFIG !== 'undefined' && typeof window.firebase !== 'undefined';
+
 
     /* ============================================================
        SET DEFINITIONS
@@ -115,6 +140,28 @@
       const [callSetIndex, setCallSetIndex] = useState(0);
       const [callCards, setCallCards] = useState({});
 
+      // Save wrapper writes to localStorage and (optionally) Firebase
+      const saveGame = (data) => {
+        try {
+          if (!roomCode) return;
+          localStorage.setItem(`game:${roomCode}`, JSON.stringify(data));
+          if (REMOTE_ENABLED) {
+            try {
+              if (window.firebase && window.FIREBASE_CONFIG) {
+                if (!window.firebase.apps || window.firebase.apps.length === 0) {
+                  window.firebase.initializeApp(window.FIREBASE_CONFIG);
+                }
+                window.firebase.database().ref('games/' + roomCode).set(data);
+              }
+            } catch (e) {
+              console.error('Firebase write failed', e);
+            }
+          }
+        } catch (e) {
+          console.error('saveGame error', e);
+        }
+      };
+
       /* ========================= LOAD GAME ========================= */
       const loadGame = () => {
         if (!roomCode) return;
@@ -130,7 +177,7 @@
             if (current?.isBot) {
               // Mark that bot is thinking to prevent duplicate calls
               data.botThinking = true;
-              localStorage.setItem(`game:${roomCode}`, JSON.stringify(data));
+              saveGame(data);
               setTimeout(() => executeBotTurn(current, data), 2500);
             }
           }
@@ -141,6 +188,40 @@
 
       useEffect(() => {
         if (!roomCode) return;
+
+        // If remote is enabled, subscribe the Firebase game key and mirror into localStorage
+        if (REMOTE_ENABLED && window.firebase) {
+          try {
+            if (!window.firebase.apps || window.firebase.apps.length === 0) {
+              window.firebase.initializeApp(window.FIREBASE_CONFIG);
+            }
+          } catch (e) {
+            console.error('Firebase init error', e);
+          }
+
+          const ref = window.firebase.database().ref('games/' + roomCode);
+          const handler = (snap) => {
+            const val = snap.exists() ? snap.val() : null;
+            if (!val) return;
+            try {
+              localStorage.setItem(`game:${roomCode}`, JSON.stringify(val));
+            } catch (e) {}
+            setGameData(val);
+
+            if (val.phase === 'game' && !val.botThinking) {
+              const current = val.players.find(p => p.id === val.currentTurn);
+              if (current?.isBot) {
+                val.botThinking = true;
+                saveGame(val);
+                setTimeout(() => executeBotTurn(current, val), 2500);
+              }
+            }
+          };
+          ref.on('value', handler);
+          return () => ref.off('value', handler);
+        }
+
+        // Fallback: poll localStorage
         const interval = setInterval(loadGame, 2000);
         return () => clearInterval(interval);
       }, [roomCode]);
@@ -186,7 +267,7 @@
           }
         };
 
-        localStorage.setItem(`game:${roomCode}`, JSON.stringify(initialData));
+        saveGame(initialData);
         setView('lobby');
         loadGame();
       };
@@ -236,7 +317,7 @@
           const data = JSON.parse(localStorage.getItem(`game:${roomCode}`));
           data.players.push({ id: myId, name: playerName, hand: [], isBot: false });
           data.teams[selectedTeam].push(myId);
-          localStorage.setItem(`game:${roomCode}`, JSON.stringify(data));
+          saveGame(data);
           setView('lobby');
           loadGame();
         } catch (e) {
@@ -251,7 +332,7 @@
           const bot = createBot(data.players);
           data.players.push(bot);
           data.teams[team].push(bot.id);
-          localStorage.setItem(`game:${roomCode}`, JSON.stringify(data));
+          saveGame(data);
           loadGame();
         } catch (e) {
           alert('Error adding bot');
@@ -264,7 +345,7 @@
           data.players = data.players.filter(p => p.id !== playerId);
           data.teams.team1 = data.teams.team1.filter(id => id !== playerId);
           data.teams.team2 = data.teams.team2.filter(id => id !== playerId);
-          localStorage.setItem(`game:${roomCode}`, JSON.stringify(data));
+          saveGame(data);
           loadGame();
         } catch (e) {
           alert('Error removing player');
@@ -302,7 +383,7 @@
           data.turnStartTime = Date.now();
           data.gameLog.unshift('Game started!');
 
-          localStorage.setItem(`game:${roomCode}`, JSON.stringify(data));
+          saveGame(data);
           setView('game');
           loadGame();
         } catch (e) {
@@ -315,7 +396,7 @@
         try {
           const data = JSON.parse(localStorage.getItem(`game:${roomCode}`));
           data.settings.showAskHistory = !data.settings.showAskHistory;
-          localStorage.setItem(`game:${roomCode}`, JSON.stringify(data));
+          saveGame(data);
           loadGame();
         } catch (e) {
           alert('Error toggling setting');
@@ -326,7 +407,7 @@
         try {
           const data = JSON.parse(localStorage.getItem(`game:${roomCode}`));
           data.settings.showCardCounts = !data.settings.showCardCounts;
-          localStorage.setItem(`game:${roomCode}`, JSON.stringify(data));
+          saveGame(data);
           loadGame();
         } catch (e) {
           alert('Error toggling setting');
@@ -337,7 +418,7 @@
         try {
           const data = JSON.parse(localStorage.getItem(`game:${roomCode}`));
           data.settings.askHistoryCount = count;
-          localStorage.setItem(`game:${roomCode}`, JSON.stringify(data));
+          saveGame(data);
           loadGame();
         } catch (e) {
           alert('Error changing setting');
@@ -348,7 +429,7 @@
         try {
           const data = JSON.parse(localStorage.getItem(`game:${roomCode}`));
           data.settings.turnTimeLimit = seconds;
-          localStorage.setItem(`game:${roomCode}`, JSON.stringify(data));
+          saveGame(data);
           loadGame();
         } catch (e) {
           alert('Error changing setting');
@@ -387,7 +468,7 @@
           // Keep only last 2 asks
           data.askHistory = data.askHistory.slice(0, 2);
 
-          localStorage.setItem(`game:${roomCode}`, JSON.stringify(data));
+          saveGame(data);
           setSelectedCard('');
           setSelectedOpponent('');
           loadGame();
@@ -407,7 +488,7 @@
           data.currentTurn = data.teams[oppTeam][0];
           data.turnStartTime = Date.now();
           data.botThinking = false;
-          localStorage.setItem(`game:${roomCode}`, JSON.stringify(data));
+          saveGame(data);
           loadGame();
           return;
         }
@@ -433,7 +514,7 @@
 
         data.askHistory = data.askHistory.slice(0, data.settings.askHistoryCount);
         data.botThinking = false;
-        localStorage.setItem(`game:${roomCode}`, JSON.stringify(data));
+        saveGame(data);
         loadGame();
       };
 
@@ -482,7 +563,7 @@
             });
           });
 
-          localStorage.setItem(`game:${roomCode}`, JSON.stringify(data));
+          saveGame(data);
           setShowCallModal(false);
           setCallCards({});
           loadGame();
@@ -799,14 +880,14 @@
             setTimeRemaining(remaining);
 
             // Auto-pass turn if time runs out
-            if (remaining <= 0 && isMyTurn) {
+                if (remaining <= 0 && isMyTurn) {
               try {
                 const data = JSON.parse(localStorage.getItem(`game:${roomCode}`));
                 const oppTeam = myTeam === 'team1' ? 'team2' : 'team1';
                 data.currentTurn = data.teams[oppTeam][0];
                 data.turnStartTime = Date.now();
                 data.gameLog.unshift(`${me.name}'s turn timed out!`);
-                localStorage.setItem(`game:${roomCode}`, JSON.stringify(data));
+                saveGame(data);
                 loadGame();
               } catch (e) {
                 console.error('Error timing out turn:', e);
