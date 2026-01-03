@@ -332,13 +332,12 @@
             // Transfer card
             opponent.hand = opponent.hand.filter(c => c !== selectedCard);
             me.hand.push(selectedCard);
-            data.gameLog.unshift(`${me.name} asked ${opponent.name} for ${selectedCard} - SUCCESS! Goes again.`);
+            data.gameLog.unshift(`${me.name} asked ${opponent.name} - SUCCESS!`);
             data.askHistory.unshift({ from: me.name, to: opponent.name, card: selectedCard, success: true });
           } else {
-            // Failed - pass turn to opponent's team
-            const oppTeam = data.teams.team1.includes(opponent.id) ? 'team1' : 'team2';
-            data.currentTurn = data.teams[oppTeam][0];
-            data.gameLog.unshift(`${me.name} asked ${opponent.name} for ${selectedCard} - FAILED. Turn passes to ${oppTeam === 'team1' ? 'Team 1' : 'Team 2'}.`);
+            // Failed - pass turn to the opponent who was asked
+            data.currentTurn = opponent.id;
+            data.gameLog.unshift(`${me.name} asked ${opponent.name} - FAILED`);
             data.askHistory.unshift({ from: me.name, to: opponent.name, card: selectedCard, success: false });
           }
 
@@ -374,12 +373,12 @@
         if (hasCard) {
           target.hand = target.hand.filter(c => c !== decision.card);
           bot.hand.push(decision.card);
-          data.gameLog.unshift(`${bot.name} asked ${target.name} for ${decision.card} - SUCCESS! Goes again.`);
+          data.gameLog.unshift(`${bot.name} asked ${target.name} - SUCCESS!`);
           data.askHistory.unshift({ from: bot.name, to: target.name, card: decision.card, success: true });
         } else {
-          const oppTeam = data.teams.team1.includes(target.id) ? 'team1' : 'team2';
-          data.currentTurn = data.teams[oppTeam][0];
-          data.gameLog.unshift(`${bot.name} asked ${target.name} for ${decision.card} - FAILED.`);
+          // Failed - turn passes to the opponent who was asked
+          data.currentTurn = target.id;
+          data.gameLog.unshift(`${bot.name} asked ${target.name} - FAILED`);
           data.askHistory.unshift({ from: bot.name, to: target.name, card: decision.card, success: false });
         }
 
