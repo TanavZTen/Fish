@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Literature — 9 Set Variant</title>
+  <title>Literature</title>
 
   <!-- React -->
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -18,10 +18,9 @@
 
 <script type="text/babel">
 /* ============================================================
-   PERSISTENT CLIENT ID (CRITICAL FIX)
+   IDENTITY (persistent per browser)
    ============================================================ */
 const CLIENT_ID_KEY = 'literature-client-id';
-
 function getClientId() {
   let id = localStorage.getItem(CLIENT_ID_KEY);
   if (!id) {
@@ -32,46 +31,41 @@ function getClientId() {
 }
 
 /* ============================================================
-   GAME CONSTANTS
+   SET DEFINITIONS
    ============================================================ */
 const SETS = [
-  { name: 'Spades 2–7', cards: ['2♠','3♠','4♠','5♠','6♠','7♠'] },
-  { name: 'Spades 9–A', cards: ['9♠','10♠','J♠','Q♠','K♠','A♠'] },
-  { name: 'Hearts 2–7', cards: ['2♥','3♥','4♥','5♥','6♥','7♥'] },
-  { name: 'Hearts 9–A', cards: ['9♥','10♥','J♥','Q♥','K♥','A♥'] },
-  { name: 'Clubs 2–7', cards: ['2♣','3♣','4♣','5♣','6♣','7♣'] },
-  { name: 'Clubs 9–A', cards: ['9♣','10♣','J♣','Q♣','K♣','A♣'] },
-  { name: 'Diamonds 2–7', cards: ['2♦','3♦','4♦','5♦','6♦','7♦'] },
-  { name: 'Diamonds 9–A', cards: ['9♦','10♦','J♦','Q♦','K♦','A♦'] },
-  { name: '8s + Jokers', cards: ['8♥','8♦','8♠','8♣','RJ','BJ'] }
+  { name:'Spades 2–7', cards:['2♠','3♠','4♠','5♠','6♠','7♠'] },
+  { name:'Spades 9–A', cards:['9♠','10♠','J♠','Q♠','K♠','A♠'] },
+  { name:'Hearts 2–7', cards:['2♥','3♥','4♥','5♥','6♥','7♥'] },
+  { name:'Hearts 9–A', cards:['9♥','10♥','J♥','Q♥','K♥','A♥'] },
+  { name:'Clubs 2–7', cards:['2♣','3♣','4♣','5♣','6♣','7♣'] },
+  { name:'Clubs 9–A', cards:['9♣','10♣','J♣','Q♣','K♣','A♣'] },
+  { name:'Diamonds 2–7', cards:['2♦','3♦','4♦','5♦','6♦','7♦'] },
+  { name:'Diamonds 9–A', cards:['9♦','10♦','J♦','Q♦','K♦','A♦'] },
+  { name:'8s + Jokers', cards:['8♥','8♦','8♠','8♣','RJ','BJ'] }
 ];
 
-/* ============================================================
-   UTILITIES
-   ============================================================ */
-function shuffle(deck) {
-  for (let i = deck.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [deck[i], deck[j]] = [deck[j], deck[i]];
+const findSet = card => SETS.find(s => s.cards.includes(card));
+
+const shuffle = deck => {
+  for (let i=deck.length-1;i>0;i--) {
+    const j=Math.floor(Math.random()*(i+1));
+    [deck[i],deck[j]]=[deck[j],deck[i]];
   }
-}
+};
 
-function findSet(card) {
-  return SETS.find(s => s.cards.includes(card));
-}
-
-function nameExists(players, name) {
-  return players.some(p => p.name.toLowerCase() === name.toLowerCase());
-}
-
+/* ============================================================
+   BOT MEMORY
+   ============================================================ */
 function createBot(players) {
-  let n = 1;
-  while (players.some(p => p.name === `Bot ${n}`)) n++;
+  let n=1;
+  while(players.some(p=>p.name===`Bot ${n}`)) n++;
   return {
-    id: `bot-${crypto.randomUUID()}`,
-    name: `Bot ${n}`,
-    hand: [],
-    isBot: true
+    id:`bot-${crypto.randomUUID()}`,
+    name:`Bot ${n}`,
+    hand:[],
+    isBot:true,
+    memory:{}
   };
 }
 
@@ -79,256 +73,221 @@ function createBot(players) {
    APP
    ============================================================ */
 const App = () => {
-  const [view, setView] = React.useState('home');
-  const [roomCode, setRoomCode] = React.useState('');
-  const [playerName, setPlayerName] = React.useState('');
-  const [teamChoice, setTeamChoice] = React.useState('');
-  const [game, setGame] = React.useState(null);
+  const myId = React.useMemo(()=>getClientId(),[]);
+  const [view,setView]=React.useState('home');
+  const [room,setRoom]=React.useState('');
+  const [name,setName]=React.useState('');
+  const [team,setTeam]=React.useState('');
+  const [game,setGame]=React.useState(null);
 
-  // PERSISTENT ID — NEVER CHANGES
-  const myId = React.useMemo(() => getClientId(), []);
-
-  /* ============================================================
-     LOAD & SYNC GAME
-     ============================================================ */
-  const loadGame = () => {
-    if (!roomCode) return;
-    const raw = localStorage.getItem(`game:${roomCode}`);
-    if (!raw) return;
-
-    const data = JSON.parse(raw);
+  /* ========================= LOAD ========================= */
+  const loadGame=()=>{
+    if(!room) return;
+    const raw=localStorage.getItem(`game:${room}`);
+    if(!raw) return;
+    const data=JSON.parse(raw);
     setGame(data);
 
-    if (data.started) {
-      const current = data.players.find(p => p.id === data.currentTurn);
-      if (current?.isBot) {
-        setTimeout(() => runBotTurn(current, data), 800);
+    if(data.phase==='game'){
+      const current=data.players.find(p=>p.id===data.currentTurn);
+      if(current?.isBot && data.dev.autoplay){
+        setTimeout(()=>botTurn(current,data),700);
       }
     }
   };
 
-  React.useEffect(() => {
-    if (!roomCode) return;
-    const i = setInterval(loadGame, 1500);
-    return () => clearInterval(i);
-  }, [roomCode]);
+  React.useEffect(()=>{
+    if(!room) return;
+    const i=setInterval(loadGame,1200);
+    return()=>clearInterval(i);
+  },[room]);
 
-  /* ============================================================
-     CREATE ROOM
-     ============================================================ */
-  const createRoom = () => {
-    const code = Math.random().toString(36).substring(2,8).toUpperCase();
-    setRoomCode(code);
+  /* ========================= CREATE ========================= */
+  const createRoom=()=>{
+    const code=Math.random().toString(36).substring(2,8).toUpperCase();
+    setRoom(code);
     setView('team');
   };
 
-  const confirmCreate = () => {
-    const gameState = {
-      players: [{
-        id: myId,
-        name: playerName,
-        hand: [],
-        isBot: false
-      }],
-      teams: {
-        team1: teamChoice === 'team1' ? [myId] : [],
-        team2: teamChoice === 'team2' ? [myId] : []
-      },
-      scores: { team1: 0, team2: 0 },
-      currentTurn: '',
-      started: false,
-      log: []
+  const confirmCreate=()=>{
+    const state={
+      hostId:myId,
+      phase:'lobby',
+      players:[{id:myId,name,hand:[],isBot:false}],
+      teams:{team1:team==='team1'?[myId]:[],team2:team==='team2'?[myId]:[]},
+      currentTurn:'',
+      claimed:[],
+      askHistory:[],
+      settings:{showAskHistory:true},
+      dev:{autoplay:false},
+      log:[]
     };
-
-    localStorage.setItem(`game:${roomCode}`, JSON.stringify(gameState));
+    localStorage.setItem(`game:${room}`,JSON.stringify(state));
+    setView('lobby');
     loadGame();
-    setView('waiting');
   };
 
-  /* ============================================================
-     JOIN ROOM
-     ============================================================ */
-  const joinRoom = () => {
-    const raw = localStorage.getItem(`game:${roomCode}`);
-    if (!raw) return alert('Room not found');
-
-    const data = JSON.parse(raw);
-
-    // already joined on this browser
-    if (data.players.some(p => p.id === myId)) {
-      setView('waiting');
-      return;
-    }
-
-    // name collision
-    if (nameExists(data.players, playerName)) {
+  /* ========================= JOIN ========================= */
+  const joinRoom=()=>{
+    const raw=localStorage.getItem(`game:${room}`);
+    if(!raw) return alert('Room not found');
+    const data=JSON.parse(raw);
+    if(data.players.some(p=>p.name.toLowerCase()===name.toLowerCase())){
       alert('Name already taken');
       return;
     }
-
+    if(data.players.some(p=>p.id===myId)){
+      setView('lobby'); return;
+    }
     setView('team');
   };
 
-  const confirmJoin = () => {
-    const data = JSON.parse(localStorage.getItem(`game:${roomCode}`));
-
-    if (!data.players.some(p => p.id === myId)) {
-      data.players.push({
-        id: myId,
-        name: playerName,
-        hand: [],
-        isBot: false
-      });
-    }
-
-    if (!data.teams[teamChoice].includes(myId)) {
-      data.teams[teamChoice].push(myId);
-    }
-
-    localStorage.setItem(`game:${roomCode}`, JSON.stringify(data));
-    loadGame();
-    setView('waiting');
-  };
-
-  /* ============================================================
-     BOT MANAGEMENT
-     ============================================================ */
-  const addBot = (team) => {
-    const data = JSON.parse(localStorage.getItem(`game:${roomCode}`));
-    const bot = createBot(data.players);
-    data.players.push(bot);
-    data.teams[team].push(bot.id);
-    localStorage.setItem(`game:${roomCode}`, JSON.stringify(data));
+  const confirmJoin=()=>{
+    const data=JSON.parse(localStorage.getItem(`game:${room}`));
+    data.players.push({id:myId,name,hand:[],isBot:false});
+    data.teams[team].push(myId);
+    localStorage.setItem(`game:${room}`,JSON.stringify(data));
+    setView('lobby');
     loadGame();
   };
 
-  /* ============================================================
-     START GAME
-     ============================================================ */
-  const startGame = () => {
-    const data = JSON.parse(localStorage.getItem(`game:${roomCode}`));
-
-    let deck = [];
-    SETS.forEach(s => deck.push(...s.cards));
+  /* ========================= START ========================= */
+  const startGame=()=>{
+    const data=JSON.parse(localStorage.getItem(`game:${room}`));
+    let deck=[];
+    SETS.forEach(s=>deck.push(...s.cards));
     shuffle(deck);
-
-    data.players.forEach((p, i) => {
-      p.hand = deck.filter((_, idx) => idx % data.players.length === i);
+    data.players.forEach((p,i)=>{
+      p.hand=deck.filter((_,idx)=>idx%data.players.length===i);
     });
-
-    data.started = true;
-    data.currentTurn = data.players[0].id;
-    data.log.unshift('Game started');
-
-    localStorage.setItem(`game:${roomCode}`, JSON.stringify(data));
+    data.phase='game';
+    data.currentTurn=data.players[0].id;
+    localStorage.setItem(`game:${room}`,JSON.stringify(data));
+    setView('game');
     loadGame();
   };
 
-  /* ============================================================
-     BOT TURN LOGIC
-     ============================================================ */
-  const runBotTurn = (bot, data) => {
-    const myTeam = data.teams.team1.includes(bot.id) ? 'team1' : 'team2';
-    const oppTeam = myTeam === 'team1' ? 'team2' : 'team1';
-    const opponents = data.players.filter(p => data.teams[oppTeam].includes(p.id));
+  /* ========================= ASK LOGIC ========================= */
+  const recordAsk=(from,to,card,success)=>{
+    const data=JSON.parse(localStorage.getItem(`game:${room}`));
+    data.askHistory.unshift({from,to,card,success});
+    data.askHistory=data.askHistory.slice(0,2);
+    localStorage.setItem(`game:${room}`,JSON.stringify(data));
+  };
 
-    const askable = new Set();
-    bot.hand.forEach(card => {
-      const set = findSet(card);
-      set.cards.forEach(c => {
-        if (!bot.hand.includes(c)) askable.add(c);
+  /* ========================= BOT TURN ========================= */
+  const botTurn=(bot,data)=>{
+    const myTeam=data.teams.team1.includes(bot.id)?'team1':'team2';
+    const oppTeam=myTeam==='team1'?'team2':'team1';
+    const opponents=data.players.filter(p=>data.teams[oppTeam].includes(p.id));
+
+    let possible=[];
+    bot.hand.forEach(c=>{
+      const set=findSet(c);
+      set.cards.forEach(x=>{
+        if(!bot.hand.includes(x)) possible.push(x);
       });
     });
 
-    if (askable.size === 0) {
-      data.currentTurn = opponents[0].id;
-    } else {
-      const card = Array.from(askable)[Math.floor(Math.random() * askable.size)];
-      const opp = opponents[Math.floor(Math.random() * opponents.length)];
-
-      if (opp.hand.includes(card)) {
-        opp.hand = opp.hand.filter(c => c !== card);
-        bot.hand.push(card);
-        data.log.unshift(`${bot.name} took ${card} from ${opp.name}`);
-      } else {
-        data.currentTurn = opp.id;
-        data.log.unshift(`${bot.name} failed asking ${opp.name}`);
-      }
+    if(!possible.length){
+      data.currentTurn=opponents[0].id;
+      localStorage.setItem(`game:${room}`,JSON.stringify(data));
+      return;
     }
 
-    localStorage.setItem(`game:${roomCode}`, JSON.stringify(data));
+    const card=possible[Math.floor(Math.random()*possible.length)];
+    const target=opponents[Math.floor(Math.random()*opponents.length)];
+
+    if(target.hand.includes(card)){
+      target.hand=target.hand.filter(c=>c!==card);
+      bot.hand.push(card);
+      recordAsk(bot.name,target.name,card,true);
+    } else {
+      recordAsk(bot.name,target.name,card,false);
+      data.currentTurn=target.id;
+    }
+
+    localStorage.setItem(`game:${room}`,JSON.stringify(data));
     loadGame();
   };
 
-  /* ============================================================
-     UI
-     ============================================================ */
-  if (view === 'home') {
+  /* ========================= DEV MODE ========================= */
+  const devFill=()=>{
+    const data=JSON.parse(localStorage.getItem(`game:${room}`));
+    while(data.players.length<6){
+      const bot=createBot(data.players);
+      data.players.push(bot);
+      (data.players.length%2?data.teams.team1:data.teams.team2).push(bot.id);
+    }
+    localStorage.setItem(`game:${room}`,JSON.stringify(data));
+    loadGame();
+  };
+
+  /* ========================= UI ========================= */
+  if(view==='home'){
     return (
       <div className="p-8 text-center">
-        <h1 className="text-4xl font-bold mb-4">Literature</h1>
-        <input
-          className="text-black p-2 mb-4"
-          placeholder="Your Name"
-          onChange={e => setPlayerName(e.target.value)}
-        />
+        <h1 className="text-4xl mb-4 font-bold">Literature</h1>
+        <input className="text-black p-2 mb-2" placeholder="Name" onChange={e=>setName(e.target.value)} />
         <div>
-          <button onClick={createRoom} className="bg-green-600 px-4 py-2 m-2">Create</button>
-          <input
-            className="text-black p-2 mx-2"
-            placeholder="Room Code"
-            onChange={e => setRoomCode(e.target.value.toUpperCase())}
-          />
-          <button onClick={joinRoom} className="bg-blue-600 px-4 py-2 m-2">Join</button>
+          <button className="bg-green-600 px-4 py-2 m-2" onClick={createRoom}>Create</button>
+          <input className="text-black p-2 m-2" placeholder="Room" onChange={e=>setRoom(e.target.value.toUpperCase())}/>
+          <button className="bg-blue-600 px-4 py-2 m-2" onClick={joinRoom}>Join</button>
         </div>
       </div>
     );
   }
 
-  if (view === 'team') {
+  if(view==='team'){
     return (
       <div className="p-8 text-center">
-        <h2 className="text-2xl mb-4">Choose Team</h2>
-        <button onClick={() => setTeamChoice('team1')} className="bg-blue-600 px-4 py-2 m-2">Team 1</button>
-        <button onClick={() => setTeamChoice('team2')} className="bg-red-600 px-4 py-2 m-2">Team 2</button>
+        <button onClick={()=>setTeam('team1')} className="bg-blue-600 px-4 py-2 m-2">Team 1</button>
+        <button onClick={()=>setTeam('team2')} className="bg-red-600 px-4 py-2 m-2">Team 2</button>
         <div>
-          <button
-            onClick={game ? confirmJoin : confirmCreate}
-            className="bg-green-700 px-6 py-2 mt-4"
-          >
-            Confirm
-          </button>
+          <button className="bg-green-700 px-6 py-2 mt-4" onClick={game?confirmJoin:confirmCreate}>Confirm</button>
         </div>
       </div>
     );
   }
 
-  if (view === 'waiting' && game) {
+  if(view==='lobby' && game){
     return (
       <div className="p-8">
-        <h2 className="text-2xl mb-2">Room {roomCode}</h2>
-        <div className="grid grid-cols-2 gap-6">
-          <div>
-            <h3 className="font-bold">Team 1</h3>
-            <button onClick={() => addBot('team1')} className="text-sm underline">+ Bot</button>
-            {game.teams.team1.map(id => (
-              <div key={id}>{game.players.find(p => p.id === id)?.name}</div>
-            ))}
-          </div>
-          <div>
-            <h3 className="font-bold">Team 2</h3>
-            <button onClick={() => addBot('team2')} className="text-sm underline">+ Bot</button>
-            {game.teams.team2.map(id => (
-              <div key={id}>{game.players.find(p => p.id === id)?.name}</div>
-            ))}
-          </div>
-        </div>
-        <button onClick={startGame} className="bg-green-600 px-4 py-2 mt-6">Start Game</button>
+        <h2 className="text-2xl">Room {room}</h2>
+        <button onClick={devFill} className="underline text-sm">Developer Test Mode</button>
+        <button onClick={startGame} className="bg-green-600 px-4 py-2 mt-4">Start</button>
       </div>
     );
   }
 
-  return <div className="p-8">Game in progress…</div>;
+  if(view==='game' && game){
+    const me=game.players.find(p=>p.id===myId);
+    return (
+      <div className="p-6">
+        <h2 className="text-xl">Turn: {game.players.find(p=>p.id===game.currentTurn)?.name}</h2>
+
+        {game.settings.showAskHistory && (
+          <div className="bg-black/40 p-2 mt-2">
+            <h4 className="font-bold">Ask History</h4>
+            {game.askHistory.map((a,i)=>(
+              <div key={i}>
+                {a.from} asked {a.to} for {a.card} → {a.success?'✓':'✗'}
+              </div>
+            ))}
+          </div>
+        )}
+
+        <h3 className="mt-4 font-bold">Your Hand</h3>
+        <div className="flex flex-wrap gap-2">
+          {me?.hand.map(c=>(
+            <div key={c} className="bg-white text-black px-2 py-1 rounded">{c}</div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return null;
 };
 
 ReactDOM.render(<App />, document.getElementById('root'));
