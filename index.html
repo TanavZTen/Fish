@@ -3,30 +3,53 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Literature - Pro Table Edition</title>
+  <title>Literature Pro - 247 Poker Style</title>
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
-    body { background-color: #052e16; overflow: hidden; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-    .felt-table {
-      background: radial-gradient(circle, #065f46 0%, #064e3b 70%, #022c22 100%);
-      border: 14px solid #3d2b1f;
-      border-radius: 50%;
-      box-shadow: inset 0 0 80px rgba(0,0,0,0.8), 0 20px 50px rgba(0,0,0,0.5);
-      position: relative;
+    :root { --wood: #3d2b1f; --felt: #065f46; --gold: #fbbf24; }
+    body { background-color: #052e16; font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; overflow: hidden; color: white; }
+    
+    /* Table Styling */
+    .poker-arena {
+      position: relative; width: 1000px; height: 600px;
+      background: radial-gradient(circle, #067a5c 0%, #065f46 60%, #022c22 100%);
+      border: 16px solid var(--wood); border-radius: 300px;
+      box-shadow: inset 0 0 100px rgba(0,0,0,0.7), 0 25px 50px rgba(0,0,0,0.5);
     }
-    .player-seat { position: absolute; transform: translate(-50%, -50%); transition: all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1); z-index: 10; }
-    .wood-panel { background: linear-gradient(to bottom, #5d4037, #3e2723); border: 1px solid #2d1a12; }
-    .card-rect {
-      width: 45px; height: 65px; background: white; border-radius: 4px;
-      border: 1px solid #ccc; display: flex; align-items: center; justify-content: center;
-      font-weight: bold; font-size: 0.9rem; box-shadow: 2px 2px 5px rgba(0,0,0,0.3);
-      user-select: none;
+    .table-rail {
+      position: absolute; inset: -20px; border: 4px solid #2d1a12;
+      border-radius: 320px; pointer-events: none;
     }
-    .status-badge { font-size: 0.65rem; padding: 2px 6px; border-radius: 10px; text-transform: uppercase; font-weight: 800; }
+
+    /* Seat Positioning */
+    .seat { position: absolute; transform: translate(-50%, -50%); width: 140px; z-index: 20; transition: all 0.5s ease; }
+    .player-card {
+      background: rgba(0,0,0,0.8); backdrop-filter: blur(8px);
+      border: 2px solid rgba(255,255,255,0.1); border-radius: 16px;
+      padding: 10px; text-align: center;
+    }
+    .player-card.active { border-color: var(--gold); box-shadow: 0 0 15px var(--gold); }
+    .player-card.is-me { border-color: #3b82f6; }
+
+    /* Cards */
+    .card-sprite {
+      width: 42px; height: 60px; background: white; border-radius: 4px;
+      color: black; font-weight: bold; display: flex; align-items: center;
+      justify-content: center; font-size: 14px; box-shadow: 2px 2px 5px rgba(0,0,0,0.3);
+      border: 1px solid #ddd;
+    }
+    .red-suit { color: #e11d48; }
+
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 10px; }
+    
+    .modal-overlay { background: rgba(0,0,0,0.85); backdrop-filter: blur(10px); }
+    .btn-wood { background: linear-gradient(to bottom, #5d4037, #3e2723); border: 1px solid #2d1a12; }
   </style>
 </head>
 <body>
@@ -35,174 +58,149 @@
     const { useState, useEffect, useMemo, useCallback, useRef } = React;
 
     /* ============================================================
-       CONFIG & CONSTANTS
+       CONSTANTS & CONFIG
        ============================================================ */
     const SUPABASE_URL = 'https://vngdiukjrfmzwlbefmjf.supabase.co';
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZuZ2RpdWtqcmZtendsYmVmbWpmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc0Njk5MDUsImV4cCI6MjA4MzA0NTkwNX0.XBr7aEzSPj-Iw0HYf27T8yXo1nbZ01MhBVa-VIdNZG4';
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    const CLIENT_ID_KEY = 'lit-pro-id-v2';
     const SETS = [
-      { id: 0, name: 'Spades Low', cards: ['2♠', '3♠', '4♠', '5♠', '6♠', '7♠'] },
-      { id: 1, name: 'Spades High', cards: ['9♠', '10♠', 'J♠', 'Q♠', 'K♠', 'A♠'] },
-      { id: 2, name: 'Hearts Low', cards: ['2♥', '3♥', '4♥', '5♥', '6♥', '7♥'] },
-      { id: 3, name: 'Hearts High', cards: ['9♥', '10♥', 'J♥', 'Q♥', 'K♥', 'A♥'] },
-      { id: 4, name: 'Clubs Low', cards: ['2♣', '3♣', '4♣', '5♣', '6♣', '7♣'] },
-      { id: 5, name: 'Clubs High', cards: ['9♣', '10♣', 'J♣', 'Q♣', 'K♣', 'A♣'] },
-      { id: 6, name: 'Diamonds Low', cards: ['2♦', '3♦', '4♦', '5♦', '6♦', '7♦'] },
-      { id: 7, name: 'Diamonds High', cards: ['9♦', '10♦', 'J♦', 'Q♦', 'K♦', 'A♦'] },
-      { id: 8, name: '8s & Jokers', cards: ['8♥', '8♦', '8♠', '8♣', 'RJ', 'BJ'] }
+      { name: 'Spades Low', cards: ['2♠','3♠','4♠','5♠','6♠','7♠'] },
+      { name: 'Spades High', cards: ['9♠','10♠','J♠','Q♠','K♠','A♠'] },
+      { name: 'Hearts Low', cards: ['2♥','3♥','4♥','5♥','6♥','7♥'] },
+      { name: 'Hearts High', cards: ['9♥','10♥','J♥','Q♥','K♥','A♥'] },
+      { name: 'Clubs Low', cards: ['2♣','3♣','4♣','5♣','6♣','7♣'] },
+      { name: 'Clubs High', cards: ['9♣','10♣','J♣','Q♣','K♣','A♣'] },
+      { name: 'Diamonds Low', cards: ['2♦','3♦','4♦','5♦','6♦','7♦'] },
+      { name: 'Diamonds High', cards: ['9♦','10♦','J♦','Q♦','K♦','A♦'] },
+      { name: '8s & Jokers', cards: ['8♥','8♦','8♠','8♣','RJ','BJ'] }
     ];
 
-    /* ============================================================
-       HELPERS
-       ============================================================ */
-    const getMyId = () => {
-      try {
-        let id = localStorage.getItem(CLIENT_ID_KEY);
-        if (!id) { id = crypto.randomUUID(); localStorage.setItem(CLIENT_ID_KEY, id); }
-        return id;
-      } catch(e) { return 'fallback-id-' + Math.random(); }
+    const generateId = () => {
+      let id = localStorage.getItem('lit_v3_id');
+      if (!id) { id = 'user-' + Math.random().toString(36).substr(2, 9); localStorage.setItem('lit_v3_id', id); }
+      return id;
     };
 
+    /* ============================================================
+       MAIN COMPONENT
+       ============================================================ */
     const App = () => {
-      const myId = useMemo(() => getMyId(), []);
-      const [view, setView] = useState('home'); // home, lobby, game
+      const myId = useMemo(() => generateId(), []);
+      const [view, setView] = useState('home'); 
       const [roomCode, setRoomCode] = useState('');
       const [playerName, setPlayerName] = useState('');
       const [gameData, setGameData] = useState(null);
-      const [errorMsg, setErrorMsg] = useState('');
-      const [isProcessing, setIsProcessing] = useState(false);
-
-      // UI States
+      const [error, setError] = useState('');
+      const [isSpectator, setIsSpectator] = useState(false);
+      
+      // UI / Interaction
       const [showCallModal, setShowCallModal] = useState(false);
-      const [callSetIndex, setCallSetIndex] = useState(0);
-      const [callAssignments, setCallAssignments] = useState({});
+      const [callSetIdx, setCallSetIdx] = useState(0);
+      const [callMap, setCallMap] = useState({});
       const [askTarget, setAskTarget] = useState('');
       const [askCard, setAskCard] = useState('');
 
-      /* ========================= ERROR HANDLING SYNC ========================= */
-      const syncToCloud = async (newData) => {
+      /* --- DATABASE SYNC --- */
+      const pushUpdate = async (updated) => {
         if (!roomCode) return;
-        setIsProcessing(true);
         try {
-          const { error } = await supabase
-            .from('games')
-            .upsert({ 
-              room_code: roomCode, 
-              game_data: newData, 
-              updated_at: new Date().toISOString() 
-            });
-          
-          if (error) throw error;
-          setGameData(newData);
-        } catch (err) {
-          console.error("Sync Error:", err);
-          setErrorMsg("Connection lost. Retrying sync...");
-          // Background retry logic
-          setTimeout(() => syncToCloud(newData), 2000);
-        } finally {
-          setIsProcessing(false);
+          const { error: upsertErr } = await supabase.from('games').upsert({
+            room_code: roomCode,
+            game_data: updated,
+            updated_at: new Date().toISOString()
+          });
+          if (upsertErr) throw upsertErr;
+          setGameData(updated);
+        } catch (e) {
+          console.error("Sync Failure:", e);
+          setError("Connection sync failed. Action may not have saved.");
         }
       };
 
-      const fetchLatest = useCallback(async () => {
+      const fetchState = useCallback(async () => {
         if (!roomCode) return;
-        try {
-          const { data, error } = await supabase
-            .from('games')
-            .select('game_data')
-            .eq('room_code', roomCode)
-            .single();
+        const { data } = await supabase.from('games').select('game_data').eq('room_code', roomCode).single();
+        if (data && data.game_data) {
+          const remote = data.game_data;
+          setGameData(remote);
           
-          if (error) throw error;
-          if (data) {
-            setGameData(data.game_data);
-            if (data.game_data.phase === 'game' && view !== 'game') setView('game');
+          // Check if I should be a spectator
+          if (remote.phase === 'game' && !remote.players.find(p => p.id === myId)) {
+            setIsSpectator(true);
           }
-        } catch (err) {
-          console.warn("Polling fetch failed (normal if room is new)");
+
+          if (remote.phase === 'game' && view !== 'game') setView('game');
+          if (remote.phase === 'lobby' && view !== 'lobby') setView('lobby');
         }
-      }, [roomCode, view]);
+      }, [roomCode, view, myId]);
 
       useEffect(() => {
-        const poller = setInterval(fetchLatest, 3000);
-        return () => clearInterval(poller);
-      }, [fetchLatest]);
+        const interval = setInterval(fetchState, 3000);
+        return () => clearInterval(interval);
+      }, [fetchState]);
 
-      /* ========================= GAME LOGIC ========================= */
-      const createRoom = async () => {
-        if (!playerName.trim()) return setErrorMsg("Name is required");
+      /* --- ROOM ACTIONS --- */
+      const handleCreate = async () => {
+        if (!playerName) return setError("Name is required");
         const code = Math.random().toString(36).substring(2, 8).toUpperCase();
         const initial = {
-          hostId: myId,
-          phase: 'lobby',
+          hostId: myId, phase: 'lobby',
           players: [{ id: myId, name: playerName, hand: [], isBot: false }],
           teams: { team1: [myId], team2: [] },
           scores: { team1: 0, team2: 0 },
-          gameLog: [`Room created by ${playerName}`],
-          claimedSets: [],
-          currentTurn: '',
-          botActive: false
+          gameLog: ["Room created by " + playerName],
+          claimedSets: [], currentTurn: '',
+          settings: { showAskHistory: true, askHistoryCount: 23, showCardCounts: true, turnTime: 'No Limit' }
         };
         setRoomCode(code);
-        await syncToCloud(initial);
+        await pushUpdate(initial);
         setView('lobby');
       };
 
-      const joinRoom = async () => {
-        if (!playerName.trim() || !roomCode.trim()) return setErrorMsg("Name and Code required");
-        try {
-          const { data, error } = await supabase.from('games').select('game_data').eq('room_code', roomCode).single();
-          if (error || !data) return setErrorMsg("Room not found");
-          
-          const updated = { ...data.game_data };
-          if (!updated.players.find(p => p.id === myId)) {
-            updated.players.push({ id: myId, name: playerName, hand: [], isBot: false });
-            // Balance teams
-            if (updated.teams.team1.length <= updated.teams.team2.length) updated.teams.team1.push(myId);
-            else updated.teams.team2.push(myId);
+      const handleJoin = async () => {
+        if (!playerName || !roomCode) return setError("Missing name or code");
+        const { data } = await supabase.from('games').select('game_data').eq('room_code', roomCode).single();
+        if (!data) return setError("Room not found");
+
+        const updated = { ...data.game_data };
+        if (!updated.players.find(p => p.id === myId)) {
+          // Join as spectator if game is active
+          if (updated.phase === 'game') {
+            setIsSpectator(true);
+            setView('game');
+            setGameData(updated);
+            return;
           }
-          await syncToCloud(updated);
-          setView('lobby');
-        } catch(e) { setErrorMsg("Failed to join room"); }
+          // Join as player in lobby
+          updated.players.push({ id: myId, name: playerName, hand: [], isBot: false });
+          if (updated.teams.team1.length <= updated.teams.team2.length) updated.teams.team1.push(myId);
+          else updated.teams.team2.push(myId);
+        }
+        await pushUpdate(updated);
+        setView('lobby');
       };
 
       const addBot = async (team) => {
-        if (!gameData) return;
-        const updated = { ...gameData };
+        if (gameData.hostId !== myId) return; // Verify host
+        const updated = JSON.parse(JSON.stringify(gameData));
         const botId = `bot-${Date.now()}`;
-        const botName = `Bot ${updated.players.filter(p => p.isBot).length + 1}`;
-        updated.players.push({ id: botId, name: botName, hand: [], isBot: true });
+        updated.players.push({ id: botId, name: `Bot ${updated.players.length}`, hand: [], isBot: true });
         updated.teams[team].push(botId);
-        await syncToCloud(updated);
+        await pushUpdate(updated);
       };
 
-      const leaveTable = async () => {
-        if (!gameData) return;
+      const toggleSetting = (key) => {
+        if (gameData.hostId !== myId) return;
         const updated = { ...gameData };
-        if (updated.phase === 'game') {
-          // Robust Replacement: Replace human with bot state
-          const idx = updated.players.findIndex(p => p.id === myId);
-          if (idx !== -1) {
-            updated.players[idx].isBot = true;
-            updated.players[idx].name += " (Bot)";
-            updated.gameLog.unshift(`${playerName} disconnected. Bot taking over.`);
-          }
-        } else {
-          updated.players = updated.players.filter(p => p.id !== myId);
-          updated.teams.team1 = updated.teams.team1.filter(id => id !== myId);
-          updated.teams.team2 = updated.teams.team2.filter(id => id !== myId);
-          if (updated.hostId === myId && updated.players.length > 0) updated.hostId = updated.players[0].id;
-        }
-        await syncToCloud(updated);
-        setView('home');
-        setRoomCode('');
+        if (key === 'showAskHistory') updated.settings.showAskHistory = !updated.settings.showAskHistory;
+        if (key === 'showCardCounts') updated.settings.showCardCounts = !updated.settings.showCardCounts;
+        pushUpdate(updated);
       };
 
-      const startGame = async () => {
-        if (gameData.players.length < 2) return setErrorMsg("Need more players");
-        const updated = { ...gameData };
+      const handleStart = async () => {
+        if (gameData.players.length < 2) return setError("Need more players");
+        const updated = JSON.parse(JSON.stringify(gameData));
         let deck = []; SETS.forEach(s => deck.push(...s.cards));
         deck.sort(() => Math.random() - 0.5);
         
@@ -212,292 +210,282 @@
         
         updated.phase = 'game';
         updated.currentTurn = myId;
-        updated.gameLog.unshift("Game Started! Team 1 vs Team 2");
-        await syncToCloud(updated);
+        updated.gameLog.unshift("Game Started!");
+        await pushUpdate(updated);
+        setView('game');
+      };
+
+      const handleLeave = async () => {
+        const updated = JSON.parse(JSON.stringify(gameData));
+        if (updated.phase === 'game' && !isSpectator) {
+          const me = updated.players.find(p => p.id === myId);
+          me.isBot = true;
+          me.name += " (Bot)";
+          updated.gameLog.unshift(`${playerName} left. Replaced by Bot.`);
+        } else {
+          updated.players = updated.players.filter(p => p.id !== myId);
+          updated.teams.team1 = updated.teams.team1.filter(id => id !== myId);
+          updated.teams.team2 = updated.teams.team2.filter(id => id !== myId);
+          if (updated.hostId === myId && updated.players.length > 0) updated.hostId = updated.players[0].id;
+        }
+        await pushUpdate(updated);
+        setView('home');
+        setRoomCode('');
+      };
+
+      const resetGame = async () => {
+        if (gameData.hostId !== myId) return;
+        const updated = JSON.parse(JSON.stringify(gameData));
+        updated.phase = 'lobby';
+        updated.scores = { team1: 0, team2: 0 };
+        updated.claimedSets = [];
+        updated.gameLog = ["New Game Initiated"];
+        updated.players.forEach(p => p.hand = []);
+        await pushUpdate(updated);
+        setView('lobby');
       };
 
       const handleAsk = async () => {
         if (!askTarget || !askCard) return;
-        const updated = { ...gameData };
+        const updated = JSON.parse(JSON.stringify(gameData));
         const target = updated.players.find(p => p.id === askTarget);
         const me = updated.players.find(p => p.id === myId);
 
         if (target.hand.includes(askCard)) {
           target.hand = target.hand.filter(c => c !== askCard);
           me.hand.push(askCard);
-          updated.gameLog.unshift(`${me.name} successfully took ${askCard} from ${target.name}`);
+          updated.gameLog.unshift(`${me.name} took ${askCard} from ${target.name}`);
         } else {
           updated.currentTurn = target.id;
-          updated.gameLog.unshift(`${me.name} failed to get ${askCard} from ${target.name}. Turn switches.`);
-          // Trigger Bot Turn if applicable
-          if (target.isBot) setTimeout(() => runBotTurn(target.id), 1500);
+          updated.gameLog.unshift(`${me.name} failed to get ${askCard}. Turn: ${target.name}`);
         }
         setAskCard('');
-        await syncToCloud(updated);
+        await pushUpdate(updated);
       };
 
-      const runBotTurn = async (botId) => {
-        // Simple Bot Logic with delay for realism
-        const { data } = await supabase.from('games').select('game_data').eq('room_code', roomCode).single();
-        const updated = data.game_data;
-        if (updated.currentTurn !== botId) return;
+      const handleCall = async () => {
+        const updated = JSON.parse(JSON.stringify(gameData));
+        const set = SETS[callSetIdx];
+        let correct = true;
 
-        const bot = updated.players.find(p => p.id === botId);
-        const myTeam = updated.teams.team1.includes(botId) ? 'team1' : 'team2';
-        const opponents = updated.players.filter(p => !updated.teams[myTeam].includes(p.id) && p.hand.length > 0);
-        
-        if (opponents.length === 0) return;
-
-        // Bot picks a random card from a set it partially owns
-        const botSet = SETS.find(s => s.cards.some(c => bot.hand.includes(c)));
-        const targetCard = botSet.cards.find(c => !bot.hand.includes(c));
-        const targetOpp = opponents[0];
-
-        if (targetOpp.hand.includes(targetCard)) {
-          targetOpp.hand = targetOpp.hand.filter(c => c !== targetCard);
-          bot.hand.push(targetCard);
-          updated.gameLog.unshift(`[Bot] ${bot.name} took ${targetCard} from ${targetOpp.name}`);
-          await syncToCloud(updated);
-          setTimeout(() => runBotTurn(botId), 2000); // Bot continues
-        } else {
-          updated.currentTurn = targetOpp.id;
-          updated.gameLog.unshift(`[Bot] ${bot.name} asked ${targetOpp.name} for ${targetCard} and failed.`);
-          await syncToCloud(updated);
-        }
-      };
-
-      const submitCall = async () => {
-        const updated = { ...gameData };
-        const set = SETS[callSetIndex];
-        let isCorrect = true;
-
-        set.cards.forEach(card => {
-          const actualOwner = updated.players.find(p => p.hand.includes(card));
-          if (!actualOwner || actualOwner.id !== callAssignments[card]) {
-            isCorrect = false;
-          }
+        set.cards.forEach(c => {
+          const owner = updated.players.find(p => p.hand.includes(c));
+          if (!owner || owner.id !== callMap[c]) correct = false;
         });
 
         const myTeam = updated.teams.team1.includes(myId) ? 'team1' : 'team2';
         const oppTeam = myTeam === 'team1' ? 'team2' : 'team1';
 
-        if (isCorrect) {
+        if (correct) {
           updated.scores[myTeam]++;
-          updated.gameLog.unshift(`YES! Correct call by ${playerName}. ${set.name} goes to ${myTeam}.`);
+          updated.gameLog.unshift(`CORRECT! Team ${myTeam} gets ${set.name}`);
         } else {
           updated.scores[oppTeam]++;
-          updated.gameLog.unshift(`NO! Incorrect call by ${playerName}. ${set.name} awarded to ${oppTeam}.`);
+          updated.gameLog.unshift(`WRONG! Team ${oppTeam} awarded ${set.name}`);
         }
 
         updated.claimedSets.push(set.name);
         set.cards.forEach(c => updated.players.forEach(p => p.hand = p.hand.filter(hc => hc !== c)));
         setShowCallModal(false);
-        await syncToCloud(updated);
+        await pushUpdate(updated);
       };
 
-      // Effect to auto-populate call assignments for cards YOU hold
       useEffect(() => {
         if (showCallModal && gameData) {
           const me = gameData.players.find(p => p.id === myId);
-          const currentSetCards = SETS[callSetIndex].cards;
-          let newAssigns = {};
-          currentSetCards.forEach(c => {
-            if (me.hand.includes(c)) newAssigns[c] = myId;
-          });
-          setCallAssignments(newAssigns);
+          const setCards = SETS[callSetIdx].cards;
+          let m = {};
+          setCards.forEach(c => { if(me.hand.includes(c)) m[c] = myId; });
+          setCallMap(m);
         }
-      }, [showCallModal, callSetIndex]);
+      }, [showCallModal, callSetIdx]);
 
-      /* ========================= RENDERING ========================= */
-      if (view === 'home') return (
-        <div className="flex flex-col items-center justify-center min-h-screen text-white p-6">
-          <div className="wood-panel p-10 rounded-3xl shadow-2xl w-full max-w-md border-4 border-[#2d1a12]">
-            <h1 className="text-5xl font-black text-center mb-2 italic tracking-tighter text-yellow-500">LITERATURE</h1>
-            <p className="text-center text-xs uppercase tracking-widest mb-8 opacity-60">Professional Card Table</p>
-            
-            {errorMsg && <div className="bg-red-500/20 text-red-200 p-3 rounded-lg text-sm mb-4 border border-red-500">{errorMsg}</div>}
-            
-            <input className="w-full p-4 rounded-xl bg-black/40 border border-white/10 mb-4 outline-none focus:border-yellow-500 transition-all" placeholder="Enter Your Name" value={playerName} onChange={e => setPlayerName(e.target.value)} />
-            <button onClick={createRoom} className="w-full bg-yellow-600 text-black font-black py-4 rounded-xl mb-4 hover:bg-yellow-500 shadow-lg active:scale-95 transition-all">CREATE NEW TABLE</button>
-            <div className="flex items-center gap-4 mb-4"><div className="h-px bg-white/10 flex-1"></div><span className="text-xs opacity-40">JOIN EXISTING</span><div className="h-px bg-white/10 flex-1"></div></div>
-            <input className="w-full p-4 rounded-xl bg-black/40 border border-white/10 mb-3 outline-none uppercase font-mono text-center text-xl tracking-widest" placeholder="6-CHAR CODE" value={roomCode} onChange={e => setRoomCode(e.target.value.toUpperCase())} />
-            <button onClick={joinRoom} className="w-full bg-emerald-600 font-black py-4 rounded-xl hover:bg-emerald-500 active:scale-95 transition-all">JOIN TABLE</button>
+      /* --- SUB-COMPONENTS --- */
+      const Home = () => (
+        <div className="flex flex-col items-center justify-center min-h-screen">
+          <div className="bg-emerald-900/60 p-10 rounded-3xl border border-white/10 shadow-2xl w-96">
+            <h1 className="text-4xl font-black text-center mb-1 text-gold">LITERATURE</h1>
+            <p className="text-center text-xs opacity-40 mb-8 uppercase tracking-widest">247 Professional Edition</p>
+            {error && <p className="text-red-400 text-xs mb-4 text-center">{error}</p>}
+            <input className="w-full p-4 rounded-xl bg-black/40 border border-white/10 mb-4" placeholder="Your Name" value={playerName} onChange={e => setPlayerName(e.target.value)} />
+            <button onClick={handleCreate} className="w-full bg-yellow-600 text-black font-black py-4 rounded-xl mb-4 hover:bg-yellow-500 transition-all">CREATE TABLE</button>
+            <div className="flex items-center gap-2 mb-4"><div className="h-px bg-white/10 flex-1"></div><span className="text-xs opacity-30">OR</span><div className="h-px bg-white/10 flex-1"></div></div>
+            <input className="w-full p-4 rounded-xl bg-black/40 border border-white/10 mb-2 uppercase text-center font-mono" placeholder="6-CHAR CODE" value={roomCode} onChange={e => setRoomCode(e.target.value.toUpperCase())} />
+            <button onClick={handleJoin} className="w-full bg-blue-600 font-black py-4 rounded-xl">JOIN TABLE</button>
           </div>
         </div>
       );
 
-      if (view === 'lobby' && gameData) return (
-        <div className="p-8 text-white max-w-4xl mx-auto h-screen flex flex-col">
-          <div className="wood-panel rounded-3xl p-8 border-4 border-[#2d1a12] shadow-2xl flex-1 flex flex-col">
-            <div className="flex justify-between items-center mb-10">
-              <div>
-                <h2 className="text-xs uppercase tracking-[0.3em] opacity-50 mb-1">Table Code</h2>
-                <h1 className="text-6xl font-black text-yellow-500 font-mono tracking-tighter">{roomCode}</h1>
-              </div>
-              {gameData.hostId === myId ? (
-                <button onClick={startGame} className="bg-emerald-500 text-black px-12 py-5 rounded-2xl font-black text-xl shadow-[0_0_20px_rgba(16,185,129,0.4)] hover:scale-105 active:scale-95 transition-all">START GAME</button>
-              ) : (
-                <div className="text-right"><div className="animate-pulse text-emerald-400 font-bold">Waiting for host...</div></div>
-              )}
-            </div>
-
-            <div className="grid grid-cols-2 gap-10 flex-1">
-              <div className="bg-blue-900/20 rounded-3xl p-6 border border-blue-500/20 relative">
-                <div className="absolute -top-3 left-6 bg-blue-600 px-4 py-1 rounded-full text-xs font-black">TEAM ONE</div>
-                <div className="space-y-3 mt-4">
-                  {gameData.teams.team1.map(id => {
-                    const p = gameData.players.find(x => x.id === id);
-                    return <div key={id} className="flex justify-between items-center bg-black/20 p-3 rounded-xl border border-white/5">
-                      <span className="font-bold">{p?.name} {id === myId && " (You)"}</span>
-                      {p?.isBot && <span className="status-badge bg-gray-500">BOT</span>}
-                    </div>
-                  })}
-                  {gameData.hostId === myId && <button onClick={() => addBot('team1')} className="w-full py-2 border-2 border-dashed border-blue-500/30 rounded-xl text-xs opacity-50 hover:opacity-100">+ Add Bot Player</button>}
+      const Lobby = () => {
+        const isHost = gameData.hostId === myId;
+        return (
+          <div className="flex flex-col items-center justify-center min-h-screen p-6">
+            <div className="bg-white/5 backdrop-blur-md p-10 rounded-[40px] border border-white/10 w-full max-w-4xl shadow-2xl">
+              <div className="flex justify-between items-start mb-10">
+                <div>
+                  <h2 className="text-xs uppercase tracking-widest opacity-40">Table Code</h2>
+                  <h1 className="text-6xl font-black text-yellow-500 font-mono">{roomCode}</h1>
+                </div>
+                <div className="text-right">
+                  <h3 className="text-xs font-bold text-blue-400 uppercase mb-2">Room Settings</h3>
+                  <div className="flex flex-col gap-2">
+                    <button onClick={() => toggleSetting('showAskHistory')} className={`text-[10px] px-3 py-1 rounded-full border ${gameData.settings.showAskHistory ? 'bg-blue-500/20 border-blue-500' : 'opacity-40 border-white'}`}>Show Ask History: {gameData.settings.showAskHistory ? 'ON' : 'OFF'}</button>
+                    <button onClick={() => toggleSetting('showCardCounts')} className={`text-[10px] px-3 py-1 rounded-full border ${gameData.settings.showCardCounts ? 'bg-blue-500/20 border-blue-500' : 'opacity-40 border-white'}`}>Show Card Counts: {gameData.settings.showCardCounts ? 'ON' : 'OFF'}</button>
+                  </div>
                 </div>
               </div>
 
-              <div className="bg-red-900/20 rounded-3xl p-6 border border-red-500/20 relative">
-                <div className="absolute -top-3 left-6 bg-red-600 px-4 py-1 rounded-full text-xs font-black">TEAM TWO</div>
-                <div className="space-y-3 mt-4">
-                  {gameData.teams.team2.map(id => {
-                    const p = gameData.players.find(x => x.id === id);
-                    return <div key={id} className="flex justify-between items-center bg-black/20 p-3 rounded-xl border border-white/5">
-                      <span className="font-bold">{p?.name} {id === myId && " (You)"}</span>
-                      {p?.isBot && <span className="status-badge bg-gray-500">BOT</span>}
-                    </div>
-                  })}
-                  {gameData.hostId === myId && <button onClick={() => addBot('team2')} className="w-full py-2 border-2 border-dashed border-red-500/30 rounded-xl text-xs opacity-50 hover:opacity-100">+ Add Bot Player</button>}
+              <div className="grid grid-cols-2 gap-10 mb-10">
+                <div className="bg-blue-900/20 p-6 rounded-3xl border border-blue-500/20">
+                  <h4 className="font-black text-blue-400 mb-4 flex justify-between">TEAM 1 <span>{gameData.teams.team1.length}</span></h4>
+                  <div className="space-y-2">
+                    {gameData.teams.team1.map(id => (
+                      <div key={id} className="bg-black/20 p-3 rounded-xl flex justify-between items-center">
+                        <span className="font-bold">{gameData.players.find(p => p.id === id)?.name}</span>
+                        {gameData.hostId === id && <span className="text-[10px] bg-yellow-500 text-black px-2 py-0.5 rounded font-black">HOST</span>}
+                      </div>
+                    ))}
+                    {isHost && <button onClick={() => addBot('team1')} className="w-full border-2 border-dashed border-white/10 py-2 rounded-xl text-xs opacity-40 hover:opacity-100">+ Add Bot</button>}
+                  </div>
+                </div>
+                <div className="bg-red-900/20 p-6 rounded-3xl border border-red-500/20">
+                  <h4 className="font-black text-red-400 mb-4 flex justify-between">TEAM 2 <span>{gameData.teams.team2.length}</span></h4>
+                  <div className="space-y-2">
+                    {gameData.teams.team2.map(id => (
+                      <div key={id} className="bg-black/20 p-3 rounded-xl flex justify-between items-center">
+                        <span className="font-bold">{gameData.players.find(p => p.id === id)?.name}</span>
+                        {gameData.hostId === id && <span className="text-[10px] bg-yellow-500 text-black px-2 py-0.5 rounded font-black">HOST</span>}
+                      </div>
+                    ))}
+                    {isHost && <button onClick={() => addBot('team2')} className="w-full border-2 border-dashed border-white/10 py-2 rounded-xl text-xs opacity-40 hover:opacity-100">+ Add Bot</button>}
+                  </div>
                 </div>
               </div>
+
+              <div className="flex gap-4">
+                {isHost && <button onClick={handleStart} className="flex-1 bg-emerald-500 text-black font-black py-5 rounded-2xl text-xl shadow-lg">START GAME</button>}
+                <button onClick={handleLeave} className="px-10 bg-white/5 border border-white/10 py-5 rounded-2xl font-bold opacity-60 hover:opacity-100">LEAVE</button>
+              </div>
             </div>
-            
-            <button onClick={leaveTable} className="mt-8 text-white/30 hover:text-red-400 transition-colors text-sm uppercase font-bold">Leave Table</button>
           </div>
-        </div>
-      );
+        );
+      };
+
+      if (view === 'home') return <Home />;
+      if (view === 'lobby') return <Lobby />;
 
       if (view === 'game' && gameData) {
-        const me = gameData.players.find(p => p.id === myId);
-        const isMyTurn = gameData.currentTurn === myId;
-        const myTeam = gameData.teams.team1.includes(myId) ? 'team1' : 'team2';
+        const me = gameData.players.find(p => p.id === myId) || { name: 'Spectator', hand: [] };
+        const myTeamKey = gameData.teams.team1.includes(myId) ? 'team1' : 'team2';
+        const isTurn = gameData.currentTurn === myId;
 
         return (
-          <div className="h-screen w-screen relative flex items-center justify-center p-4">
-            {/* The Table */}
-            <div className="felt-table w-[1000px] h-[600px] shadow-2xl">
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-10">
-                <h1 className="text-9xl font-black italic">LITERATURE</h1>
+          <div className="min-h-screen flex items-center justify-center p-10 select-none">
+            <div className="poker-arena">
+              <div className="table-rail"></div>
+              
+              {/* Scores & Info */}
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center">
+                <div className="flex gap-16 items-center">
+                  <div className="text-center">
+                    <div className="text-6xl font-black text-blue-500/80">{gameData.scores.team1}</div>
+                    <div className="text-[10px] font-black uppercase tracking-widest opacity-50">Team 1</div>
+                  </div>
+                  <div className="text-white/5 text-9xl font-black italic select-none">LIT</div>
+                  <div className="text-center">
+                    <div className="text-6xl font-black text-red-500/80">{gameData.scores.team2}</div>
+                    <div className="text-[10px] font-black uppercase tracking-widest opacity-50">Team 2</div>
+                  </div>
+                </div>
+                {gameData.claimedSets.length === 9 && (
+                  <div className="mt-8">
+                    <div className="text-yellow-400 font-black mb-2">GAME OVER</div>
+                    {gameData.hostId === myId && (
+                      <button onClick={resetGame} className="bg-yellow-600 text-black px-6 py-2 rounded-full font-black text-sm">REMATCH</button>
+                    )}
+                  </div>
+                )}
               </div>
 
-              {/* Scores In Center */}
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex gap-12">
-                <div className="text-center">
-                  <div className="text-blue-400 font-black text-4xl">{gameData.scores.team1}</div>
-                  <div className="text-[10px] uppercase font-bold text-blue-400/50">Team 1</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-red-400 font-black text-4xl">{gameData.scores.team2}</div>
-                  <div className="text-[10px] uppercase font-bold text-red-400/50">Team 2</div>
-                </div>
-              </div>
-
-              {/* Position Players Circulary */}
+              {/* Player Positions */}
               {gameData.players.map((p, idx) => {
-                const angle = (idx / gameData.players.length) * Math.PI * 2;
+                const angle = (idx / gameData.players.length) * 2 * Math.PI;
                 const x = 50 + Math.cos(angle) * 44;
                 const y = 50 + Math.sin(angle) * 40;
                 const active = gameData.currentTurn === p.id;
-
+                
                 return (
-                  <div key={p.id} className="player-seat" style={{ left: `${x}%`, top: `${y}%` }}>
-                    <div className={`w-32 p-3 rounded-2xl border-2 transition-all ${active ? 'bg-yellow-500 text-black border-white scale-110 shadow-[0_0_20px_rgba(255,255,255,0.3)]' : 'bg-black/60 text-white border-white/10'}`}>
-                      <div className="text-[10px] font-black uppercase opacity-60 truncate">{p.id === myId ? "You" : p.name}</div>
-                      <div className="font-bold text-sm truncate">{p.hand.length} Cards</div>
-                      <div className="flex gap-[-10px] justify-center mt-1">
-                        {[...Array(Math.min(p.hand.length, 4))].map((_, i) => (
-                           <div key={i} className="w-2 h-3 bg-white/20 rounded-sm border border-white/10 -ml-1"></div>
-                        ))}
-                      </div>
+                  <div key={p.id} className="seat" style={{ left: `${x}%`, top: `${y}%` }}>
+                    <div className={`player-card ${active ? 'active' : ''} ${p.id === myId ? 'is-me' : ''}`}>
+                      <div className="text-[10px] font-black opacity-60 uppercase truncate">{p.name}</div>
+                      <div className="text-sm font-bold">{p.hand.length} <span className="text-[10px] opacity-50">Cards</span></div>
                     </div>
                   </div>
                 );
               })}
             </div>
 
-            {/* User Interface Overlays */}
-            <div className="fixed bottom-0 left-0 right-0 p-8 flex justify-between items-end pointer-events-none">
-              {/* Activity Log */}
-              <div className="w-72 bg-black/80 backdrop-blur-xl p-5 rounded-3xl border border-white/10 pointer-events-auto shadow-2xl">
-                <div className="text-[10px] font-black text-yellow-500 uppercase mb-3 tracking-widest border-b border-white/5 pb-2">Recent Plays</div>
-                <div className="h-40 overflow-y-auto space-y-3 pr-2 scrollbar-hide">
-                  {gameData.gameLog.map((log, i) => (
-                    <div key={i} className={`text-xs leading-relaxed ${i === 0 ? 'text-white font-bold' : 'text-white/40'}`}>
-                      <span className="text-yellow-500/50 mr-2">●</span>{log}
-                    </div>
-                  ))}
-                </div>
+            {/* Bottom Controls */}
+            <div className="fixed bottom-0 inset-x-0 p-8 flex justify-between items-end">
+              <div className="w-64 bg-black/80 p-4 rounded-3xl border border-white/10 h-48 overflow-y-auto">
+                <div className="text-[10px] font-black text-gold mb-3 uppercase">Activity Log</div>
+                {gameData.gameLog.map((log, i) => <div key={i} className={`text-[11px] mb-2 ${i === 0 ? 'text-white' : 'opacity-40'}`}>• {log}</div>)}
               </div>
 
-              {/* Hand & Actions */}
-              <div className="flex flex-col items-center gap-6 pointer-events-auto">
-                <div className="flex gap-2">
-                  {me.hand.sort().map((c, i) => (
-                    <div key={c} className="card-rect transform hover:-translate-y-8 hover:rotate-2 transition-all cursor-default text-emerald-900">
+              <div className="flex flex-col items-center gap-6">
+                <div className="flex gap-1">
+                  {me.hand.sort().map(c => (
+                    <div key={c} className={`card-sprite ${c.includes('♥') || c.includes('♦') || c === 'RJ' ? 'red-suit' : ''}`}>
                       {c}
                     </div>
                   ))}
                 </div>
 
-                {isMyTurn && (
-                  <div className="bg-white p-2 rounded-2xl flex gap-2 shadow-2xl animate-bounce-in">
-                    <select className="bg-gray-100 p-3 rounded-xl text-black text-sm font-bold border-none outline-none" value={askTarget} onChange={e => setAskTarget(e.target.value)}>
+                {!isSpectator && isTurn && (
+                  <div className="bg-white p-3 rounded-2xl flex gap-3 shadow-2xl">
+                    <select className="bg-gray-100 p-2 rounded-xl text-black font-bold text-sm" value={askTarget} onChange={e => setAskTarget(e.target.value)}>
                       <option value="">Ask Opponent...</option>
-                      {gameData.players.filter(p => !gameData.teams[myTeam].includes(p.id) && p.hand.length > 0).map(p => (
-                        <option key={p.id} value={p.id}>{p.name}</option>
-                      ))}
+                      {gameData.players.filter(p => !gameData.teams[myTeamKey].includes(p.id)).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                     </select>
-                    <select className="bg-gray-100 p-3 rounded-xl text-black text-sm font-bold border-none outline-none w-36" value={askCard} onChange={e => setAskCard(e.target.value)}>
-                      <option value="">Which Card?</option>
-                      {SETS.filter(s => s.cards.some(c => me.hand.includes(c)))
-                           .flatMap(s => s.cards)
-                           .filter(c => !me.hand.includes(c))
-                           .map(c => <option key={c} value={c}>{c}</option>)}
+                    <select className="bg-gray-100 p-2 rounded-xl text-black font-bold text-sm w-32" value={askCard} onChange={e => setAskCard(e.target.value)}>
+                      <option value="">Card...</option>
+                      {SETS.filter(s => s.cards.some(c => me.hand.includes(c))).flatMap(s => s.cards).filter(c => !me.hand.includes(c)).map(c => <option key={c} value={c}>{c}</option>)}
                     </select>
-                    <button onClick={handleAsk} disabled={!askCard || !askTarget} className="bg-emerald-600 text-white px-6 py-3 rounded-xl font-black disabled:opacity-20 hover:bg-emerald-500">ASK</button>
-                    <button onClick={() => setShowCallModal(true)} className="bg-yellow-500 text-black px-6 py-3 rounded-xl font-black hover:bg-yellow-400">CALL SET</button>
+                    <button onClick={handleAsk} disabled={!askTarget || !askCard} className="bg-blue-600 px-6 rounded-xl font-black disabled:opacity-30">ASK</button>
+                    <button onClick={() => setShowCallModal(true)} className="bg-yellow-600 text-black px-6 rounded-xl font-black">CALL</button>
                   </div>
                 )}
+                {isSpectator && <div className="bg-black/60 px-6 py-2 rounded-full text-xs font-black border border-white/20">SPECTATOR MODE</div>}
               </div>
 
-              {/* Exit Button */}
-              <button onClick={leaveTable} className="bg-red-950/40 hover:bg-red-600 text-white/50 hover:text-white p-4 rounded-full border border-red-500/20 pointer-events-auto transition-all">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+              <button onClick={handleLeave} className="bg-red-600/20 hover:bg-red-600 border border-red-500 p-4 rounded-full transition-all">
+                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
               </button>
             </div>
 
             {/* CALL MODAL */}
             {showCallModal && (
-              <div className="fixed inset-0 bg-black/95 backdrop-blur-md flex items-center justify-center z-[100] p-6">
-                <div className="wood-panel p-10 rounded-[3rem] border-4 border-[#2d1a12] w-full max-w-2xl shadow-[0_0_100px_rgba(0,0,0,1)]">
-                  <h2 className="text-4xl font-black text-white mb-2 italic tracking-tighter">CALL A SET</h2>
-                  <p className="text-white/40 text-xs mb-8 uppercase tracking-widest">Assign every card in the set to your teammates</p>
+              <div className="fixed inset-0 modal-overlay flex items-center justify-center p-6 z-[100]">
+                <div className="bg-[#1a1a1a] p-10 rounded-[40px] border border-white/10 w-full max-w-xl shadow-[0_0_100px_rgba(0,0,0,1)]">
+                  <h2 className="text-3xl font-black mb-1 italic text-gold">CALLING A SET</h2>
+                  <p className="text-xs opacity-40 mb-6 uppercase tracking-widest">Assign every card in the set to your team</p>
                   
-                  <select className="w-full bg-black/40 text-white p-5 rounded-2xl border border-white/10 mb-8 font-bold text-xl outline-none focus:border-yellow-500" value={callSetIndex} onChange={e => setCallSetIndex(Number(e.target.value))}>
+                  <select className="w-full bg-black p-4 rounded-2xl border border-white/10 mb-6 font-bold" value={callSetIdx} onChange={e => setCallSetIdx(Number(e.target.value))}>
                     {SETS.map((s, i) => !gameData.claimedSets.includes(s.name) && <option key={i} value={i}>{s.name}</option>)}
                   </select>
                   
-                  <div className="grid grid-cols-2 gap-4 mb-10 overflow-y-auto max-h-[40vh] pr-4">
-                    {SETS[callSetIndex].cards.map(card => {
-                      const amIHolder = me.hand.includes(card);
+                  <div className="space-y-3 mb-8 max-h-[300px] overflow-y-auto pr-2">
+                    {SETS[callSetIdx].cards.map(card => {
+                      const isMine = me.hand.includes(card);
                       return (
-                        <div key={card} className="bg-white/5 p-4 rounded-2xl border border-white/5 flex items-center gap-4">
-                          <span className="text-2xl font-black text-yellow-500 w-12">{card}</span>
-                          {amIHolder ? (
-                            <div className="text-xs font-black text-emerald-400 uppercase bg-emerald-400/10 px-4 py-2 rounded-lg flex-1">In Your Hand</div>
+                        <div key={card} className="flex items-center gap-4 bg-white/5 p-3 rounded-xl">
+                          <span className={`w-10 font-black text-xl ${card.includes('♥') || card.includes('♦') ? 'text-red-500' : ''}`}>{card}</span>
+                          {isMine ? (
+                            <div className="flex-1 text-emerald-400 text-xs font-black uppercase px-4 py-2 bg-emerald-400/10 rounded-lg">Held by You</div>
                           ) : (
-                            <select className="flex-1 bg-white p-2 rounded-lg text-black font-bold text-sm outline-none" value={callAssignments[card] || ''} onChange={e => setCallAssignments({...callAssignments, [card]: e.target.value})}>
-                              <option value="">Choose...</option>
-                              {gameData.players.filter(p => gameData.teams[myTeam].includes(p.id) && p.id !== myId).map(p => (
+                            <select className="flex-1 bg-white p-2 rounded-lg text-black font-bold text-sm" value={callMap[card] || ''} onChange={e => setCallMap({...callMap, [card]: e.target.value})}>
+                              <option value="">Choose Teammate...</option>
+                              {gameData.players.filter(p => gameData.teams[myTeamKey].includes(p.id) && p.id !== myId).map(p => (
                                 <option key={p.id} value={p.id}>{p.name}</option>
                               ))}
                             </select>
@@ -508,8 +496,8 @@
                   </div>
 
                   <div className="flex gap-4">
-                    <button onClick={submitCall} className="flex-1 bg-yellow-500 text-black py-5 rounded-2xl font-black text-xl hover:scale-105 transition-all">SUBMIT CLAIM</button>
-                    <button onClick={() => setShowCallModal(false)} className="px-10 bg-white/5 text-white py-5 rounded-2xl font-black hover:bg-white/10">CANCEL</button>
+                    <button onClick={handleCall} className="flex-1 bg-yellow-500 text-black py-4 rounded-2xl font-black text-lg">SUBMIT CLAIM</button>
+                    <button onClick={() => setShowCallModal(false)} className="px-8 bg-white/5 py-4 rounded-2xl font-bold">CANCEL</button>
                   </div>
                 </div>
               </div>
@@ -517,7 +505,6 @@
           </div>
         );
       }
-
       return null;
     };
 
