@@ -527,10 +527,9 @@
 
           const gameData = data.game_data;
           gameData.settings.showAskHistory = !gameData.settings.showAskHistory;
-          await saveGame(gameData);
           
-          // Force immediate reload
-          setTimeout(() => loadGame(), 100);
+          await saveGame(gameData);
+          setGameData({...gameData});
         } catch (e) {
           console.error('Error toggling setting:', e);
         }
@@ -548,9 +547,9 @@
 
           const gameData = data.game_data;
           gameData.settings.showCardCounts = !gameData.settings.showCardCounts;
-          await saveGame(gameData);
           
-          setTimeout(() => loadGame(), 100);
+          await saveGame(gameData);
+          setGameData({...gameData});
         } catch (e) {
           console.error('Error toggling setting:', e);
         }
@@ -568,9 +567,9 @@
 
           const gameData = data.game_data;
           gameData.settings.askHistoryCount = count;
-          await saveGame(gameData);
           
-          setTimeout(() => loadGame(), 100);
+          await saveGame(gameData);
+          setGameData({...gameData});
         } catch (e) {
           console.error('Error changing setting:', e);
         }
@@ -588,9 +587,9 @@
 
           const gameData = data.game_data;
           gameData.settings.turnTimeLimit = seconds;
-          await saveGame(gameData);
           
-          setTimeout(() => loadGame(), 100);
+          await saveGame(gameData);
+          setGameData({...gameData});
         } catch (e) {
           console.error('Error changing setting:', e);
         }
@@ -877,7 +876,8 @@
 
       if (view === 'lobby' && gameData) {
         const isHost = gameData.hostId === myId;
-        const myTeamName = gameData.teams.team1.includes(myId) ? 'Team 1' : 'Team 2';
+        const myTeamKey = gameData.teams.team1.includes(myId) ? 'team1' : 'team2';
+        const myTeamName = myTeamKey === 'team1' ? 'Team 1' : 'Team 2';
 
         return (
           <div className="min-h-screen bg-gradient-to-br from-green-700 to-green-900 p-4">
