@@ -12,699 +12,723 @@
 <body>
     <div id="root"></div>
     <script type="text/babel">
-        import React, { useState, useEffect } from 'react';
-import { Users, Copy, Check, Crown, Trophy } from 'lucide-react';
+        const { useState, useEffect } = React;
 
-const SUITS = {
-  hearts: '♥',
-  diamonds: '♦',
-  spades: '♠',
-  clubs: '♣'
-};
+        const Users = (props) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+                <circle cx="9" cy="7" r="4"></circle>
+                <path d="M22 21v-2a4 4 0 0 0-3-3.87"></path>
+                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+            </svg>
+        );
 
-const SUIT_COLORS = {
-  hearts: 'text-red-600',
-  diamonds: 'text-red-600',
-  spades: 'text-gray-900',
-  clubs: 'text-gray-900'
-};
+        const Copy = (props) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+                <rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect>
+                <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path>
+            </svg>
+        );
 
-const SETS = [
-  { name: 'Spades 2-7', cards: ['2♠', '3♠', '4♠', '5♠', '6♠', '7♠'] },
-  { name: 'Spades 9-A', cards: ['9♠', '10♠', 'J♠', 'Q♠', 'K♠', 'A♠'] },
-  { name: 'Hearts 2-7', cards: ['2♥', '3♥', '4♥', '5♥', '6♥', '7♥'] },
-  { name: 'Hearts 9-A', cards: ['9♥', '10♥', 'J♥', 'Q♥', 'K♥', 'A♥'] },
-  { name: 'Clubs 2-7', cards: ['2♣', '3♣', '4♣', '5♣', '6♣', '7♣'] },
-  { name: 'Clubs 9-A', cards: ['9♣', '10♣', 'J♣', 'Q♣', 'K♣', 'A♣'] },
-  { name: 'Diamonds 2-7', cards: ['2♦', '3♦', '4♦', '5♦', '6♦', '7♦'] },
-  { name: 'Diamonds 9-A', cards: ['9♦', '10♦', 'J♦', 'Q♦', 'K♦', 'A♦'] },
-  { name: 'Eights + Jokers', cards: ['8♥', '8♦', '8♠', '8♣', 'RJ', 'BJ'] }
-];
+        const Check = (props) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+                <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+        );
 
-const App = () => {
-  const [gameState, setGameState] = useState('lobby');
-  const [roomCode, setRoomCode] = useState('');
-  const [playerName, setPlayerName] = useState('');
-  const [players, setPlayers] = useState([]);
-  const [myHand, setMyHand] = useState([]);
-  const [myId, setMyId] = useState('');
-  const [currentTurn, setCurrentTurn] = useState('');
-  const [selectedOpponent, setSelectedOpponent] = useState('');
-  const [selectedCard, setSelectedCard] = useState('');
-  const [gameLog, setGameLog] = useState([]);
-  const [teams, setTeams] = useState({ team1: [], team2: [] });
-  const [scores, setScores] = useState({ team1: 0, team2: 0 });
-  const [showCallModal, setShowCallModal] = useState(false);
-  const [callSetIndex, setCallSetIndex] = useState(0);
-  const [callCards, setCallCards] = useState({});
-  const [copied, setCopied] = useState(false);
-  const [selectedTeam, setSelectedTeam] = useState('');
-  const [showTeamSelect, setShowTeamSelect] = useState(false);
+        const Crown = (props) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+                <path d="m2 4 3 12h14l3-12-6 7-4-7-4 7-6-7zm3 16h14"></path>
+            </svg>
+        );
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (roomCode && gameState !== 'lobby') {
-        loadGame();
-      }
-    }, 2000);
-    return () => clearInterval(interval);
-  }, [roomCode, gameState]);
+        const Trophy = (props) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+                <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path>
+                <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"></path>
+                <path d="M4 22h16"></path>
+                <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"></path>
+                <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"></path>
+                <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"></path>
+            </svg>
+        );
 
-  const loadGame = async () => {
-    if (!roomCode) return;
-    try {
-      const game = localStorage.getItem(`game:${roomCode}`);
-      if (game) {
-        const data = JSON.parse(game);
-        setPlayers(data.players || []);
-        setCurrentTurn(data.currentTurn || '');
-        setGameLog(data.gameLog || []);
-        setTeams(data.teams || { team1: [], team2: [] });
-        setScores(data.scores || { team1: 0, team2: 0 });
-        
-        if (data.started) {
-          setGameState('playing');
-        }
-        
-        const me = data.players.find(p => p.id === myId);
-        if (me) {
-          setMyHand(me.hand || []);
-        }
-      }
-    } catch (e) {
-      console.log('Error loading game:', e);
-    }
-  };
+        const SETS = [
+          { name: 'Spades 2-7', cards: ['2♠', '3♠', '4♠', '5♠', '6♠', '7♠'] },
+          { name: 'Spades 9-A', cards: ['9♠', '10♠', 'J♠', 'Q♠', 'K♠', 'A♠'] },
+          { name: 'Hearts 2-7', cards: ['2♥', '3♥', '4♥', '5♥', '6♥', '7♥'] },
+          { name: 'Hearts 9-A', cards: ['9♥', '10♥', 'J♥', 'Q♥', 'K♥', 'A♥'] },
+          { name: 'Clubs 2-7', cards: ['2♣', '3♣', '4♣', '5♣', '6♣', '7♣'] },
+          { name: 'Clubs 9-A', cards: ['9♣', '10♣', 'J♣', 'Q♣', 'K♣', 'A♣'] },
+          { name: 'Diamonds 2-7', cards: ['2♦', '3♦', '4♦', '5♦', '6♦', '7♦'] },
+          { name: 'Diamonds 9-A', cards: ['9♦', '10♦', 'J♦', 'Q♦', 'K♦', 'A♦'] },
+          { name: 'Eights + Jokers', cards: ['8♥', '8♦', '8♠', '8♣', 'RJ', 'BJ'] }
+        ];
 
-  const createRoom = () => {
-    const code = Math.random().toString(36).substring(2, 8).toUpperCase();
-    setRoomCode(code);
-    const id = Date.now().toString();
-    setMyId(id);
-    setShowTeamSelect(true);
-  };
+        const App = () => {
+          const [gameState, setGameState] = useState('lobby');
+          const [roomCode, setRoomCode] = useState('');
+          const [playerName, setPlayerName] = useState('');
+          const [players, setPlayers] = useState([]);
+          const [myHand, setMyHand] = useState([]);
+          const [myId, setMyId] = useState('');
+          const [currentTurn, setCurrentTurn] = useState('');
+          const [selectedOpponent, setSelectedOpponent] = useState('');
+          const [selectedCard, setSelectedCard] = useState('');
+          const [gameLog, setGameLog] = useState([]);
+          const [teams, setTeams] = useState({ team1: [], team2: [] });
+          const [scores, setScores] = useState({ team1: 0, team2: 0 });
+          const [showCallModal, setShowCallModal] = useState(false);
+          const [callSetIndex, setCallSetIndex] = useState(0);
+          const [callCards, setCallCards] = useState({});
+          const [copied, setCopied] = useState(false);
+          const [selectedTeam, setSelectedTeam] = useState('');
+          const [showTeamSelect, setShowTeamSelect] = useState(false);
 
-  const confirmTeamAndCreate = () => {
-    if (!selectedTeam) {
-      alert('Please select a team!');
-      return;
-    }
+          useEffect(() => {
+            const interval = setInterval(() => {
+              if (roomCode && gameState !== 'lobby') {
+                loadGame();
+              }
+            }, 2000);
+            return () => clearInterval(interval);
+          }, [roomCode, gameState]);
 
-    const initialGame = {
-      players: [{ id: myId, name: playerName, hand: [] }],
-      currentTurn: '',
-      gameLog: [],
-      teams: { 
-        team1: selectedTeam === 'team1' ? [myId] : [], 
-        team2: selectedTeam === 'team2' ? [myId] : [] 
-      },
-      scores: { team1: 0, team2: 0 },
-      started: false
-    };
-    
-    localStorage.setItem(`game:${roomCode}`, JSON.stringify(initialGame));
-    setGameState('waiting');
-    loadGame();
-  };
+          const loadGame = () => {
+            if (!roomCode) return;
+            try {
+              const game = localStorage.getItem(`game:${roomCode}`);
+              if (game) {
+                const data = JSON.parse(game);
+                setPlayers(data.players || []);
+                setCurrentTurn(data.currentTurn || '');
+                setGameLog(data.gameLog || []);
+                setTeams(data.teams || { team1: [], team2: [] });
+                setScores(data.scores || { team1: 0, team2: 0 });
+                
+                if (data.started) {
+                  setGameState('playing');
+                }
+                
+                const me = data.players.find(p => p.id === myId);
+                if (me) {
+                  setMyHand(me.hand || []);
+                }
+              }
+            } catch (e) {
+              console.log('Error loading game:', e);
+            }
+          };
 
-  const joinRoom = () => {
-    const game = localStorage.getItem(`game:${roomCode}`);
-    if (!game) {
-      alert('Room not found!');
-      return;
-    }
-    
-    const id = Date.now().toString();
-    setMyId(id);
-    setShowTeamSelect(true);
-  };
+          const createRoom = () => {
+            const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+            setRoomCode(code);
+            const id = Date.now().toString();
+            setMyId(id);
+            setShowTeamSelect(true);
+          };
 
-  const confirmTeamAndJoin = () => {
-    if (!selectedTeam) {
-      alert('Please select a team!');
-      return;
-    }
+          const confirmTeamAndCreate = () => {
+            if (!selectedTeam) {
+              alert('Please select a team!');
+              return;
+            }
 
-    try {
-      const game = localStorage.getItem(`game:${roomCode}`);
-      const data = JSON.parse(game);
-      
-      if (data.started) {
-        alert('Game already started!');
-        return;
-      }
-      
-      data.players.push({ id: myId, name: playerName, hand: [] });
-      
-      if (selectedTeam === 'team1') {
-        data.teams.team1.push(myId);
-      } else {
-        data.teams.team2.push(myId);
-      }
-      
-      localStorage.setItem(`game:${roomCode}`, JSON.stringify(data));
-      setGameState('waiting');
-      setShowTeamSelect(false);
-      loadGame();
-    } catch (e) {
-      alert('Error joining room');
-    }
-  };
-
-  const startGame = () => {
-    if (players.length < 4) {
-      alert('Need at least 4 players to start!');
-      return;
-    }
-
-    if (teams.team1.length === 0 || teams.team2.length === 0) {
-      alert('Both teams need at least one player!');
-      return;
-    }
-
-    const deck = [];
-    SETS.forEach(set => {
-      deck.push(...set.cards);
-    });
-
-    for (let i = deck.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [deck[i], deck[j]] = [deck[j], deck[i]];
-    }
-
-    const cardsPerPlayer = Math.floor(deck.length / players.length);
-    const updatedPlayers = players.map((p, idx) => ({
-      ...p,
-      hand: deck.slice(idx * cardsPerPlayer, (idx + 1) * cardsPerPlayer)
-    }));
-
-    const gameData = {
-      players: updatedPlayers,
-      currentTurn: updatedPlayers[0].id,
-      gameLog: ['Game started!'],
-      teams,
-      scores: { team1: 0, team2: 0 },
-      started: true
-    };
-
-    localStorage.setItem(`game:${roomCode}`, JSON.stringify(gameData));
-    setGameState('playing');
-    loadGame();
-  };
-
-  const getAskableCards = () => {
-    if (!myHand.length) return [];
-    
-    const askable = [];
-    
-    myHand.forEach(card => {
-      const set = SETS.find(s => s.cards.includes(card));
-      if (set) {
-        set.cards.forEach(c => {
-          if (!myHand.includes(c) && !askable.includes(c)) {
-            askable.push(c);
-          }
-        });
-      }
-    });
-    
-    return askable;
-  };
-
-  const askForCard = () => {
-    if (!selectedOpponent || !selectedCard) {
-      alert('Select an opponent and a card!');
-      return;
-    }
-
-    try {
-      const game = localStorage.getItem(`game:${roomCode}`);
-      const data = JSON.parse(game);
-      
-      const opponent = data.players.find(p => p.id === selectedOpponent);
-      const me = data.players.find(p => p.id === myId);
-      
-      const hasCard = opponent.hand.includes(selectedCard);
-      
-      if (hasCard) {
-        opponent.hand = opponent.hand.filter(c => c !== selectedCard);
-        me.hand.push(selectedCard);
-        data.gameLog.unshift(`${playerName} asked ${opponent.name} for ${selectedCard} - SUCCESS! Goes again.`);
-      } else {
-        const opponentTeam = data.teams.team1.includes(opponent.id) ? 'team1' : 'team2';
-        const nextPlayer = data.teams[opponentTeam][0];
-        data.currentTurn = nextPlayer;
-        data.gameLog.unshift(`${playerName} asked ${opponent.name} for ${selectedCard} - FAILED. Turn passes to ${opponentTeam === 'team1' ? 'Team 1' : 'Team 2'}.`);
-      }
-      
-      localStorage.setItem(`game:${roomCode}`, JSON.stringify(data));
-      setSelectedCard('');
-      setSelectedOpponent('');
-      loadGame();
-    } catch (e) {
-      alert('Error making move');
-    }
-  };
-
-  const openCallModal = () => {
-    setShowCallModal(true);
-    setCallCards({});
-  };
-
-  const submitCall = () => {
-    const set = SETS[callSetIndex];
-    const calledCards = Object.values(callCards);
-    
-    if (calledCards.length !== set.cards.length) {
-      alert('You must assign all cards in the set!');
-      return;
-    }
-
-    try {
-      const game = localStorage.getItem(`game:${roomCode}`);
-      const data = JSON.parse(game);
-      
-      let correct = true;
-      const actualLocations = {};
-      
-      set.cards.forEach(card => {
-        const holder = data.players.find(p => p.hand.includes(card));
-        if (holder) {
-          actualLocations[card] = holder.id;
-        }
-      });
-      
-      set.cards.forEach(card => {
-        if (callCards[card] !== actualLocations[card]) {
-          correct = false;
-        }
-      });
-      
-      const myTeam = data.teams.team1.includes(myId) ? 'team1' : 'team2';
-      const opponentTeam = myTeam === 'team1' ? 'team2' : 'team1';
-      
-      if (correct) {
-        data.scores[myTeam]++;
-        data.gameLog.unshift(`${playerName} correctly called ${set.name}! ${myTeam === 'team1' ? 'Team 1' : 'Team 2'} scores!`);
-        
-        set.cards.forEach(card => {
-          data.players.forEach(p => {
-            p.hand = p.hand.filter(c => c !== card);
-          });
-        });
-      } else {
-        data.scores[opponentTeam]++;
-        data.gameLog.unshift(`${playerName} INCORRECTLY called ${set.name}! ${opponentTeam === 'team1' ? 'Team 1' : 'Team 2'} gets the set!`);
-        
-        set.cards.forEach(card => {
-          data.players.forEach(p => {
-            p.hand = p.hand.filter(c => c !== card);
-          });
-        });
-      }
-      
-      localStorage.setItem(`game:${roomCode}`, JSON.stringify(data));
-      setShowCallModal(false);
-      loadGame();
-      
-      if (data.scores.team1 + data.scores.team2 === 9) {
-        setTimeout(() => {
-          alert(`Game Over! ${data.scores.team1 > data.scores.team2 ? 'Team 1' : 'Team 2'} wins ${data.scores.team1}-${data.scores.team2}!`);
-        }, 100);
-      }
-    } catch (e) {
-      alert('Error submitting call');
-    }
-  };
-
-  const copyRoomCode = () => {
-    navigator.clipboard.writeText(roomCode);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  const myTeam = teams.team1.includes(myId) ? 'team1' : 'team2';
-  const isMyTurn = currentTurn === myId;
-
-  if (showTeamSelect) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-green-700 to-green-900 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full">
-          <h2 className="text-2xl font-bold text-center mb-6">Choose Your Team</h2>
-          
-          <div className="space-y-4">
-            <button
-              onClick={() => setSelectedTeam('team1')}
-              className={`w-full p-6 rounded-lg border-4 transition-all ${
-                selectedTeam === 'team1' 
-                  ? 'border-blue-600 bg-blue-50' 
-                  : 'border-gray-300 bg-white hover:border-blue-400'
-              }`}
-            >
-              <div className="text-2xl font-bold text-blue-600 mb-2">Team 1</div>
-              <div className="text-sm text-gray-600">Join the Blue Team</div>
-            </button>
+            const initialGame = {
+              players: [{ id: myId, name: playerName, hand: [] }],
+              currentTurn: '',
+              gameLog: [],
+              teams: { 
+                team1: selectedTeam === 'team1' ? [myId] : [], 
+                team2: selectedTeam === 'team2' ? [myId] : [] 
+              },
+              scores: { team1: 0, team2: 0 },
+              started: false
+            };
             
-            <button
-              onClick={() => setSelectedTeam('team2')}
-              className={`w-full p-6 rounded-lg border-4 transition-all ${
-                selectedTeam === 'team2' 
-                  ? 'border-red-600 bg-red-50' 
-                  : 'border-gray-300 bg-white hover:border-red-400'
-              }`}
-            >
-              <div className="text-2xl font-bold text-red-600 mb-2">Team 2</div>
-              <div className="text-sm text-gray-600">Join the Red Team</div>
-            </button>
-          </div>
-          
-          <button
-            onClick={gameState === 'lobby' ? confirmTeamAndCreate : confirmTeamAndJoin}
-            disabled={!selectedTeam}
-            className="w-full mt-6 bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 disabled:bg-gray-300"
-          >
-            Confirm Team
-          </button>
-          
-          <button
-            onClick={() => {
+            localStorage.setItem(`game:${roomCode}`, JSON.stringify(initialGame));
+            setGameState('waiting');
+            loadGame();
+          };
+
+          const joinRoom = () => {
+            const game = localStorage.getItem(`game:${roomCode}`);
+            if (!game) {
+              alert('Room not found!');
+              return;
+            }
+            
+            const id = Date.now().toString();
+            setMyId(id);
+            setShowTeamSelect(true);
+          };
+
+          const confirmTeamAndJoin = () => {
+            if (!selectedTeam) {
+              alert('Please select a team!');
+              return;
+            }
+
+            try {
+              const game = localStorage.getItem(`game:${roomCode}`);
+              const data = JSON.parse(game);
+              
+              if (data.started) {
+                alert('Game already started!');
+                return;
+              }
+              
+              data.players.push({ id: myId, name: playerName, hand: [] });
+              
+              if (selectedTeam === 'team1') {
+                data.teams.team1.push(myId);
+              } else {
+                data.teams.team2.push(myId);
+              }
+              
+              localStorage.setItem(`game:${roomCode}`, JSON.stringify(data));
+              setGameState('waiting');
               setShowTeamSelect(false);
-              setSelectedTeam('');
-              setRoomCode('');
-              setMyId('');
-            }}
-            className="w-full mt-2 bg-gray-300 text-gray-700 py-2 rounded-lg font-semibold hover:bg-gray-400"
-          >
-            Cancel
-          </button>
-        </div>
-      </div>
-    );
-  }
+              loadGame();
+            } catch (e) {
+              alert('Error joining room');
+            }
+          };
 
-  if (gameState === 'lobby') {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-green-700 to-green-900 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full">
-          <div className="text-center mb-8">
-            <Trophy className="w-16 h-16 mx-auto mb-4 text-yellow-600" />
-            <h1 className="text-3xl font-bold text-gray-800 mb-2">Literature</h1>
-            <p className="text-gray-600">Authors - 9 Set Variant</p>
-          </div>
-          
-          <input
-            type="text"
-            placeholder="Your Name"
-            value={playerName}
-            onChange={(e) => setPlayerName(e.target.value)}
-            className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg mb-4 focus:outline-none focus:border-green-600"
-          />
-          
-          <button
-            onClick={createRoom}
-            disabled={!playerName}
-            className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 disabled:bg-gray-300 mb-4"
-          >
-            Create New Game
-          </button>
-          
-          <div className="relative my-6">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-gray-300"></div>
-            </div>
-            <div className="relative flex justify-center text-sm">
-              <span className="px-2 bg-white text-gray-500">or</span>
-            </div>
-          </div>
-          
-          <input
-            type="text"
-            placeholder="Room Code"
-            value={roomCode}
-            onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
-            className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg mb-4 focus:outline-none focus:border-green-600"
-          />
-          
-          <button
-            onClick={joinRoom}
-            disabled={!playerName || !roomCode}
-            className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 disabled:bg-gray-300"
-          >
-            Join Game
-          </button>
-        </div>
-      </div>
-    );
-  }
+          const startGame = () => {
+            if (players.length < 4) {
+              alert('Need at least 4 players to start!');
+              return;
+            }
 
-  if (gameState === 'waiting') {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-green-700 to-green-900 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-2xl w-full">
-          <div className="text-center mb-6">
-            <h2 className="text-2xl font-bold mb-2">Room Code</h2>
-            <div className="flex items-center justify-center gap-2">
-              <span className="text-4xl font-mono font-bold text-green-600">{roomCode}</span>
-              <button
-                onClick={copyRoomCode}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                {copied ? <Check className="w-6 h-6 text-green-600" /> : <Copy className="w-6 h-6" />}
-              </button>
-            </div>
-          </div>
-          
-          <div className="grid md:grid-cols-2 gap-6 mb-6">
-            <div>
-              <h3 className="font-bold text-lg mb-3 text-blue-600">Team 1 ({teams.team1.length})</h3>
-              {teams.team1.length === 0 ? (
-                <div className="text-gray-400 text-sm italic">No players yet</div>
-              ) : (
-                players.filter(p => teams.team1.includes(p.id)).map(p => (
-                  <div key={p.id} className="bg-blue-50 px-4 py-2 rounded-lg mb-2 flex items-center gap-2">
-                    <Users className="w-4 h-4" />
-                    {p.name} {p.id === myId && '(You)'}
+            if (teams.team1.length === 0 || teams.team2.length === 0) {
+              alert('Both teams need at least one player!');
+              return;
+            }
+
+            const deck = [];
+            SETS.forEach(set => {
+              deck.push(...set.cards);
+            });
+
+            for (let i = deck.length - 1; i > 0; i--) {
+              const j = Math.floor(Math.random() * (i + 1));
+              [deck[i], deck[j]] = [deck[j], deck[i]];
+            }
+
+            const cardsPerPlayer = Math.floor(deck.length / players.length);
+            const updatedPlayers = players.map((p, idx) => ({
+              ...p,
+              hand: deck.slice(idx * cardsPerPlayer, (idx + 1) * cardsPerPlayer)
+            }));
+
+            const gameData = {
+              players: updatedPlayers,
+              currentTurn: updatedPlayers[0].id,
+              gameLog: ['Game started!'],
+              teams,
+              scores: { team1: 0, team2: 0 },
+              started: true
+            };
+
+            localStorage.setItem(`game:${roomCode}`, JSON.stringify(gameData));
+            setGameState('playing');
+            loadGame();
+          };
+
+          const getAskableCards = () => {
+            if (!myHand.length) return [];
+            
+            const askable = [];
+            
+            myHand.forEach(card => {
+              const set = SETS.find(s => s.cards.includes(card));
+              if (set) {
+                set.cards.forEach(c => {
+                  if (!myHand.includes(c) && !askable.includes(c)) {
+                    askable.push(c);
+                  }
+                });
+              }
+            });
+            
+            return askable;
+          };
+
+          const askForCard = () => {
+            if (!selectedOpponent || !selectedCard) {
+              alert('Select an opponent and a card!');
+              return;
+            }
+
+            try {
+              const game = localStorage.getItem(`game:${roomCode}`);
+              const data = JSON.parse(game);
+              
+              const opponent = data.players.find(p => p.id === selectedOpponent);
+              const me = data.players.find(p => p.id === myId);
+              
+              const hasCard = opponent.hand.includes(selectedCard);
+              
+              if (hasCard) {
+                opponent.hand = opponent.hand.filter(c => c !== selectedCard);
+                me.hand.push(selectedCard);
+                data.gameLog.unshift(`${playerName} asked ${opponent.name} for ${selectedCard} - SUCCESS! Goes again.`);
+              } else {
+                const opponentTeam = data.teams.team1.includes(opponent.id) ? 'team1' : 'team2';
+                const nextPlayer = data.teams[opponentTeam][0];
+                data.currentTurn = nextPlayer;
+                data.gameLog.unshift(`${playerName} asked ${opponent.name} for ${selectedCard} - FAILED. Turn passes to ${opponentTeam === 'team1' ? 'Team 1' : 'Team 2'}.`);
+              }
+              
+              localStorage.setItem(`game:${roomCode}`, JSON.stringify(data));
+              setSelectedCard('');
+              setSelectedOpponent('');
+              loadGame();
+            } catch (e) {
+              alert('Error making move');
+            }
+          };
+
+          const openCallModal = () => {
+            setShowCallModal(true);
+            setCallCards({});
+          };
+
+          const submitCall = () => {
+            const set = SETS[callSetIndex];
+            const calledCards = Object.values(callCards);
+            
+            if (calledCards.length !== set.cards.length) {
+              alert('You must assign all cards in the set!');
+              return;
+            }
+
+            try {
+              const game = localStorage.getItem(`game:${roomCode}`);
+              const data = JSON.parse(game);
+              
+              let correct = true;
+              const actualLocations = {};
+              
+              set.cards.forEach(card => {
+                const holder = data.players.find(p => p.hand.includes(card));
+                if (holder) {
+                  actualLocations[card] = holder.id;
+                }
+              });
+              
+              set.cards.forEach(card => {
+                if (callCards[card] !== actualLocations[card]) {
+                  correct = false;
+                }
+              });
+              
+              const myTeam = data.teams.team1.includes(myId) ? 'team1' : 'team2';
+              const opponentTeam = myTeam === 'team1' ? 'team2' : 'team1';
+              
+              if (correct) {
+                data.scores[myTeam]++;
+                data.gameLog.unshift(`${playerName} correctly called ${set.name}! ${myTeam === 'team1' ? 'Team 1' : 'Team 2'} scores!`);
+                
+                set.cards.forEach(card => {
+                  data.players.forEach(p => {
+                    p.hand = p.hand.filter(c => c !== card);
+                  });
+                });
+              } else {
+                data.scores[opponentTeam]++;
+                data.gameLog.unshift(`${playerName} INCORRECTLY called ${set.name}! ${opponentTeam === 'team1' ? 'Team 1' : 'Team 2'} gets the set!`);
+                
+                set.cards.forEach(card => {
+                  data.players.forEach(p => {
+                    p.hand = p.hand.filter(c => c !== card);
+                  });
+                });
+              }
+              
+              localStorage.setItem(`game:${roomCode}`, JSON.stringify(data));
+              setShowCallModal(false);
+              loadGame();
+              
+              if (data.scores.team1 + data.scores.team2 === 9) {
+                setTimeout(() => {
+                  alert(`Game Over! ${data.scores.team1 > data.scores.team2 ? 'Team 1' : 'Team 2'} wins ${data.scores.team1}-${data.scores.team2}!`);
+                }, 100);
+              }
+            } catch (e) {
+              alert('Error submitting call');
+            }
+          };
+
+          const copyRoomCode = () => {
+            navigator.clipboard.writeText(roomCode);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+          };
+
+          const myTeam = teams.team1.includes(myId) ? 'team1' : 'team2';
+          const isMyTurn = currentTurn === myId;
+
+          if (showTeamSelect) {
+            return (
+              <div className="min-h-screen bg-gradient-to-br from-green-700 to-green-900 flex items-center justify-center p-4">
+                <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full">
+                  <h2 className="text-2xl font-bold text-center mb-6">Choose Your Team</h2>
+                  
+                  <div className="space-y-4">
+                    <button
+                      onClick={() => setSelectedTeam('team1')}
+                      className={`w-full p-6 rounded-lg border-4 transition-all ${
+                        selectedTeam === 'team1' 
+                          ? 'border-blue-600 bg-blue-50' 
+                          : 'border-gray-300 bg-white hover:border-blue-400'
+                      }`}
+                    >
+                      <div className="text-2xl font-bold text-blue-600 mb-2">Team 1</div>
+                      <div className="text-sm text-gray-600">Join the Blue Team</div>
+                    </button>
+                    
+                    <button
+                      onClick={() => setSelectedTeam('team2')}
+                      className={`w-full p-6 rounded-lg border-4 transition-all ${
+                        selectedTeam === 'team2' 
+                          ? 'border-red-600 bg-red-50' 
+                          : 'border-gray-300 bg-white hover:border-red-400'
+                      }`}
+                    >
+                      <div className="text-2xl font-bold text-red-600 mb-2">Team 2</div>
+                      <div className="text-sm text-gray-600">Join the Red Team</div>
+                    </button>
                   </div>
-                ))
+                  
+                  <button
+                    onClick={gameState === 'lobby' ? confirmTeamAndCreate : confirmTeamAndJoin}
+                    disabled={!selectedTeam}
+                    className="w-full mt-6 bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 disabled:bg-gray-300"
+                  >
+                    Confirm Team
+                  </button>
+                  
+                  <button
+                    onClick={() => {
+                      setShowTeamSelect(false);
+                      setSelectedTeam('');
+                      setRoomCode('');
+                      setMyId('');
+                    }}
+                    className="w-full mt-2 bg-gray-300 text-gray-700 py-2 rounded-lg font-semibold hover:bg-gray-400"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            );
+          }
+
+          if (gameState === 'lobby') {
+            return (
+              <div className="min-h-screen bg-gradient-to-br from-green-700 to-green-900 flex items-center justify-center p-4">
+                <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full">
+                  <div className="text-center mb-8">
+                    <Trophy className="w-16 h-16 mx-auto mb-4 text-yellow-600" />
+                    <h1 className="text-3xl font-bold text-gray-800 mb-2">Literature</h1>
+                    <p className="text-gray-600">Authors - 9 Set Variant</p>
+                  </div>
+                  
+                  <input
+                    type="text"
+                    placeholder="Your Name"
+                    value={playerName}
+                    onChange={(e) => setPlayerName(e.target.value)}
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg mb-4 focus:outline-none focus:border-green-600"
+                  />
+                  
+                  <button
+                    onClick={createRoom}
+                    disabled={!playerName}
+                    className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 disabled:bg-gray-300 mb-4"
+                  >
+                    Create New Game
+                  </button>
+                  
+                  <div className="relative my-6">
+                    <div className="absolute inset-0 flex items-center">
+                      <div className="w-full border-t border-gray-300"></div>
+                    </div>
+                    <div className="relative flex justify-center text-sm">
+                      <span className="px-2 bg-white text-gray-500">or</span>
+                    </div>
+                  </div>
+                  
+                  <input
+                    type="text"
+                    placeholder="Room Code"
+                    value={roomCode}
+                    onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg mb-4 focus:outline-none focus:border-green-600"
+                  />
+                  
+                  <button
+                    onClick={joinRoom}
+                    disabled={!playerName || !roomCode}
+                    className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 disabled:bg-gray-300"
+                  >
+                    Join Game
+                  </button>
+                </div>
+              </div>
+            );
+          }
+
+          if (gameState === 'waiting') {
+            return (
+              <div className="min-h-screen bg-gradient-to-br from-green-700 to-green-900 flex items-center justify-center p-4">
+                <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-2xl w-full">
+                  <div className="text-center mb-6">
+                    <h2 className="text-2xl font-bold mb-2">Room Code</h2>
+                    <div className="flex items-center justify-center gap-2">
+                      <span className="text-4xl font-mono font-bold text-green-600">{roomCode}</span>
+                      <button
+                        onClick={copyRoomCode}
+                        className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                      >
+                        {copied ? <Check className="w-6 h-6 text-green-600" /> : <Copy className="w-6 h-6" />}
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <div className="grid md:grid-cols-2 gap-6 mb-6">
+                    <div>
+                      <h3 className="font-bold text-lg mb-3 text-blue-600">Team 1 ({teams.team1.length})</h3>
+                      {teams.team1.length === 0 ? (
+                        <div className="text-gray-400 text-sm italic">No players yet</div>
+                      ) : (
+                        players.filter(p => teams.team1.includes(p.id)).map(p => (
+                          <div key={p.id} className="bg-blue-50 px-4 py-2 rounded-lg mb-2 flex items-center gap-2">
+                            <Users className="w-4 h-4" />
+                            {p.name} {p.id === myId && '(You)'}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                    
+                    <div>
+                      <h3 className="font-bold text-lg mb-3 text-red-600">Team 2 ({teams.team2.length})</h3>
+                      {teams.team2.length === 0 ? (
+                        <div className="text-gray-400 text-sm italic">No players yet</div>
+                      ) : (
+                        players.filter(p => teams.team2.includes(p.id)).map(p => (
+                          <div key={p.id} className="bg-red-50 px-4 py-2 rounded-lg mb-2 flex items-center gap-2">
+                            <Users className="w-4 h-4" />
+                            {p.name} {p.id === myId && '(You)'}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                  
+                  <button
+                    onClick={startGame}
+                    disabled={players.length < 4 || teams.team1.length === 0 || teams.team2.length === 0}
+                    className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 disabled:bg-gray-300"
+                  >
+                    {players.length < 4 
+                      ? `Waiting for ${4 - players.length} more players...` 
+                      : teams.team1.length === 0 || teams.team2.length === 0
+                      ? 'Both teams need players!'
+                      : 'Start Game'}
+                  </button>
+                </div>
+              </div>
+            );
+          }
+
+          return (
+            <div className="min-h-screen bg-gradient-to-br from-green-700 to-green-900 p-4">
+              <div className="max-w-7xl mx-auto">
+                <div className="bg-white rounded-2xl shadow-2xl p-6 mb-4">
+                  <div className="flex justify-between items-center mb-4">
+                    <h1 className="text-2xl font-bold">Literature - Room {roomCode}</h1>
+                    <div className="text-sm text-gray-600">Auto-refreshing every 2 seconds</div>
+                  </div>
+                  
+                  <div className="grid md:grid-cols-3 gap-4 mb-4">
+                    <div className="bg-blue-50 p-4 rounded-lg">
+                      <h3 className="font-bold text-blue-600 mb-2">Team 1: {scores.team1}</h3>
+                      {players.filter(p => teams.team1.includes(p.id)).map(p => (
+                        <div key={p.id} className="text-sm mb-1">
+                          {currentTurn === p.id && <Crown className="w-4 h-4 inline mr-1 text-yellow-600" />}
+                          {p.name} {p.id === myId && '(You)'}
+                        </div>
+                      ))}
+                    </div>
+                    
+                    <div className="bg-red-50 p-4 rounded-lg">
+                      <h3 className="font-bold text-red-600 mb-2">Team 2: {scores.team2}</h3>
+                      {players.filter(p => teams.team2.includes(p.id)).map(p => (
+                        <div key={p.id} className="text-sm mb-1">
+                          {currentTurn === p.id && <Crown className="w-4 h-4 inline mr-1 text-yellow-600" />}
+                          {p.name} {p.id === myId && '(You)'}
+                        </div>
+                      ))}
+                    </div>
+                    
+                    <div className="bg-gray-50 p-4 rounded-lg">
+                      <h3 className="font-bold mb-2">Game Log</h3>
+                      <div className="text-sm max-h-24 overflow-y-auto">
+                        {gameLog.slice(0, 5).map((log, i) => (
+                          <div key={i} className="mb-1">{log}</div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div className="bg-white rounded-2xl shadow-2xl p-6">
+                    <h2 className="text-xl font-bold mb-4">Your Hand ({myHand.length} cards)</h2>
+                    <div className="flex flex-wrap gap-2 mb-6">
+                      {myHand.sort().map((card, i) => (
+                        <div key={i} className="bg-gradient-to-br from-gray-50 to-gray-100 border-2 border-gray-300 rounded-lg px-4 py-3 font-bold text-lg shadow-sm">
+                          {card}
+                        </div>
+                      ))}
+                    </div>
+                    
+                    {isMyTurn && (
+                      <div className="space-y-4">
+                        <div>
+                          <label className="block font-semibold mb-2">Ask Opponent:</label>
+                          <select
+                            value={selectedOpponent}
+                            onChange={(e) => setSelectedOpponent(e.target.value)}
+                            className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg"
+                          >
+                            <option value="">Select card...</option>
+                            {getAskableCards().sort().map(card => (
+                              <option key={card} value={card}>{card}</option>
+                            ))}
+                          </select>
+                        </div>
+                        
+                        <button
+                          onClick={askForCard}
+                          disabled={!selectedOpponent || !selectedCard}
+                          className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 disabled:bg-gray-300"
+                        >
+                          Ask for Card
+                        </button>
+                        
+                        <button
+                          onClick={openCallModal}
+                          className="w-full bg-yellow-600 text-white py-3 rounded-lg font-semibold hover:bg-yellow-700"
+                        >
+                          Call a Set
+                        </button>
+                      </div>
+                    )}
+                    
+                    {!isMyTurn && (
+                      <div className="bg-gray-100 p-4 rounded-lg text-center">
+                        <p className="font-semibold">Waiting for other players...</p>
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="bg-white rounded-2xl shadow-2xl p-6">
+                    <h2 className="text-xl font-bold mb-4">Sets Status</h2>
+                    <div className="space-y-3">
+                      {SETS.map((set, i) => (
+                        <div key={i} className="border-2 border-gray-200 rounded-lg p-3">
+                          <div className="font-semibold mb-1">{set.name}</div>
+                          <div className="flex flex-wrap gap-1 text-sm">
+                            {set.cards.map(card => (
+                              <span key={card} className="bg-gray-100 px-2 py-1 rounded">{card}</span>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              {showCallModal && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                  <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                    <h2 className="text-2xl font-bold mb-4">Call a Set</h2>
+                    
+                    <div className="mb-4">
+                      <label className="block font-semibold mb-2">Select Set:</label>
+                      <select
+                        value={callSetIndex}
+                        onChange={(e) => {
+                          setCallSetIndex(Number(e.target.value));
+                          setCallCards({});
+                        }}
+                        className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg"
+                      >
+                        {SETS.map((set, i) => (
+                          <option key={i} value={i}>{set.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    
+                    <div className="space-y-3 mb-4">
+                      {SETS[callSetIndex].cards.map(card => (
+                        <div key={card} className="flex items-center gap-3">
+                          <span className="font-bold w-16">{card}</span>
+                          <select
+                            value={callCards[card] || ''}
+                            onChange={(e) => setCallCards({...callCards, [card]: e.target.value})}
+                            className="flex-1 px-4 py-2 border-2 border-gray-300 rounded-lg"
+                          >
+                            <option value="">Who has this card?</option>
+                            {players.map(p => (
+                              <option key={p.id} value={p.id}>{p.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                      ))}
+                    </div>
+                    
+                    <div className="flex gap-3">
+                      <button
+                        onClick={submitCall}
+                        className="flex-1 bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700"
+                      >
+                        Submit Call
+                      </button>
+                      <button
+                        onClick={() => setShowCallModal(false)}
+                        className="flex-1 bg-gray-300 text-gray-700 py-3 rounded-lg font-semibold hover:bg-gray-400"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                </div>
               )}
             </div>
-            
-            <div>
-              <h3 className="font-bold text-lg mb-3 text-red-600">Team 2 ({teams.team2.length})</h3>
-              {teams.team2.length === 0 ? (
-                <div className="text-gray-400 text-sm italic">No players yet</div>
-              ) : (
-                players.filter(p => teams.team2.includes(p.id)).map(p => (
-                  <div key={p.id} className="bg-red-50 px-4 py-2 rounded-lg mb-2 flex items-center gap-2">
-                    <Users className="w-4 h-4" />
-                    {p.name} {p.id === myId && '(You)'}
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-          
-          <button
-            onClick={startGame}
-            disabled={players.length < 4 || teams.team1.length === 0 || teams.team2.length === 0}
-            className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 disabled:bg-gray-300"
-          >
-            {players.length < 4 
-              ? `Waiting for ${4 - players.length} more players...` 
-              : teams.team1.length === 0 || teams.team2.length === 0
-              ? 'Both teams need players!'
-              : 'Start Game'}
-          </button>
-        </div>
-      </div>
-    );
-  }
+          );
+        };
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-green-700 to-green-900 p-4">
-      <div className="max-w-7xl mx-auto">
-        <div className="bg-white rounded-2xl shadow-2xl p-6 mb-4">
-          <div className="flex justify-between items-center mb-4">
-            <h1 className="text-2xl font-bold">Literature - Room {roomCode}</h1>
-            <div className="text-sm text-gray-600">Auto-refreshing every 2 seconds</div>
-          </div>
-          
-          <div className="grid md:grid-cols-3 gap-4 mb-4">
-            <div className="bg-blue-50 p-4 rounded-lg">
-              <h3 className="font-bold text-blue-600 mb-2">Team 1: {scores.team1}</h3>
-              {players.filter(p => teams.team1.includes(p.id)).map(p => (
-                <div key={p.id} className="text-sm mb-1">
-                  {currentTurn === p.id && <Crown className="w-4 h-4 inline mr-1 text-yellow-600" />}
-                  {p.name} {p.id === myId && '(You)'}
-                </div>
-              ))}
-            </div>
-            
-            <div className="bg-red-50 p-4 rounded-lg">
-              <h3 className="font-bold text-red-600 mb-2">Team 2: {scores.team2}</h3>
-              {players.filter(p => teams.team2.includes(p.id)).map(p => (
-                <div key={p.id} className="text-sm mb-1">
-                  {currentTurn === p.id && <Crown className="w-4 h-4 inline mr-1 text-yellow-600" />}
-                  {p.name} {p.id === myId && '(You)'}
-                </div>
-              ))}
-            </div>
-            
-            <div className="bg-gray-50 p-4 rounded-lg">
-              <h3 className="font-bold mb-2">Game Log</h3>
-              <div className="text-sm max-h-24 overflow-y-auto">
-                {gameLog.slice(0, 5).map((log, i) => (
-                  <div key={i} className="mb-1">{log}</div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-        
-        <div className="grid md:grid-cols-2 gap-4">
-          <div className="bg-white rounded-2xl shadow-2xl p-6">
-            <h2 className="text-xl font-bold mb-4">Your Hand ({myHand.length} cards)</h2>
-            <div className="flex flex-wrap gap-2 mb-6">
-              {myHand.sort().map((card, i) => (
-                <div key={i} className="bg-gradient-to-br from-gray-50 to-gray-100 border-2 border-gray-300 rounded-lg px-4 py-3 font-bold text-lg shadow-sm">
-                  {card}
-                </div>
-              ))}
-            </div>
-            
-            {isMyTurn && (
-              <div className="space-y-4">
-                <div>
-                  <label className="block font-semibold mb-2">Ask Opponent:</label>
-                  <select
-                    value={selectedOpponent}
-                    onChange={(e) => setSelectedOpponent(e.target.value)}
-                    className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg"
-                  >
-                    <option value="">Select opponent...</option>
-                    {players.filter(p => p.id !== myId && teams[myTeam === 'team1' ? 'team2' : 'team1'].includes(p.id)).map(p => (
-                      <option key={p.id} value={p.id}>{p.name}</option>
-                    ))}
-                  </select>
-                </div>
-                
-                <div>
-                  <label className="block font-semibold mb-2">Ask for Card:</label>
-                  <select
-                    value={selectedCard}
-                    onChange={(e) => setSelectedCard(e.target.value)}
-                    className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg"
-                  >
-                    <option value="">Select card...</option>
-                    {getAskableCards().sort().map(card => (
-                      <option key={card} value={card}>{card}</option>
-                    ))}
-                  </select>
-                </div>
-                
-                <button
-                  onClick={askForCard}
-                  disabled={!selectedOpponent || !selectedCard}
-                  className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 disabled:bg-gray-300"
-                >
-                  Ask for Card
-                </button>
-                
-                <button
-                  onClick={openCallModal}
-                  className="w-full bg-yellow-600 text-white py-3 rounded-lg font-semibold hover:bg-yellow-700"
-                >
-                  Call a Set
-                </button>
-              </div>
-            )}
-            
-            {!isMyTurn && (
-              <div className="bg-gray-100 p-4 rounded-lg text-center">
-                <p className="font-semibold">Waiting for other players...</p>
-              </div>
-            )}
-          </div>
-          
-          <div className="bg-white rounded-2xl shadow-2xl p-6">
-            <h2 className="text-xl font-bold mb-4">Sets Status</h2>
-            <div className="space-y-3">
-              {SETS.map((set, i) => (
-                <div key={i} className="border-2 border-gray-200 rounded-lg p-3">
-                  <div className="font-semibold mb-1">{set.name}</div>
-                  <div className="flex flex-wrap gap-1 text-sm">
-                    {set.cards.map(card => (
-                      <span key={card} className="bg-gray-100 px-2 py-1 rounded">{card}</span>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      {showCallModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <h2 className="text-2xl font-bold mb-4">Call a Set</h2>
-            
-            <div className="mb-4">
-              <label className="block font-semibold mb-2">Select Set:</label>
-              <select
-                value={callSetIndex}
-                onChange={(e) => {
-                  setCallSetIndex(Number(e.target.value));
-                  setCallCards({});
-                }}
-                className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg"
-              >
-                {SETS.map((set, i) => (
-                  <option key={i} value={i}>{set.name}</option>
-                ))}
-              </select>
-            </div>
-            
-            <div className="space-y-3 mb-4">
-              {SETS[callSetIndex].cards.map(card => (
-                <div key={card} className="flex items-center gap-3">
-                  <span className="font-bold w-16">{card}</span>
-                  <select
-                    value={callCards[card] || ''}
-                    onChange={(e) => setCallCards({...callCards, [card]: e.target.value})}
-                    className="flex-1 px-4 py-2 border-2 border-gray-300 rounded-lg"
-                  >
-                    <option value="">Who has this card?</option>
-                    {players.map(p => (
-                      <option key={p.id} value={p.id}>{p.name}</option>
-                    ))}
-                  </select>
-                </div>
-              ))}
-            </div>
-            
-            <div className="flex gap-3">
-              <button
-                onClick={submitCall}
-                className="flex-1 bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700"
-              >
-                Submit Call
-              </button>
-              <button
-                onClick={() => setShowCallModal(false)}
-                className="flex-1 bg-gray-300 text-gray-700 py-3 rounded-lg font-semibold hover:bg-gray-400"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-export default App;
+        ReactDOM.render(<App />, document.getElementById('root'));
     </script>
 </body>
-</html>
+</html>border-gray-300 rounded-lg"
+                          >
+                            <option value="">Select opponent...</option>
+                            {players.filter(p => p.id !== myId && teams[myTeam === 'team1' ? 'team2' : 'team1'].includes(p.id)).map(p => (
+                              <option key={p.id} value={p.id}>{p.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                        
+                        <div>
+                          <label className="block font-semibold mb-2">Ask for Card:</label>
+                          <select
+                            value={selectedCard}
+                            onChange={(e) => setSelectedCard(e.target.value)}
+                            className="w-full px-4 py-2 border-2
