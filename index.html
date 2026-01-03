@@ -3,20 +3,25 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Literature Card Game</title>
+  <title>Fish Card Game</title>
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Firebase for cross-client room syncing. Load config from config.js (add to .gitignore) -->
-  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
-  <script src="config.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
   <div id="root"></div>
   <script type="text/babel">
     const { useState, useEffect, useMemo } = React;
+
+    /* ============================================================
+       SUPABASE CONFIGURATION
+       ============================================================ */
+    const SUPABASE_URL = 'https://vngdiukjrfmzwlbefmjf.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZuZ2RpdWtqcmZtendsYmVmbWpmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc0Njk5MDUsImV4cCI6MjA4MzA0NTkwNX0.XBr7aEzSPj-Iw0HYf27T8yXo1nbZ01MhBVa-VIdNZG4';
+    
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     /* ============================================================
        PERSISTENT CLIENT ID
@@ -30,17 +35,6 @@
       }
       return id;
     }
-
-    /* ============================================================
-       REMOTE SYNC LAYER (optional - Firebase Realtime Database)
-       - If you set `window.FIREBASE_CONFIG = { apiKey: ..., authDomain: ..., databaseURL: ..., ... }`
-         the app will mirror the `game:{roomCode}` key to Firebase at `/games/{roomCode}`.
-       - If not provided, behavior falls back to the original localStorage-only implementation.
-    */
-
-    // Helper to detect whether remote sync is available
-    const REMOTE_ENABLED = typeof window.FIREBASE_CONFIG !== 'undefined' && typeof window.firebase !== 'undefined';
-
 
     /* ============================================================
        SET DEFINITIONS
@@ -86,7 +80,6 @@
       const oppTeam = myTeam === 'team1' ? 'team2' : 'team1';
       const opponents = gameData.players.filter(p => gameData.teams[oppTeam].includes(p.id));
 
-      // Build list of cards bot can ask for
       let askableCards = [];
       bot.hand.forEach(card => {
         const set = findSet(card);
@@ -100,10 +93,9 @@
       });
 
       if (askableCards.length === 0) {
-        return null; // Can't ask anything
+        return null;
       }
 
-      // Simple strategy: pick random card and opponent
       const card = askableCards[Math.floor(Math.random() * askableCards.length)];
       const target = opponents[Math.floor(Math.random() * opponents.length)];
 
@@ -121,54 +113,71 @@
       const [playerName, setPlayerName] = useState('');
       const [selectedTeam, setSelectedTeam] = useState('');
       const [gameData, setGameData] = useState(null);
-      const [showSettings, setShowSettings] = useState(false);
 
-      // For playing
       const [selectedOpponent, setSelectedOpponent] = useState('');
       const [selectedCard, setSelectedCard] = useState('');
       const [showCallModal, setShowCallModal] = useState(false);
       const [callSetIndex, setCallSetIndex] = useState(0);
       const [callCards, setCallCards] = useState({});
 
-      // Save wrapper writes to localStorage and (optionally) Firebase
-      const saveGame = (data) => {
+      /* ========================= SAVE/LOAD ========================= */
+      const saveGame = async (data) => {
         try {
           if (!roomCode) return;
           localStorage.setItem(`game:${roomCode}`, JSON.stringify(data));
-          if (REMOTE_ENABLED) {
-            try {
-              if (window.firebase && window.FIREBASE_CONFIG) {
-                if (!window.firebase.apps || window.firebase.apps.length === 0) {
-                  window.firebase.initializeApp(window.FIREBASE_CONFIG);
-                }
-                window.firebase.database().ref('games/' + roomCode).set(data);
-              }
-            } catch (e) {
-              console.error('Firebase write failed', e);
-            }
+          
+          const { error } = await supabase
+            .from('games')
+            .upsert({ 
+              room_code: roomCode, 
+              game_data: data,
+              updated_at: new Date().toISOString()
+            });
+          
+          if (error) {
+            console.error('Supabase save error:', error);
           }
         } catch (e) {
           console.error('saveGame error', e);
         }
       };
 
-      /* ========================= LOAD GAME ========================= */
-      const loadGame = () => {
+      const loadGame = async () => {
         if (!roomCode) return;
         try {
+          const { data, error } = await supabase
+            .from('games')
+            .select('game_data')
+            .eq('room_code', roomCode)
+            .single();
+          
+          if (!error && data) {
+            const gameData = data.game_data;
+            localStorage.setItem(`game:${roomCode}`, JSON.stringify(gameData));
+            setGameData(gameData);
+
+            if (gameData.phase === 'game' && !gameData.botThinking) {
+              const current = gameData.players.find(p => p.id === gameData.currentTurn);
+              if (current?.isBot) {
+                gameData.botThinking = true;
+                await saveGame(gameData);
+                setTimeout(() => executeBotTurn(current, gameData), 2500);
+              }
+            }
+            return;
+          }
+          
           const raw = localStorage.getItem(`game:${roomCode}`);
           if (!raw) return;
-          const data = JSON.parse(raw);
-          setGameData(data);
+          const localData = JSON.parse(raw);
+          setGameData(localData);
 
-          // If current turn is a bot and game is running, trigger bot move
-          if (data.phase === 'game' && !data.botThinking) {
-            const current = data.players.find(p => p.id === data.currentTurn);
+          if (localData.phase === 'game' && !localData.botThinking) {
+            const current = localData.players.find(p => p.id === localData.currentTurn);
             if (current?.isBot) {
-              // Mark that bot is thinking to prevent duplicate calls
-              data.botThinking = true;
-              saveGame(data);
-              setTimeout(() => executeBotTurn(current, data), 2500);
+              localData.botThinking = true;
+              await saveGame(localData);
+              setTimeout(() => executeBotTurn(current, localData), 2500);
             }
           }
         } catch (e) {
@@ -179,40 +188,35 @@
       useEffect(() => {
         if (!roomCode) return;
 
-        // If remote is enabled, subscribe the Firebase game key and mirror into localStorage
-        if (REMOTE_ENABLED && window.firebase) {
+        loadGame();
+
+        const interval = setInterval(async () => {
           try {
-            if (!window.firebase.apps || window.firebase.apps.length === 0) {
-              window.firebase.initializeApp(window.FIREBASE_CONFIG);
-            }
-          } catch (e) {
-            console.error('Firebase init error', e);
-          }
-
-          const ref = window.firebase.database().ref('games/' + roomCode);
-          const handler = (snap) => {
-            const val = snap.exists() ? snap.val() : null;
-            if (!val) return;
-            try {
+            const { data, error } = await supabase
+              .from('games')
+              .select('game_data')
+              .eq('room_code', roomCode)
+              .single();
+            
+            if (!error && data && data.game_data) {
+              const val = data.game_data;
               localStorage.setItem(`game:${roomCode}`, JSON.stringify(val));
-            } catch (e) {}
-            setGameData(val);
+              setGameData(val);
 
-            if (val.phase === 'game' && !val.botThinking) {
-              const current = val.players.find(p => p.id === val.currentTurn);
-              if (current?.isBot) {
-                val.botThinking = true;
-                saveGame(val);
-                setTimeout(() => executeBotTurn(current, val), 2500);
+              if (val.phase === 'game' && !val.botThinking) {
+                const current = val.players.find(p => p.id === val.currentTurn);
+                if (current?.isBot) {
+                  val.botThinking = true;
+                  await saveGame(val);
+                  setTimeout(() => executeBotTurn(current, val), 2500);
+                }
               }
             }
-          };
-          ref.on('value', handler);
-          return () => ref.off('value', handler);
-        }
+          } catch (e) {
+            console.error('Polling error:', e);
+          }
+        }, 2000);
 
-        // Fallback: poll localStorage
-        const interval = setInterval(loadGame, 2000);
         return () => clearInterval(interval);
       }, [roomCode]);
 
@@ -227,7 +231,7 @@
         setView('teamSelect');
       };
 
-      const confirmTeamCreate = () => {
+      const confirmTeamCreate = async () => {
         if (!selectedTeam) {
           alert('Please select a team');
           return;
@@ -253,17 +257,17 @@
             showAskHistory: true,
             askHistoryCount: 2,
             showCardCounts: false,
-            turnTimeLimit: 0 // 0 = no limit, 60 = 1 min, 120 = 2 min
+            turnTimeLimit: 0
           }
         };
 
-        saveGame(initialData);
+        await saveGame(initialData);
         setView('lobby');
         loadGame();
       };
 
       /* ========================= JOIN ROOM ========================= */
-      const joinRoom = () => {
+      const joinRoom = async () => {
         if (!playerName.trim()) {
           alert('Please enter your name');
           return;
@@ -273,41 +277,54 @@
           return;
         }
 
-        const raw = localStorage.getItem(`game:${roomCode}`);
-        if (!raw) {
-          alert('Room not found!');
-          return;
-        }
+        try {
+          const { data, error } = await supabase
+            .from('games')
+            .select('game_data')
+            .eq('room_code', roomCode)
+            .single();
 
-        const data = JSON.parse(raw);
-        
-        // Check if already in game
-        if (data.players.some(p => p.id === myId)) {
-          setView('lobby');
-          loadGame();
-          return;
-        }
+          if (error || !data) {
+            alert('Room not found!');
+            return;
+          }
 
-        // Check name conflict
-        if (data.players.some(p => p.name.toLowerCase() === playerName.toLowerCase())) {
-          alert('Name already taken!');
-          return;
-        }
+          const gameData = data.game_data;
+          
+          if (gameData.players.some(p => p.id === myId)) {
+            setView('lobby');
+            loadGame();
+            return;
+          }
 
-        setView('teamSelect');
+          if (gameData.players.some(p => p.name.toLowerCase() === playerName.toLowerCase())) {
+            alert('Name already taken!');
+            return;
+          }
+
+          setView('teamSelect');
+        } catch (e) {
+          alert('Error joining room');
+        }
       };
 
-      const confirmTeamJoin = () => {
+      const confirmTeamJoin = async () => {
         if (!selectedTeam) {
           alert('Please select a team');
           return;
         }
 
         try {
-          const data = JSON.parse(localStorage.getItem(`game:${roomCode}`));
-          data.players.push({ id: myId, name: playerName, hand: [], isBot: false });
-          data.teams[selectedTeam].push(myId);
-          saveGame(data);
+          const { data } = await supabase
+            .from('games')
+            .select('game_data')
+            .eq('room_code', roomCode)
+            .single();
+
+          const gameData = data.game_data;
+          gameData.players.push({ id: myId, name: playerName, hand: [], isBot: false });
+          gameData.teams[selectedTeam].push(myId);
+          await saveGame(gameData);
           setView('lobby');
           loadGame();
         } catch (e) {
@@ -316,26 +333,38 @@
       };
 
       /* ========================= ADD BOTS ========================= */
-      const addBot = (team) => {
+      const addBot = async (team) => {
         try {
-          const data = JSON.parse(localStorage.getItem(`game:${roomCode}`));
-          const bot = createBot(data.players);
-          data.players.push(bot);
-          data.teams[team].push(bot.id);
-          saveGame(data);
+          const { data } = await supabase
+            .from('games')
+            .select('game_data')
+            .eq('room_code', roomCode)
+            .single();
+
+          const gameData = data.game_data;
+          const bot = createBot(gameData.players);
+          gameData.players.push(bot);
+          gameData.teams[team].push(bot.id);
+          await saveGame(gameData);
           loadGame();
         } catch (e) {
           alert('Error adding bot');
         }
       };
 
-      const removePlayer = (playerId) => {
+      const removePlayer = async (playerId) => {
         try {
-          const data = JSON.parse(localStorage.getItem(`game:${roomCode}`));
-          data.players = data.players.filter(p => p.id !== playerId);
-          data.teams.team1 = data.teams.team1.filter(id => id !== playerId);
-          data.teams.team2 = data.teams.team2.filter(id => id !== playerId);
-          saveGame(data);
+          const { data } = await supabase
+            .from('games')
+            .select('game_data')
+            .eq('room_code', roomCode)
+            .single();
+
+          const gameData = data.game_data;
+          gameData.players = gameData.players.filter(p => p.id !== playerId);
+          gameData.teams.team1 = gameData.teams.team1.filter(id => id !== playerId);
+          gameData.teams.team2 = gameData.teams.team2.filter(id => id !== playerId);
+          await saveGame(gameData);
           loadGame();
         } catch (e) {
           alert('Error removing player');
@@ -343,37 +372,41 @@
       };
 
       /* ========================= START GAME ========================= */
-      const startGame = () => {
+      const startGame = async () => {
         try {
-          const data = JSON.parse(localStorage.getItem(`game:${roomCode}`));
+          const { data } = await supabase
+            .from('games')
+            .select('game_data')
+            .eq('room_code', roomCode)
+            .single();
+
+          const gameData = data.game_data;
           
-          if (data.players.length < 4) {
+          if (gameData.players.length < 4) {
             alert('Need at least 4 players to start!');
             return;
           }
 
-          if (data.teams.team1.length === 0 || data.teams.team2.length === 0) {
+          if (gameData.teams.team1.length === 0 || gameData.teams.team2.length === 0) {
             alert('Both teams need at least one player!');
             return;
           }
 
-          // Create and shuffle deck
           let deck = [];
           SETS.forEach(set => deck.push(...set.cards));
           shuffle(deck);
 
-          // Deal cards evenly
-          const cardsPerPlayer = Math.floor(deck.length / data.players.length);
-          data.players.forEach((p, idx) => {
+          const cardsPerPlayer = Math.floor(deck.length / gameData.players.length);
+          gameData.players.forEach((p, idx) => {
             p.hand = deck.slice(idx * cardsPerPlayer, (idx + 1) * cardsPerPlayer);
           });
 
-          data.phase = 'game';
-          data.currentTurn = data.players[0].id;
-          data.turnStartTime = Date.now();
-          data.gameLog.unshift('Game started!');
+          gameData.phase = 'game';
+          gameData.currentTurn = gameData.players[0].id;
+          gameData.turnStartTime = Date.now();
+          gameData.gameLog.unshift('Game started!');
 
-          saveGame(data);
+          await saveGame(gameData);
           setView('game');
           loadGame();
         } catch (e) {
@@ -381,45 +414,69 @@
         }
       };
 
-      /* ========================= TOGGLE SETTINGS ========================= */
-      const toggleAskHistory = () => {
+      /* ========================= SETTINGS ========================= */
+      const toggleAskHistory = async () => {
         try {
-          const data = JSON.parse(localStorage.getItem(`game:${roomCode}`));
-          data.settings.showAskHistory = !data.settings.showAskHistory;
-          saveGame(data);
+          const { data } = await supabase
+            .from('games')
+            .select('game_data')
+            .eq('room_code', roomCode)
+            .single();
+
+          const gameData = data.game_data;
+          gameData.settings.showAskHistory = !gameData.settings.showAskHistory;
+          await saveGame(gameData);
           loadGame();
         } catch (e) {
           alert('Error toggling setting');
         }
       };
 
-      const toggleCardCounts = () => {
+      const toggleCardCounts = async () => {
         try {
-          const data = JSON.parse(localStorage.getItem(`game:${roomCode}`));
-          data.settings.showCardCounts = !data.settings.showCardCounts;
-          saveGame(data);
+          const { data } = await supabase
+            .from('games')
+            .select('game_data')
+            .eq('room_code', roomCode)
+            .single();
+
+          const gameData = data.game_data;
+          gameData.settings.showCardCounts = !gameData.settings.showCardCounts;
+          await saveGame(gameData);
           loadGame();
         } catch (e) {
           alert('Error toggling setting');
         }
       };
 
-      const setAskHistoryCount = (count) => {
+      const setAskHistoryCount = async (count) => {
         try {
-          const data = JSON.parse(localStorage.getItem(`game:${roomCode}`));
-          data.settings.askHistoryCount = count;
-          saveGame(data);
+          const { data } = await supabase
+            .from('games')
+            .select('game_data')
+            .eq('room_code', roomCode)
+            .single();
+
+          const gameData = data.game_data;
+          gameData.settings.askHistoryCount = count;
+          await saveGame(gameData);
           loadGame();
         } catch (e) {
           alert('Error changing setting');
         }
       };
 
-      const setTurnTimeLimit = (seconds) => {
+      const setTurnTimeLimit = async (seconds) => {
         try {
-          const data = JSON.parse(localStorage.getItem(`game:${roomCode}`));
-          data.settings.turnTimeLimit = seconds;
-          saveGame(data);
+          const { data } = await supabase
+            .from('games')
+            .select('game_data')
+            .eq('room_code', roomCode)
+            .single();
+
+          const gameData = data.game_data;
+          gameData.settings.turnTimeLimit = seconds;
+          await saveGame(gameData);
           loadGame();
         } catch (e) {
           alert('Error changing setting');
@@ -427,38 +484,41 @@
       };
 
       /* ========================= ASK FOR CARD ========================= */
-      const askForCard = () => {
+      const askForCard = async () => {
         if (!selectedOpponent || !selectedCard) {
           alert('Select opponent and card!');
           return;
         }
 
         try {
-          const data = JSON.parse(localStorage.getItem(`game:${roomCode}`));
-          const opponent = data.players.find(p => p.id === selectedOpponent);
-          const me = data.players.find(p => p.id === myId);
+          const { data } = await supabase
+            .from('games')
+            .select('game_data')
+            .eq('room_code', roomCode)
+            .single();
+
+          const gameData = data.game_data;
+          const opponent = gameData.players.find(p => p.id === selectedOpponent);
+          const me = gameData.players.find(p => p.id === myId);
 
           if (!opponent || !me) return;
 
           const hasCard = opponent.hand.includes(selectedCard);
 
           if (hasCard) {
-            // Transfer card
             opponent.hand = opponent.hand.filter(c => c !== selectedCard);
             me.hand.push(selectedCard);
-            data.gameLog.unshift(`${me.name} asked ${opponent.name} - SUCCESS!`);
-            data.askHistory.unshift({ from: me.name, to: opponent.name, card: selectedCard, success: true });
+            gameData.gameLog.unshift(`${me.name} asked ${opponent.name} - SUCCESS!`);
+            gameData.askHistory.unshift({ from: me.name, to: opponent.name, card: selectedCard, success: true });
           } else {
-            // Failed - pass turn to the opponent who was asked
-            data.currentTurn = opponent.id;
-            data.gameLog.unshift(`${me.name} asked ${opponent.name} - FAILED`);
-            data.askHistory.unshift({ from: me.name, to: opponent.name, card: selectedCard, success: false });
+            gameData.currentTurn = opponent.id;
+            gameData.gameLog.unshift(`${me.name} asked ${opponent.name} - FAILED`);
+            gameData.askHistory.unshift({ from: me.name, to: opponent.name, card: selectedCard, success: false });
           }
 
-          // Keep only last 2 asks
-          data.askHistory = data.askHistory.slice(0, 2);
+          gameData.askHistory = gameData.askHistory.slice(0, 2);
 
-          saveGame(data);
+          await saveGame(gameData);
           setSelectedCard('');
           setSelectedOpponent('');
           loadGame();
@@ -468,17 +528,16 @@
       };
 
       /* ========================= BOT TURN ========================= */
-      const executeBotTurn = (bot, data) => {
+      const executeBotTurn = async (bot, data) => {
         const decision = botDecide(bot, data);
         
         if (!decision) {
-          // Bot can't ask anything, pass turn
           const myTeam = data.teams.team1.includes(bot.id) ? 'team1' : 'team2';
           const oppTeam = myTeam === 'team1' ? 'team2' : 'team1';
           data.currentTurn = data.teams[oppTeam][0];
           data.turnStartTime = Date.now();
           data.botThinking = false;
-          saveGame(data);
+          await saveGame(data);
           loadGame();
           return;
         }
@@ -494,7 +553,6 @@
           data.lastAskedPlayer = target.id;
           data.turnStartTime = Date.now();
         } else {
-          // Failed - turn passes to the opponent who was asked
           data.currentTurn = target.id;
           data.turnStartTime = Date.now();
           data.lastAskedPlayer = '';
@@ -504,12 +562,12 @@
 
         data.askHistory = data.askHistory.slice(0, data.settings.askHistoryCount);
         data.botThinking = false;
-        saveGame(data);
+        await saveGame(data);
         loadGame();
       };
 
       /* ========================= CALL SET ========================= */
-      const submitCall = () => {
+      const submitCall = async () => {
         const set = SETS[callSetIndex];
         if (Object.values(callCards).length !== set.cards.length) {
           alert('Must assign all cards in the set!');
@@ -517,12 +575,18 @@
         }
 
         try {
-          const data = JSON.parse(localStorage.getItem(`game:${roomCode}`));
+          const { data } = await supabase
+            .from('games')
+            .select('game_data')
+            .eq('room_code', roomCode)
+            .single();
+
+          const gameData = data.game_data;
           let correct = true;
           const actualLocations = {};
 
           set.cards.forEach(card => {
-            const holder = data.players.find(p => p.hand.includes(card));
+            const holder = gameData.players.find(p => p.hand.includes(card));
             if (holder) actualLocations[card] = holder.id;
           });
 
@@ -532,35 +596,34 @@
             }
           });
 
-          const me = data.players.find(p => p.id === myId);
-          const myTeam = data.teams.team1.includes(myId) ? 'team1' : 'team2';
+          const me = gameData.players.find(p => p.id === myId);
+          const myTeam = gameData.teams.team1.includes(myId) ? 'team1' : 'team2';
           const oppTeam = myTeam === 'team1' ? 'team2' : 'team1';
 
           if (correct) {
-            data.scores[myTeam]++;
-            data.gameLog.unshift(`${me.name} correctly called ${set.name}! ${myTeam === 'team1' ? 'Team 1' : 'Team 2'} scores!`);
-            data.claimedSets.push(set.name);
+            gameData.scores[myTeam]++;
+            gameData.gameLog.unshift(`${me.name} correctly called ${set.name}! ${myTeam === 'team1' ? 'Team 1' : 'Team 2'} scores!`);
+            gameData.claimedSets.push(set.name);
           } else {
-            data.scores[oppTeam]++;
-            data.gameLog.unshift(`${me.name} INCORRECTLY called ${set.name}! ${oppTeam === 'team1' ? 'Team 1' : 'Team 2'} gets the set!`);
-            data.claimedSets.push(set.name);
+            gameData.scores[oppTeam]++;
+            gameData.gameLog.unshift(`${me.name} INCORRECTLY called ${set.name}! ${oppTeam === 'team1' ? 'Team 1' : 'Team 2'} gets the set!`);
+            gameData.claimedSets.push(set.name);
           }
 
-          // Remove cards from all hands
           set.cards.forEach(card => {
-            data.players.forEach(p => {
+            gameData.players.forEach(p => {
               p.hand = p.hand.filter(c => c !== card);
             });
           });
 
-          saveGame(data);
+          await saveGame(gameData);
           setShowCallModal(false);
           setCallCards({});
           loadGame();
 
-          if (data.scores.team1 + data.scores.team2 === 9) {
+          if (gameData.scores.team1 + gameData.scores.team2 === 9) {
             setTimeout(() => {
-              alert(`Game Over! ${data.scores.team1 > data.scores.team2 ? 'Team 1' : 'Team 2'} wins ${data.scores.team1}-${data.scores.team2}!`);
+              alert(`Game Over! ${gameData.scores.team1 > gameData.scores.team2 ? 'Team 1' : 'Team 2'} wins ${gameData.scores.team1}-${gameData.scores.team2}!`);
             }, 500);
           }
         } catch (e) {
@@ -590,7 +653,6 @@
 
       /* ========================= RENDER VIEWS ========================= */
 
-      // HOME VIEW
       if (view === 'home') {
         return (
           <div className="min-h-screen bg-gradient-to-br from-green-700 via-green-800 to-green-900 flex items-center justify-center p-4">
@@ -645,7 +707,6 @@
         );
       }
 
-      // TEAM SELECT VIEW
       if (view === 'teamSelect') {
         return (
           <div className="min-h-screen bg-gradient-to-br from-green-700 to-green-900 flex items-center justify-center p-4">
@@ -701,7 +762,6 @@
         );
       }
 
-      // LOBBY VIEW
       if (view === 'lobby' && gameData) {
         const isHost = gameData.hostId === myId;
 
@@ -851,33 +911,36 @@
         );
       }
 
-      // GAME VIEW
       if (view === 'game' && gameData) {
         const me = gameData.players.find(p => p.id === myId);
         const myTeam = gameData.teams.team1.includes(myId) ? 'team1' : 'team2';
         const isMyTurn = gameData.currentTurn === myId;
         const currentPlayer = gameData.players.find(p => p.id === gameData.currentTurn);
 
-        // Calculate remaining time
         const [timeRemaining, setTimeRemaining] = useState(null);
         
         useEffect(() => {
           if (!gameData.settings.turnTimeLimit || !gameData.turnStartTime) return;
           
-          const interval = setInterval(() => {
+          const interval = setInterval(async () => {
             const elapsed = Math.floor((Date.now() - gameData.turnStartTime) / 1000);
             const remaining = gameData.settings.turnTimeLimit - elapsed;
             setTimeRemaining(remaining);
 
-            // Auto-pass turn if time runs out
-                if (remaining <= 0 && isMyTurn) {
+            if (remaining <= 0 && isMyTurn) {
               try {
-                const data = JSON.parse(localStorage.getItem(`game:${roomCode}`));
+                const { data } = await supabase
+                  .from('games')
+                  .select('game_data')
+                  .eq('room_code', roomCode)
+                  .single();
+
+                const updatedData = data.game_data;
                 const oppTeam = myTeam === 'team1' ? 'team2' : 'team1';
-                data.currentTurn = data.teams[oppTeam][0];
-                data.turnStartTime = Date.now();
-                data.gameLog.unshift(`${me.name}'s turn timed out!`);
-                saveGame(data);
+                updatedData.currentTurn = updatedData.teams[oppTeam][0];
+                updatedData.turnStartTime = Date.now();
+                updatedData.gameLog.unshift(`${me.name}'s turn timed out!`);
+                await saveGame(updatedData);
                 loadGame();
               } catch (e) {
                 console.error('Error timing out turn:', e);
