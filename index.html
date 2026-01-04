@@ -399,25 +399,45 @@
     async function saveGame(data) {
       if (!state.roomCode) return;
       try {
-        const { error } = await supabase
+        // First try to select the existing record
+        const { data: existing } = await supabase
           .from('games')
-          .upsert({
-            room_code: state.roomCode,
-            game_data: data,
-            updated_at: new Date().toISOString()
-          }, {
-            onConflict: 'room_code'
-          });
+          .select('id')
+          .eq('room_code', state.roomCode)
+          .single();
         
-        if (error) {
-          console.error('Save error:', error);
+        let result;
+        if (existing) {
+          // Update existing record
+          result = await supabase
+            .from('games')
+            .update({
+              game_data: data,
+              updated_at: new Date().toISOString()
+            })
+            .eq('room_code', state.roomCode);
+        } else {
+          // Insert new record
+          result = await supabase
+            .from('games')
+            .insert({
+              room_code: state.roomCode,
+              game_data: data,
+              updated_at: new Date().toISOString()
+            });
+        }
+        
+        if (result.error) {
+          console.error('Save error:', result.error);
+          alert('Save failed: ' + result.error.message);
           return;
         }
         
         state.gameData = JSON.parse(JSON.stringify(data));
         render();
       } catch (e) {
-        console.error('Save error:', e);
+        console.error('Save exception:', e);
+        alert('Save failed: ' + e.message);
       }
     }
     
@@ -428,14 +448,19 @@
           .from('games')
           .select('game_data')
           .eq('room_code', state.roomCode)
-          .single();
+          .maybeSingle();
         
-        if (!error && data) {
+        if (error) {
+          console.error('Load error:', error);
+          return;
+        }
+        
+        if (data) {
           state.gameData = data.game_data;
           render();
         }
       } catch (e) {
-        console.error('Load error:', e);
+        console.error('Load exception:', e);
       }
     }
     
