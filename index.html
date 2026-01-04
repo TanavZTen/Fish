@@ -49,18 +49,19 @@
           .update({ game_data: game, updated_at: new Date().toISOString() })
           .eq('room_code', state.code);
         
-        console.log('Update result:', { updateData, updateErr });
+        console.log('Update error:', updateErr?.message || 'none');
         
         if (updateErr) {
           console.log('Update failed, trying insert...');
           const { data: insertData, error: insertErr } = await DB.from('games')
             .insert({ room_code: state.code, game_data: game });
           
-          console.log('Insert result:', { insertData, insertErr });
+          console.log('Insert error:', insertErr?.message || 'none');
+          console.log('Insert error code:', insertErr?.code);
+          console.log('Insert error details:', insertErr?.details);
           
           if (insertErr) {
-            console.error('INSERT FAILED:', insertErr);
-            alert('Failed to save game: ' + insertErr.message);
+            console.error('INSERT FAILED:', insertErr.message);
             return;
           }
         }
@@ -69,20 +70,25 @@
         state.game = game;
         render();
       } catch (e) {
-        console.error('Save exception:', e);
-        alert('Error saving: ' + e.message);
+        console.error('Save exception:', e.message);
       }
     }
     
     async function load() {
       if (!state.code) return;
       try {
-        const { data } = await DB.from('games').select('game_data').eq('room_code', state.code).single();
+        const { data, error } = await DB.from('games').select('*').eq('room_code', state.code).maybeSingle();
+        if (error) {
+          console.error('Load error:', error.message);
+          return;
+        }
         if (data) {
           state.game = data.game_data;
           render();
         }
-      } catch (e) {}
+      } catch (e) {
+        console.error('Load exception:', e.message);
+      }
     }
     
     function createRoom() {
@@ -95,8 +101,11 @@
     async function joinRoom() {
       if (!state.name || !state.code) return alert('Enter name and code');
       try {
-        const { data } = await DB.from('games').select('game_data').eq('room_code', state.code.toUpperCase()).single();
-        if (!data) return alert('Room not found');
+        const { data, error } = await DB.from('games').select('*').eq('room_code', state.code.toUpperCase()).single();
+        if (error || !data) {
+          console.error('Join error:', error);
+          return alert('Room not found');
+        }
         state.code = state.code.toUpperCase();
         state.game = data.game_data;
         if (data.game_data.players.some(p => p.id === myId)) {
@@ -107,6 +116,7 @@
         render();
         setInterval(load, 2000);
       } catch (e) {
+        console.error('Join exception:', e);
         alert('Room not found');
       }
     }
