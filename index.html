@@ -3,1024 +3,357 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Literature Card Game</title>
+  <title>Literature</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      background: #0d1117;
-      color: #c9d1d9;
-      min-height: 100vh;
-    }
-    .container {
-      max-width: 1400px;
-      margin: 0 auto;
-      padding: 20px;
-    }
-    
-    /* Home Screen */
-    .home-screen {
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    .home-card {
-      background: #161b22;
-      border: 1px solid #30363d;
-      border-radius: 12px;
-      padding: 40px;
-      max-width: 500px;
-      width: 100%;
-    }
-    .title {
-      font-size: 48px;
-      font-weight: 800;
-      text-align: center;
-      margin-bottom: 10px;
-      background: linear-gradient(135deg, #ffd700, #ffed4e);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-    }
-    .subtitle {
-      text-align: center;
-      color: #8b949e;
-      margin-bottom: 30px;
-    }
-    
-    input, select {
-      width: 100%;
-      padding: 12px;
-      background: #0d1117;
-      border: 1px solid #30363d;
-      border-radius: 6px;
-      color: #c9d1d9;
-      font-size: 16px;
-      margin-bottom: 12px;
-    }
-    input:focus, select:focus {
-      outline: none;
-      border-color: #ffd700;
-    }
-    
-    button {
-      width: 100%;
-      padding: 12px;
-      background: linear-gradient(135deg, #ffd700, #ffed4e);
-      border: none;
-      border-radius: 6px;
-      font-size: 16px;
-      font-weight: 700;
-      color: #000;
-      cursor: pointer;
-      margin-bottom: 8px;
-    }
+    body { font-family: system-ui; background: #0a0e1a; color: #fff; min-height: 100vh; }
+    .container { max-width: 800px; margin: 0 auto; padding: 20px; }
+    .card { background: #1a1f2e; border: 1px solid #2a3142; border-radius: 12px; padding: 30px; margin: 20px 0; }
+    h1 { color: #ffd700; text-align: center; font-size: 48px; margin-bottom: 10px; }
+    input, select, button { width: 100%; padding: 12px; margin: 8px 0; border-radius: 6px; border: 1px solid #2a3142; background: #0a0e1a; color: #fff; font-size: 16px; }
+    button { background: linear-gradient(135deg, #ffd700, #ffed4e); color: #000; font-weight: 700; cursor: pointer; border: none; }
     button:hover { opacity: 0.9; }
-    button:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-    .btn-secondary {
-      background: #21262d;
-      color: #c9d1d9;
-      border: 1px solid #30363d;
-    }
-    
-    .divider {
-      text-align: center;
-      color: #8b949e;
-      margin: 20px 0;
-    }
-    
-    /* Poker Table */
-    .table-view {
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 20px;
-    }
-    .poker-table {
-      width: 95vw;
-      max-width: 1200px;
-      height: 75vh;
-      min-height: 600px;
-      background: radial-gradient(ellipse at center, #1a5f3a 0%, #0d3b24 100%);
-      border-radius: 50%;
-      position: relative;
-      box-shadow: 0 0 0 12px #5c3d2e, 0 0 0 15px #3d2817, 0 20px 60px rgba(0,0,0,0.8);
-    }
-    
-    .table-center {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      text-align: center;
-      z-index: 1;
-    }
-    .room-code {
-      font-size: 32px;
-      font-weight: 800;
-      letter-spacing: 4px;
-      color: #ffd700;
-      text-shadow: 0 0 20px rgba(255,215,0,0.5);
-    }
-    .turn-info {
-      margin-top: 10px;
-      background: rgba(0,0,0,0.6);
-      padding: 10px 20px;
-      border-radius: 20px;
-      font-size: 16px;
-    }
-    .score-display {
-      margin-top: 8px;
-      font-size: 14px;
-      color: #ffd700;
-    }
-    
-    /* Player Seats */
-    .seat {
-      position: absolute;
-      z-index: 2;
-    }
-    .seat.pos-bottom { bottom: 8%; left: 50%; transform: translateX(-50%); }
-    .seat.pos-top { top: 8%; left: 50%; transform: translateX(-50%); }
-    .seat.pos-left { left: 8%; top: 50%; transform: translateY(-50%); }
-    .seat.pos-right { right: 8%; top: 50%; transform: translateY(-50%); }
-    .seat.pos-top-left { left: 18%; top: 18%; }
-    .seat.pos-top-right { right: 18%; top: 18%; }
-    .seat.pos-bottom-left { left: 18%; bottom: 22%; }
-    .seat.pos-bottom-right { right: 18%; bottom: 22%; }
-    
-    .player-card {
-      background: #161b22;
-      border: 2px solid #30363d;
-      border-radius: 12px;
-      padding: 12px 16px;
-      text-align: center;
-      min-width: 140px;
-    }
-    .player-card.active {
-      border-color: #ffd700;
-      box-shadow: 0 0 20px rgba(255,215,0,0.6);
-    }
-    .player-card.self {
-      border-color: #58a6ff;
-    }
-    .player-name {
-      font-weight: 700;
-      font-size: 14px;
-      margin-bottom: 4px;
-    }
-    .player-team {
-      font-size: 11px;
-      padding: 2px 8px;
-      border-radius: 10px;
-      display: inline-block;
-      margin-bottom: 6px;
-    }
-    .team1 { background: #da3633; color: #fff; }
-    .team2 { background: #1f6feb; color: #fff; }
-    .card-count {
-      font-size: 11px;
-      color: #8b949e;
-    }
-    .card-backs {
-      display: flex;
-      gap: 3px;
-      justify-content: center;
-      margin-top: 6px;
-    }
-    .card-back {
-      width: 20px;
-      height: 28px;
-      background: linear-gradient(135deg, #1e40af, #1e3a8a);
-      border-radius: 3px;
-      border: 1px solid #000;
-    }
-    
-    /* Hand Panel */
-    .hand-panel {
-      position: absolute;
-      bottom: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: #161b22;
-      border: 1px solid #30363d;
-      border-radius: 12px;
-      padding: 16px;
-      max-width: 90%;
-      z-index: 100;
-    }
-    .hand-title {
-      font-size: 12px;
-      color: #8b949e;
-      margin-bottom: 10px;
-      text-align: center;
-    }
-    .hand-cards {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-      justify-content: center;
-      margin-bottom: 12px;
-    }
-    .card {
-      width: 60px;
-      height: 84px;
-      background: #fff;
-      border-radius: 6px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 20px;
-      font-weight: 800;
-      cursor: pointer;
-      transition: all 0.2s;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-    }
-    .card:hover { transform: translateY(-5px); }
-    .card.selected {
-      transform: translateY(-10px);
-      box-shadow: 0 0 0 3px #ffd700;
-    }
-    .card.red { color: #dc2626; }
-    .card.black { color: #000; }
-    
-    .actions {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-      justify-content: center;
-    }
-    .actions select {
-      width: auto;
-      min-width: 140px;
-      margin: 0;
-    }
-    .actions button {
-      width: auto;
-      padding: 8px 16px;
-      margin: 0;
-      font-size: 14px;
-    }
-    
-    /* Lobby */
-    .lobby {
-      max-width: 900px;
-      margin: 40px auto;
-      background: #161b22;
-      border: 1px solid #30363d;
-      border-radius: 12px;
-      padding: 30px;
-    }
-    .lobby-header {
-      text-align: center;
-      margin-bottom: 30px;
-    }
-    .teams-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 20px;
-      margin-bottom: 20px;
-    }
-    .team-section h3 {
-      margin-bottom: 12px;
-      font-size: 18px;
-    }
-    .team-section.t1 h3 { color: #da3633; }
-    .team-section.t2 h3 { color: #1f6feb; }
-    .team-player {
-      background: #0d1117;
-      border: 1px solid #30363d;
-      padding: 10px;
-      border-radius: 6px;
-      margin-bottom: 8px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    .team-player.you {
-      border-color: #58a6ff;
-    }
-    .remove-btn {
-      background: #da3633;
-      padding: 4px 12px;
-      font-size: 12px;
-      width: auto;
-      margin: 0;
-    }
-    .add-bot-btn {
-      margin-top: 8px;
-    }
-    
-    .settings {
-      background: #0d1117;
-      border: 1px solid #30363d;
-      padding: 20px;
-      border-radius: 8px;
-      margin-bottom: 20px;
-    }
-    .setting-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 12px;
-    }
-    .setting-row label {
-      color: #8b949e;
-    }
-    .setting-row input[type="checkbox"] {
-      width: auto;
-      margin: 0;
-    }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .team { background: #0a0e1a; padding: 15px; border-radius: 8px; margin: 10px 0; }
+    .team h3 { margin-bottom: 10px; }
+    .player { background: #1a1f2e; padding: 10px; border-radius: 6px; margin: 5px 0; display: flex; justify-content: space-between; }
+    .btn-sm { width: auto; padding: 6px 12px; font-size: 14px; }
+    .t1 { color: #ef4444; }
+    .t2 { color: #3b82f6; }
   </style>
 </head>
 <body>
-  <div id="root"></div>
+  <div id="app"></div>
   
   <script>
-    const SUPABASE_URL = 'https://vngdiukjrfmzwlbefmjf.supabase.co';
-    const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZuZ2RpdWtqcmZtendsYmVmbWpmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc0Njk5MDUsImV4cCI6MjA4MzA0NTkwNX0.XBr7aEzSPj-Iw0HYf27T8yXo1nbZ01MhBVa-VIdNZG4';
-    const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    const DB = window.supabase.createClient(
+      'https://vngdiukjrfmzwlbefmjf.supabase.co',
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZuZ2RpdWtqcmZtendsYmVmbWpmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc0Njk5MDUsImV4cCI6MjA4MzA0NTkwNX0.XBr7aEzSPj-Iw0HYf27T8yXo1nbZ01MhBVa-VIdNZG4'
+    );
     
-    // Expose for debugging
-    window.sbClient = sb;
-    
-    const SETS = [
-      { name: 'Spades 2-7', cards: ['2♠','3♠','4♠','5♠','6♠','7♠'] },
-      { name: 'Spades 9-A', cards: ['9♠','10♠','J♠','Q♠','K♠','A♠'] },
-      { name: 'Hearts 2-7', cards: ['2♥','3♥','4♥','5♥','6♥','7♥'] },
-      { name: 'Hearts 9-A', cards: ['9♥','10♥','J♥','Q♥','K♥','A♥'] },
-      { name: 'Clubs 2-7', cards: ['2♣','3♣','4♣','5♣','6♣','7♣'] },
-      { name: 'Clubs 9-A', cards: ['9♣','10♣','J♣','Q♣','K♣','A♣'] },
-      { name: 'Diamonds 2-7', cards: ['2♦','3♦','4♦','5♦','6♦','7♦'] },
-      { name: 'Diamonds 9-A', cards: ['9♦','10♦','J♦','Q♦','K♦','A♦'] },
-      { name: '8s + Jokers', cards: ['8♥','8♦','8♠','8♣','RJ','BJ'] }
-    ];
-    
-    function getClientId() {
-      let id = localStorage.getItem('lit-client-id');
-      if (!id) {
-        id = crypto.randomUUID();
-        localStorage.setItem('lit-client-id', id);
-      }
+    const myId = localStorage.getItem('player-id') || (() => {
+      const id = crypto.randomUUID();
+      localStorage.setItem('player-id', id);
       return id;
-    }
+    })();
     
-    function shuffle(arr) {
-      for (let i = arr.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [arr[i], arr[j]] = [arr[j], arr[i]];
-      }
-    }
+    let state = { view: 'home', name: '', code: '', team: '', game: null };
     
-    function createBot(players) {
-      let n = 1;
-      while (players.some(p => p.name === `Bot ${n}`)) n++;
-      return {
-        id: `bot-${crypto.randomUUID()}`,
-        name: `Bot ${n}`,
-        hand: [],
-        isBot: true
-      };
-    }
-    
-    const myId = getClientId();
-    let state = {
-      view: 'home',
-      roomCode: '',
-      playerName: '',
-      selectedTeam: '',
-      gameData: null,
-      selectedCard: '',
-      selectedOpponent: ''
-    };
-    
-    async function saveGame(data) {
-      if (!state.roomCode) return;
+    async function save(game) {
       try {
-        // Try to update first
-        const { error: updateError } = await sb
-          .from('games')
-          .update({
-            game_data: data,
-            updated_at: new Date().toISOString()
-          })
-          .eq('room_code', state.roomCode);
-        
-        // If update failed (row doesn't exist), insert it
-        if (updateError) {
-          const { error: insertError } = await sb
-            .from('games')
-            .insert({
-              room_code: state.roomCode,
-              game_data: data,
-              updated_at: new Date().toISOString()
-            });
-          
-          if (insertError) {
-            console.error('Insert error:', insertError);
-            return;
-          }
-        }
-        
-        state.gameData = JSON.parse(JSON.stringify(data));
+        const { error: updateErr } = await DB.from('games').update({ game_data: game, updated_at: new Date().toISOString() }).eq('room_code', state.code);
+        if (updateErr) await DB.from('games').insert({ room_code: state.code, game_data: game });
+        state.game = game;
         render();
       } catch (e) {
-        console.error('Save error:', e);
+        console.error(e);
       }
     }
     
-    async function loadGame() {
-      if (!state.roomCode) return;
+    async function load() {
+      if (!state.code) return;
       try {
-        const { data, error } = await sb
-          .from('games')
-          .select('game_data')
-          .eq('room_code', state.roomCode)
-          .single();
-        
-        if (!error && data) {
-          state.gameData = data.game_data;
+        const { data } = await DB.from('games').select('game_data').eq('room_code', state.code).single();
+        if (data) {
+          state.game = data.game_data;
           render();
         }
-      } catch (e) {
-        console.error('Load error:', e);
-      }
+      } catch (e) {}
     }
     
     function createRoom() {
-      if (!state.playerName.trim()) {
-        alert('Enter your name');
-        return;
-      }
-      state.roomCode = Math.random().toString(36).substring(2, 8).toUpperCase();
-      state.view = 'teamSelect';
+      if (!state.name) return alert('Enter your name');
+      state.code = Math.random().toString(36).substr(2, 6).toUpperCase();
+      state.view = 'team';
       render();
-    }
-    
-    async function confirmTeamCreate() {
-      if (!state.selectedTeam) {
-        alert('Select a team');
-        return;
-      }
-      
-      const initialData = {
-        hostId: myId,
-        phase: 'lobby',
-        players: [{ id: myId, name: state.playerName, hand: [], isBot: false }],
-        teams: {
-          team1: state.selectedTeam === 'team1' ? [myId] : [],
-          team2: state.selectedTeam === 'team2' ? [myId] : []
-        },
-        currentTurn: '',
-        scores: { team1: 0, team2: 0 },
-        claimedSets: [],
-        gameLog: [],
-        settings: {
-          showAskHistory: true,
-          askHistoryCount: 2,
-          showCardCounts: false
-        }
-      };
-      
-      await saveGame(initialData);
-      state.view = 'lobby';
-      render();
-      startPolling();
     }
     
     async function joinRoom() {
-      if (!state.playerName.trim() || !state.roomCode.trim()) {
-        alert('Enter name and room code');
-        return;
-      }
-      
+      if (!state.name || !state.code) return alert('Enter name and code');
       try {
-        const { data, error } = await supabase
-          .from('games')
-          .select('game_data')
-          .eq('room_code', state.roomCode.toUpperCase())
-          .single();
-        
-        if (error || !data) {
-          alert('Room not found');
-          return;
-        }
-        
-        state.roomCode = state.roomCode.toUpperCase();
-        
+        const { data } = await DB.from('games').select('game_data').eq('room_code', state.code.toUpperCase()).single();
+        if (!data) return alert('Room not found');
+        state.code = state.code.toUpperCase();
+        state.game = data.game_data;
         if (data.game_data.players.some(p => p.id === myId)) {
           state.view = 'lobby';
-          state.gameData = data.game_data;
-          render();
-          startPolling();
-          return;
+        } else {
+          state.view = 'team';
         }
-        
-        state.view = 'teamSelect';
-        state.gameData = data.game_data;
         render();
+        setInterval(load, 2000);
       } catch (e) {
-        alert('Error joining');
+        alert('Room not found');
       }
     }
     
-    async function confirmTeamJoin() {
-      if (!state.selectedTeam) {
-        alert('Select a team');
-        return;
+    async function selectTeam(team) {
+      state.team = team;
+      
+      if (!state.game) {
+        // Creating new room
+        const game = {
+          hostId: myId,
+          players: [{ id: myId, name: state.name, hand: [] }],
+          teams: { team1: [], team2: [] },
+          phase: 'lobby',
+          scores: { team1: 0, team2: 0 },
+          currentTurn: '',
+          log: []
+        };
+        game.teams[team].push(myId);
+        await save(game);
+      } else {
+        // Joining existing room
+        const game = state.game;
+        if (!game.players.find(p => p.id === myId)) {
+          game.players.push({ id: myId, name: state.name, hand: [] });
+          game.teams[team].push(myId);
+          await save(game);
+        }
       }
       
-      try {
-        const { data } = await supabase
-          .from('games')
-          .select('game_data')
-          .eq('room_code', state.roomCode)
-          .single();
-        
-        const gameData = data.game_data;
-        gameData.players.push({ id: myId, name: state.playerName, hand: [], isBot: false });
-        gameData.teams[state.selectedTeam].push(myId);
-        
-        await saveGame(gameData);
-        state.view = 'lobby';
-        render();
-        startPolling();
-      } catch (e) {
-        alert('Error joining');
-      }
+      state.view = 'lobby';
+      setInterval(load, 2000);
     }
     
     async function addBot(team) {
-      try {
-        const { data } = await supabase
-          .from('games')
-          .select('game_data')
-          .eq('room_code', state.roomCode)
-          .single();
-        
-        if (!data) {
-          console.error('No game data found');
-          return;
-        }
-        
-        const gameData = JSON.parse(JSON.stringify(data.game_data)); // Deep clone
-        const bot = createBot(gameData.players);
-        gameData.players.push(bot);
-        gameData.teams[team].push(bot.id);
-        
-        console.log('Adding bot:', bot.name, 'to', team);
-        await saveGame(gameData);
-      } catch (e) {
-        console.error('Bot error:', e);
-        alert('Error adding bot: ' + e.message);
-      }
+      const game = state.game;
+      let n = 1;
+      while (game.players.some(p => p.name === `Bot ${n}`)) n++;
+      const bot = { id: `bot-${Date.now()}`, name: `Bot ${n}`, hand: [], isBot: true };
+      game.players.push(bot);
+      game.teams[team].push(bot.id);
+      await save(game);
     }
     
-    async function removePlayer(playerId) {
-      try {
-        const { data } = await supabase
-          .from('games')
-          .select('game_data')
-          .eq('room_code', state.roomCode)
-          .single();
-        
-        const gameData = data.game_data;
-        gameData.players = gameData.players.filter(p => p.id !== playerId);
-        gameData.teams.team1 = gameData.teams.team1.filter(id => id !== playerId);
-        gameData.teams.team2 = gameData.teams.team2.filter(id => id !== playerId);
-        await saveGame(gameData);
-      } catch (e) {
-        console.error('Remove error:', e);
-      }
+    async function removeBot(id) {
+      const game = state.game;
+      game.players = game.players.filter(p => p.id !== id);
+      game.teams.team1 = game.teams.team1.filter(i => i !== id);
+      game.teams.team2 = game.teams.team2.filter(i => i !== id);
+      await save(game);
     }
     
     async function startGame() {
-      try {
-        const { data } = await supabase
-          .from('games')
-          .select('game_data')
-          .eq('room_code', state.roomCode)
-          .single();
-        
-        const gameData = data.game_data;
-        
-        if (gameData.players.length < 4) {
-          alert('Need at least 4 players');
-          return;
-        }
-        
-        let deck = [];
-        SETS.forEach(set => deck.push(...set.cards));
-        shuffle(deck);
-        
-        const perPlayer = Math.floor(deck.length / gameData.players.length);
-        gameData.players.forEach((p, idx) => {
-          p.hand = deck.slice(idx * perPlayer, (idx + 1) * perPlayer);
-        });
-        
-        gameData.phase = 'game';
-        gameData.currentTurn = gameData.players[0].id;
-        gameData.gameLog.unshift('Game started!');
-        
-        await saveGame(gameData);
-        state.view = 'game';
-        render();
-      } catch (e) {
-        alert('Start error');
-      }
-    }
-    
-    async function askForCard() {
-      if (!state.selectedOpponent || !state.selectedCard) {
-        alert('Select opponent and card');
-        return;
+      const game = state.game;
+      if (game.players.length < 4) return alert('Need 4+ players');
+      
+      const deck = ['2♠','3♠','4♠','5♠','6♠','7♠','9♠','10♠','J♠','Q♠','K♠','A♠','2♥','3♥','4♥','5♥','6♥','7♥','9♥','10♥','J♥','Q♥','K♥','A♥','2♣','3♣','4♣','5♣','6♣','7♣','9♣','10♣','J♣','Q♣','K♣','A♣','2♦','3♦','4♦','5♦','6♦','7♦','9♦','10♦','J♦','Q♦','K♦','A♦','8♥','8♦','8♠','8♣','RJ','BJ'];
+      for (let i = deck.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [deck[i], deck[j]] = [deck[j], deck[i]];
       }
       
-      try {
-        const { data } = await supabase
-          .from('games')
-          .select('game_data')
-          .eq('room_code', state.roomCode)
-          .single();
-        
-        const gameData = data.game_data;
-        const opponent = gameData.players.find(p => p.id === state.selectedOpponent);
-        const me = gameData.players.find(p => p.id === myId);
-        
-        const hasCard = opponent.hand.includes(state.selectedCard);
-        
-        if (hasCard) {
-          opponent.hand = opponent.hand.filter(c => c !== state.selectedCard);
-          me.hand.push(state.selectedCard);
-          gameData.gameLog.unshift(`${me.name} asked ${opponent.name} - SUCCESS`);
-        } else {
-          gameData.currentTurn = opponent.id;
-          gameData.gameLog.unshift(`${me.name} asked ${opponent.name} - FAILED`);
-        }
-        
-        await saveGame(gameData);
-        state.selectedCard = '';
-        state.selectedOpponent = '';
-        render();
-      } catch (e) {
-        alert('Ask error');
-      }
-    }
-    
-    async function toggleSetting(key) {
-      try {
-        const { data } = await supabase
-          .from('games')
-          .select('game_data')
-          .eq('room_code', state.roomCode)
-          .single();
-        
-        if (!data) {
-          console.error('No game data found');
-          return;
-        }
-        
-        const gameData = JSON.parse(JSON.stringify(data.game_data)); // Deep clone
-        gameData.settings[key] = !gameData.settings[key];
-        
-        console.log('Toggling setting:', key, 'to', gameData.settings[key]);
-        await saveGame(gameData);
-      } catch (e) {
-        console.error('Setting error:', e);
-        alert('Error toggling setting: ' + e.message);
-      }
-    }
-    
-    async function changeSetting(key, value) {
-      try {
-        const { data } = await supabase
-          .from('games')
-          .select('game_data')
-          .eq('room_code', state.roomCode)
-          .single();
-        
-        if (!data) {
-          console.error('No game data found');
-          return;
-        }
-        
-        const gameData = JSON.parse(JSON.stringify(data.game_data)); // Deep clone
-        gameData.settings[key] = value;
-        
-        console.log('Changing setting:', key, 'to', value);
-        await saveGame(gameData);
-      } catch (e) {
-        console.error('Setting error:', e);
-        alert('Error changing setting: ' + e.message);
-      }
-    }
-    
-    function getPlayerPosition(index, total) {
-      if (total <= 4) {
-        return ['bottom', 'left', 'top', 'right'][index] || 'bottom';
-      }
-      const positions = ['bottom', 'left', 'top-left', 'top', 'top-right', 'right', 'bottom-right', 'bottom-left'];
-      return positions[index] || 'bottom';
-    }
-    
-    let pollInterval = null;
-    function startPolling() {
-      if (pollInterval) clearInterval(pollInterval);
-      pollInterval = setInterval(loadGame, 2000);
+      const per = Math.floor(deck.length / game.players.length);
+      game.players.forEach((p, i) => p.hand = deck.slice(i * per, (i + 1) * per));
+      game.phase = 'game';
+      game.currentTurn = game.players[0].id;
+      await save(game);
+      state.view = 'game';
     }
     
     function render() {
-      const root = document.getElementById('root');
-      if (!root) {
-        console.error('Root element not found!');
-        return;
-      }
-      
-      console.log('Rendering view:', state.view);
+      const app = document.getElementById('app');
       
       if (state.view === 'home') {
-        root.innerHTML = `
-          <div class="home-screen">
-            <div class="home-card">
-              <h1 class="title">LITERATURE</h1>
-              <p class="subtitle">9-Set Card Game</p>
-              
-              <input type="text" placeholder="Your Name" id="name-input" value="${state.playerName}">
-              <button onclick="app.createRoom()">Create Room</button>
-              
-              <div class="divider">- OR -</div>
-              
-              <input type="text" placeholder="Room Code" id="code-input" value="${state.roomCode}">
-              <button onclick="app.joinRoom()" class="btn-secondary">Join Room</button>
+        app.innerHTML = `
+          <div class="container">
+            <div class="card">
+              <h1>LITERATURE</h1>
+              <input type="text" placeholder="Your Name" id="name" value="${state.name}">
+              <button onclick="createRoom()">Create Room</button>
+              <div style="text-align:center;margin:20px;color:#666">OR</div>
+              <input type="text" placeholder="Room Code" id="code" value="${state.code}">
+              <button onclick="joinRoom()">Join Room</button>
             </div>
           </div>
         `;
-        
-        document.getElementById('name-input').oninput = (e) => {
-          state.playerName = e.target.value;
-        };
-        document.getElementById('code-input').oninput = (e) => {
-          state.roomCode = e.target.value.toUpperCase();
-        };
+        document.getElementById('name').oninput = e => state.name = e.target.value;
+        document.getElementById('code').oninput = e => state.code = e.target.value.toUpperCase();
         return;
       }
       
-      if (state.view === 'teamSelect') {
-        root.innerHTML = `
-          <div class="home-screen">
-            <div class="home-card">
-              <h2 style="text-align:center; margin-bottom:20px;">Choose Your Team</h2>
-              
-              <button onclick="app.selectTeam('team1')" class="btn-secondary" style="background: ${state.selectedTeam === 'team1' ? '#da3633' : '#21262d'}; padding: 20px;">
-                <div style="font-size: 20px;">Team 1</div>
-                <div style="font-size: 12px; margin-top: 4px;">Red Team</div>
-              </button>
-              
-              <button onclick="app.selectTeam('team2')" class="btn-secondary" style="background: ${state.selectedTeam === 'team2' ? '#1f6feb' : '#21262d'}; padding: 20px;">
-                <div style="font-size: 20px;">Team 2</div>
-                <div style="font-size: 12px; margin-top: 4px;">Blue Team</div>
-              </button>
-              
-              <button onclick="app.confirmTeam()" style="margin-top: 20px;" ${!state.selectedTeam ? 'disabled' : ''}>
-                Confirm Team
-              </button>
-              
-              <button onclick="app.cancel()" class="btn-secondary">Cancel</button>
+      if (state.view === 'team') {
+        app.innerHTML = `
+          <div class="container">
+            <div class="card">
+              <h2 style="text-align:center;margin-bottom:20px">Choose Team</h2>
+              <button onclick="selectTeam('team1')" style="background:#ef4444;color:#fff">Team 1</button>
+              <button onclick="selectTeam('team2')" style="background:#3b82f6;color:#fff">Team 2</button>
             </div>
           </div>
         `;
         return;
       }
       
-      if (state.view === 'lobby' && state.gameData) {
-        const isHost = state.gameData.hostId === myId;
-        const myTeam = state.gameData.teams.team1.includes(myId) ? 'team1' : 'team2';
-        
-        root.innerHTML = `
-          <div class="lobby">
-            <div class="lobby-header">
-              <h1 class="title" style="font-size: 36px;">${state.roomCode}</h1>
-              <p class="subtitle">Share this code with friends</p>
-              <p style="color: ${myTeam === 'team1' ? '#da3633' : '#1f6feb'}; font-weight: 700;">
-                You're on ${myTeam === 'team1' ? 'Team 1 (Red)' : 'Team 2 (Blue)'}
-              </p>
-            </div>
-            
-            ${isHost ? `
-            <div class="settings">
-              <div class="setting-row">
-                <label>Show Ask History</label>
-                <input type="checkbox" ${state.gameData.settings.showAskHistory ? 'checked' : ''} 
-                  onchange="app.toggleSetting('showAskHistory')">
-              </div>
+      if (state.view === 'lobby' && state.game) {
+        const isHost = state.game.hostId === myId;
+        app.innerHTML = `
+          <div class="container">
+            <div class="card">
+              <h1 style="font-size:32px">${state.code}</h1>
+              <p style="text-align:center;color:#888;margin-bottom:20px">Share this code</p>
               
-              ${state.gameData.settings.showAskHistory ? `
-              <div class="setting-row">
-                <label>Recent asks to show</label>
-                <select onchange="app.changeSetting('askHistoryCount', Number(this.value))">
-                  <option value="2" ${state.gameData.settings.askHistoryCount === 2 ? 'selected' : ''}>2</option>
-                  <option value="3" ${state.gameData.settings.askHistoryCount === 3 ? 'selected' : ''}>3</option>
-                </select>
-              </div>
-              ` : ''}
-              
-              <div class="setting-row">
-                <label>Show Card Counts</label>
-                <input type="checkbox" ${state.gameData.settings.showCardCounts ? 'checked' : ''}
-                  onchange="app.toggleSetting('showCardCounts')">
-              </div>
-            </div>
-            ` : ''}
-            
-            <div class="teams-grid">
-              <div class="team-section t1">
-                <h3>Team 1 (${state.gameData.teams.team1.length})</h3>
-                ${state.gameData.players
-                  .filter(p => state.gameData.teams.team1.includes(p.id))
-                  .map(p => `
-                    <div class="team-player ${p.id === myId ? 'you' : ''}">
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+                <div class="team">
+                  <h3 class="t1">Team 1 (${state.game.teams.team1.length})</h3>
+                  ${state.game.players.filter(p => state.game.teams.team1.includes(p.id)).map(p => `
+                    <div class="player">
                       <span>${p.name} ${p.id === myId ? '(You)' : ''}</span>
-                      ${isHost && p.isBot ? `<button class="remove-btn" onclick="app.removePlayer('${p.id}')">Remove</button>` : ''}
+                      ${isHost && p.isBot ? `<button class="btn-sm" onclick="removeBot('${p.id}')">Remove</button>` : ''}
                     </div>
                   `).join('')}
-                ${isHost ? '<button class="add-bot-btn" onclick="app.addBot(\'team1\')">+ Add Bot</button>' : ''}
-              </div>
-              
-              <div class="team-section t2">
-                <h3>Team 2 (${state.gameData.teams.team2.length})</h3>
-                ${state.gameData.players
-                  .filter(p => state.gameData.teams.team2.includes(p.id))
-                  .map(p => `
-                    <div class="team-player ${p.id === myId ? 'you' : ''}">
+                  ${isHost ? '<button onclick="addBot(\'team1\')">+ Add Bot</button>' : ''}
+                </div>
+                
+                <div class="team">
+                  <h3 class="t2">Team 2 (${state.game.teams.team2.length})</h3>
+                  ${state.game.players.filter(p => state.game.teams.team2.includes(p.id)).map(p => `
+                    <div class="player">
                       <span>${p.name} ${p.id === myId ? '(You)' : ''}</span>
-                      ${isHost && p.isBot ? `<button class="remove-btn" onclick="app.removePlayer('${p.id}')">Remove</button>` : ''}
+                      ${isHost && p.isBot ? `<button class="btn-sm" onclick="removeBot('${p.id}')">Remove</button>` : ''}
                     </div>
                   `).join('')}
-                ${isHost ? '<button class="add-bot-btn" onclick="app.addBot(\'team2\')">+ Add Bot</button>' : ''}
+                  ${isHost ? '<button onclick="addBot(\'team2\')">+ Add Bot</button>' : ''}
+                </div>
               </div>
+              
+              ${isHost ? `
+                <button onclick="startGame()" ${state.game.players.length < 4 ? 'disabled' : ''}>
+                  ${state.game.players.length < 4 ? `Need ${4 - state.game.players.length} more` : 'Start Game'}
+                </button>
+              ` : '<p style="text-align:center;color:#888;margin-top:20px">Waiting for host...</p>'}
             </div>
-            
-            ${isHost ? `
-              <button onclick="app.startGame()" ${state.gameData.players.length < 4 ? 'disabled' : ''}>
-                ${state.gameData.players.length < 4 
-                  ? `Need ${4 - state.gameData.players.length} more players` 
-                  : 'Start Game'}
-              </button>
-            ` : '<p style="text-align: center; color: #8b949e;">Waiting for host to start...</p>'}
           </div>
         `;
         return;
       }
       
-      if (state.view === 'game' && state.gameData) {
-        const me = state.gameData.players.find(p => p.id === myId);
-        const myTeam = state.gameData.teams.team1.includes(myId) ? 'team1' : 'team2';
-        const isMyTurn = state.gameData.currentTurn === myId;
-        const currentPlayer = state.gameData.players.find(p => p.id === state.gameData.currentTurn);
-        const otherPlayers = state.gameData.players.filter(p => p.id !== myId);
-        const opponents = state.gameData.players.filter(p => 
+      if (state.view === 'game' && state.game) {
+        const me = state.game.players.find(p => p.id === myId);
+        const myTeam = state.game.teams.team1.includes(myId) ? 'team1' : 'team2';
+        const isMyTurn = state.game.currentTurn === myId;
+        const currentPlayer = state.game.players.find(p => p.id === state.game.currentTurn);
+        const opponents = state.game.players.filter(p => 
           p.id !== myId && 
-          state.gameData.teams[myTeam === 'team1' ? 'team2' : 'team1'].includes(p.id)
+          state.game.teams[myTeam === 'team1' ? 'team2' : 'team1'].includes(p.id)
         );
         
-        root.innerHTML = `
-          <div class="table-view">
-            <div class="poker-table">
-              <div class="table-center">
-                <div class="room-code">${state.roomCode}</div>
-                <div class="turn-info">
-                  ${isMyTurn ? '🟢 YOUR TURN' : `⏳ ${currentPlayer?.name}'s Turn`}
-                </div>
-                <div class="score-display">
-                  Team 1: ${state.gameData.scores.team1} | Team 2: ${state.gameData.scores.team2}
-                </div>
-              </div>
+        app.innerHTML = `
+          <div class="container">
+            <div class="card">
+              <h2>Room ${state.code}</h2>
+              <p>Scores - Team 1: ${state.game.scores.team1} | Team 2: ${state.game.scores.team2}</p>
+              <p style="margin:10px 0;font-weight:700;color:${isMyTurn ? '#4ade80' : '#888'}">
+                ${isMyTurn ? '🟢 YOUR TURN' : `⏳ ${currentPlayer?.name}'s Turn`}
+              </p>
               
-              ${otherPlayers.map((player, idx) => {
-                const position = getPlayerPosition(idx + 1, state.gameData.players.length);
-                const playerTeam = state.gameData.teams.team1.includes(player.id) ? 'team1' : 'team2';
-                const isActive = state.gameData.currentTurn === player.id;
-                
-                return `
-                  <div class="seat pos-${position}">
-                    <div class="player-card ${isActive ? 'active' : ''}">
-                      <div class="player-name">${player.name}</div>
-                      <div class="player-team ${playerTeam}">
-                        ${playerTeam === 'team1' ? 'Team 1' : 'Team 2'}
-                      </div>
-                      ${state.gameData.settings.showCardCounts ? 
-                        `<div class="card-count">${player.hand?.length || 0} cards</div>` : ''}
-                      <div class="card-backs">
-                        ${Array(Math.min(player.hand?.length || 0, 5)).fill(0).map(() => 
-                          '<div class="card-back"></div>'
-                        ).join('')}
-                      </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin:20px 0">
+                <div>
+                  <h3 class="t1">Team 1</h3>
+                  ${state.game.players.filter(p => state.game.teams.team1.includes(p.id)).map(p => `
+                    <div class="player">
+                      ${p.name} ${p.id === myId ? '(You)' : ''} - ${p.hand.length} cards
+                      ${state.game.currentTurn === p.id ? ' 👉' : ''}
                     </div>
-                  </div>
-                `;
-              }).join('')}
-              
-              <div class="hand-panel">
-                <div class="hand-title">YOUR HAND (${me?.hand?.length || 0} cards)</div>
-                <div class="hand-cards">
-                  ${me?.hand?.sort().map(card => {
-                    const isRed = card.includes('♥') || card.includes('♦');
-                    return `
-                      <div class="card ${isRed ? 'red' : 'black'} ${state.selectedCard === card ? 'selected' : ''}"
-                        onclick="app.selectCard('${card}')">
-                        ${card}
-                      </div>
-                    `;
-                  }).join('') || '<p style="color: #8b949e;">No cards</p>'}
+                  `).join('')}
                 </div>
-                
-                ${isMyTurn ? `
-                  <div class="actions">
-                    <select id="opponent-select">
-                      <option value="">Select Opponent</option>
-                      ${opponents.map(p => 
-                        `<option value="${p.id}" ${state.selectedOpponent === p.id ? 'selected' : ''}>${p.name}</option>`
-                      ).join('')}
-                    </select>
-                    
-                    <button onclick="app.askForCard()" ${!state.selectedCard || !state.selectedOpponent ? 'disabled' : ''}>
-                      Ask for Card
-                    </button>
-                    
-                    <button class="btn-secondary">Call Set</button>
-                  </div>
-                ` : `
-                  <p style="text-align: center; color: #8b949e; margin-top: 8px;">
-                    Waiting for ${currentPlayer?.name}...
-                  </p>
-                `}
-                
-                <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid #30363d;">
-                  <div style="font-size: 11px; color: #8b949e; margin-bottom: 4px;">Recent Activity:</div>
-                  ${state.gameData.gameLog?.slice(0, 3).map(log => 
-                    `<div style="font-size: 11px; color: #8b949e;">${log}</div>`
-                  ).join('') || '<div style="font-size: 11px; color: #8b949e;">No activity yet</div>'}
+                <div>
+                  <h3 class="t2">Team 2</h3>
+                  ${state.game.players.filter(p => state.game.teams.team2.includes(p.id)).map(p => `
+                    <div class="player">
+                      ${p.name} ${p.id === myId ? '(You)' : ''} - ${p.hand.length} cards
+                      ${state.game.currentTurn === p.id ? ' 👉' : ''}
+                    </div>
+                  `).join('')}
                 </div>
               </div>
+              
+              <div style="margin:20px 0">
+                <h3>Your Hand (${me.hand.length} cards)</h3>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+                  ${me.hand.sort().map((c, i) => `
+                    <div onclick="selectCard(${i}, '${c}')" id="card-${i}" style="background:#fff;color:${c.includes('♥') || c.includes('♦') ? '#ef4444' : '#000'};padding:12px;border-radius:6px;min-width:50px;text-align:center;font-weight:700;cursor:pointer;border:3px solid transparent">
+                      ${c}
+                    </div>
+                  `).join('')}
+                </div>
+              </div>
+              
+              ${isMyTurn ? `
+                <div style="margin-top:20px">
+                  <select id="opponent-select" style="margin-bottom:10px">
+                    <option value="">Select Opponent</option>
+                    ${opponents.map(p => `<option value="${p.id}">${p.name}</option>`).join('')}
+                  </select>
+                  <button onclick="askCard()" id="ask-btn" disabled>Ask for Card</button>
+                </div>
+              ` : '<p style="text-align:center;color:#888">Waiting for turn...</p>'}
             </div>
           </div>
         `;
-        
-        const opponentSelect = document.getElementById('opponent-select');
-        if (opponentSelect) {
-          opponentSelect.onchange = (e) => {
-            state.selectedOpponent = e.target.value;
-          };
-        }
-        
-        return;
       }
     }
     
-    window.app = {
-      createRoom,
-      joinRoom,
-      selectTeam: (team) => {
-        state.selectedTeam = team;
-        render();
-      },
-      confirmTeam: () => {
-        if (state.gameData) {
-          confirmTeamJoin();
-        } else {
-          confirmTeamCreate();
-        }
-      },
-      cancel: () => {
-        state.view = 'home';
-        state.selectedTeam = '';
-        state.roomCode = '';
-        render();
-      },
-      addBot,
-      removePlayer,
-      startGame,
-      toggleSetting,
-      changeSetting,
-      selectCard: (card) => {
-        if (state.gameData && state.gameData.currentTurn !== myId) {
-          alert('Not your turn!');
-          return;
-        }
-        state.selectedCard = state.selectedCard === card ? '' : card;
-        render();
-      },
-      askForCard
-    };
+    let selectedCard = null;
+    let selectedOpponent = null;
     
-    // Initialize
-    console.log('App starting...');
-    console.log('Supabase client:', sb ? 'loaded' : 'NOT loaded');
+    function selectCard(idx, card) {
+      selectedCard = card;
+      document.querySelectorAll('[id^="card-"]').forEach(el => el.style.borderColor = 'transparent');
+      document.getElementById(`card-${idx}`).style.borderColor = '#ffd700';
+      updateAskBtn();
+    }
+    
+    function updateAskBtn() {
+      const btn = document.getElementById('ask-btn');
+      const sel = document.getElementById('opponent-select');
+      if (btn && sel) {
+        selectedOpponent = sel.value;
+        btn.disabled = !selectedCard || !selectedOpponent;
+      }
+    }
+    
+    async function askCard() {
+      if (!selectedCard || !selectedOpponent) return;
+      
+      const game = state.game;
+      const opponent = game.players.find(p => p.id === selectedOpponent);
+      const me = game.players.find(p => p.id === myId);
+      
+      const hasCard = opponent.hand.includes(selectedCard);
+      
+      if (hasCard) {
+        opponent.hand = opponent.hand.filter(c => c !== selectedCard);
+        me.hand.push(selectedCard);
+        game.log = game.log || [];
+        game.log.unshift(`${me.name} asked ${opponent.name} for ${selectedCard} - SUCCESS!`);
+      } else {
+        game.currentTurn = opponent.id;
+        game.log = game.log || [];
+        game.log.unshift(`${me.name} asked ${opponent.name} for ${selectedCard} - FAILED`);
+      }
+      
+      selectedCard = null;
+      selectedOpponent = null;
+      await save(game);
+    }
+    
+    window.selectCard = selectCard;
+    window.askCard = askCard;
+    window.addEventListener('change', (e) => {
+      if (e.target.id === 'opponent-select') updateAskBtn();
+    });
+    
+    window.createRoom = createRoom;
+    window.joinRoom = joinRoom;
+    window.selectTeam = selectTeam;
+    window.addBot = addBot;
+    window.removeBot = removeBot;
+    window.startGame = startGame;
+    
     render();
   </script>
 </body>
