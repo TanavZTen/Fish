@@ -344,7 +344,7 @@
   <script>
     const SUPABASE_URL = 'https://vngdiukjrfmzwlbefmjf.supabase.co';
     const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZuZ2RpdWtqcmZtendsYmVmbWpmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc0Njk5MDUsImV4cCI6MjA4MzA0NTkwNX0.XBr7aEzSPj-Iw0HYf27T8yXo1nbZ01MhBVa-VIdNZG4';
-    const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
     
     const SETS = [
       { name: 'Spades 2-7', cards: ['2♠','3♠','4♠','5♠','6♠','7♠'] },
@@ -399,29 +399,19 @@
     async function saveGame(data) {
       if (!state.roomCode) return;
       try {
-        // Try to update first
-        const { error: updateError } = await sb
+        const { error } = await supabase
           .from('games')
-          .update({
+          .upsert({
+            room_code: state.roomCode,
             game_data: data,
             updated_at: new Date().toISOString()
-          })
-          .eq('room_code', state.roomCode);
+          }, {
+            onConflict: 'room_code'
+          });
         
-        // If update failed (row doesn't exist), insert it
-        if (updateError) {
-          const { error: insertError } = await sb
-            .from('games')
-            .insert({
-              room_code: state.roomCode,
-              game_data: data,
-              updated_at: new Date().toISOString()
-            });
-          
-          if (insertError) {
-            console.error('Insert error:', insertError);
-            return;
-          }
+        if (error) {
+          console.error('Save error:', error);
+          return;
         }
         
         state.gameData = JSON.parse(JSON.stringify(data));
@@ -434,7 +424,7 @@
     async function loadGame() {
       if (!state.roomCode) return;
       try {
-        const { data, error } = await sb
+        const { data, error } = await supabase
           .from('games')
           .select('game_data')
           .eq('room_code', state.roomCode)
@@ -497,7 +487,7 @@
       }
       
       try {
-        const { data, error } = await supabase
+        const { data, error} = await supabase
           .from('games')
           .select('game_data')
           .eq('room_code', state.roomCode.toUpperCase())
@@ -565,12 +555,11 @@
           return;
         }
         
-        const gameData = JSON.parse(JSON.stringify(data.game_data)); // Deep clone
+        const gameData = JSON.parse(JSON.stringify(data.game_data));
         const bot = createBot(gameData.players);
         gameData.players.push(bot);
         gameData.teams[team].push(bot.id);
         
-        console.log('Adding bot:', bot.name, 'to', team);
         await saveGame(gameData);
       } catch (e) {
         console.error('Bot error:', e);
@@ -654,10 +643,10 @@
         if (hasCard) {
           opponent.hand = opponent.hand.filter(c => c !== state.selectedCard);
           me.hand.push(state.selectedCard);
-          gameData.gameLog.unshift(`${me.name} asked ${opponent.name} - SUCCESS`);
+          gameData.gameLog.unshift(`${me.name} asked ${opponent.name} for ${state.selectedCard} - SUCCESS`);
         } else {
           gameData.currentTurn = opponent.id;
-          gameData.gameLog.unshift(`${me.name} asked ${opponent.name} - FAILED`);
+          gameData.gameLog.unshift(`${me.name} asked ${opponent.name} for ${state.selectedCard} - FAILED`);
         }
         
         await saveGame(gameData);
@@ -677,19 +666,14 @@
           .eq('room_code', state.roomCode)
           .single();
         
-        if (!data) {
-          console.error('No game data found');
-          return;
-        }
+        if (!data) return;
         
-        const gameData = JSON.parse(JSON.stringify(data.game_data)); // Deep clone
+        const gameData = JSON.parse(JSON.stringify(data.game_data));
         gameData.settings[key] = !gameData.settings[key];
         
-        console.log('Toggling setting:', key, 'to', gameData.settings[key]);
         await saveGame(gameData);
       } catch (e) {
         console.error('Setting error:', e);
-        alert('Error toggling setting: ' + e.message);
       }
     }
     
@@ -701,19 +685,14 @@
           .eq('room_code', state.roomCode)
           .single();
         
-        if (!data) {
-          console.error('No game data found');
-          return;
-        }
+        if (!data) return;
         
-        const gameData = JSON.parse(JSON.stringify(data.game_data)); // Deep clone
+        const gameData = JSON.parse(JSON.stringify(data.game_data));
         gameData.settings[key] = value;
         
-        console.log('Changing setting:', key, 'to', value);
         await saveGame(gameData);
       } catch (e) {
         console.error('Setting error:', e);
-        alert('Error changing setting: ' + e.message);
       }
     }
     
@@ -733,12 +712,7 @@
     
     function render() {
       const root = document.getElementById('root');
-      if (!root) {
-        console.error('Root element not found!');
-        return;
-      }
-      
-      console.log('Rendering view:', state.view);
+      if (!root) return;
       
       if (state.view === 'home') {
         root.innerHTML = `
@@ -1017,7 +991,7 @@
     
     // Initialize
     console.log('App starting...');
-    console.log('Supabase client:', sb ? 'loaded' : 'NOT loaded');
+    console.log('Supabase client:', supabase ? 'loaded' : 'NOT loaded');
     render();
   </script>
 </body>
