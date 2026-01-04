@@ -42,12 +42,35 @@
     
     async function save(game) {
       try {
-        const { error: updateErr } = await DB.from('games').update({ game_data: game, updated_at: new Date().toISOString() }).eq('room_code', state.code);
-        if (updateErr) await DB.from('games').insert({ room_code: state.code, game_data: game });
+        console.log('Saving game to room:', state.code);
+        console.log('Game data:', game);
+        
+        const { data: updateData, error: updateErr } = await DB.from('games')
+          .update({ game_data: game, updated_at: new Date().toISOString() })
+          .eq('room_code', state.code);
+        
+        console.log('Update result:', { updateData, updateErr });
+        
+        if (updateErr) {
+          console.log('Update failed, trying insert...');
+          const { data: insertData, error: insertErr } = await DB.from('games')
+            .insert({ room_code: state.code, game_data: game });
+          
+          console.log('Insert result:', { insertData, insertErr });
+          
+          if (insertErr) {
+            console.error('INSERT FAILED:', insertErr);
+            alert('Failed to save game: ' + insertErr.message);
+            return;
+          }
+        }
+        
+        console.log('Save successful!');
         state.game = game;
         render();
       } catch (e) {
-        console.error(e);
+        console.error('Save exception:', e);
+        alert('Error saving: ' + e.message);
       }
     }
     
