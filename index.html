@@ -344,7 +344,7 @@
   <script>
     const SUPABASE_URL = 'https://vngdiukjrfmzwlbefmjf.supabase.co';
     const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZuZ2RpdWtqcmZtendsYmVmbWpmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc0Njk5MDUsImV4cCI6MjA4MzA0NTkwNX0.XBr7aEzSPj-Iw0HYf27T8yXo1nbZ01MhBVa-VIdNZG4';
-    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
     
     const SETS = [
       { name: 'Spades 2-7', cards: ['2♠','3♠','4♠','5♠','6♠','7♠'] },
@@ -400,7 +400,7 @@
       if (!state.roomCode) return;
       try {
         // Try to update first
-        const { error: updateError } = await supabase
+        const { error: updateError } = await sb
           .from('games')
           .update({
             game_data: data,
@@ -410,7 +410,7 @@
         
         // If update failed (row doesn't exist), insert it
         if (updateError) {
-          const { error: insertError } = await supabase
+          const { error: insertError } = await sb
             .from('games')
             .insert({
               room_code: state.roomCode,
@@ -434,7 +434,7 @@
     async function loadGame() {
       if (!state.roomCode) return;
       try {
-        const { data, error } = await supabase
+        const { data, error } = await sb
           .from('games')
           .select('game_data')
           .eq('room_code', state.roomCode)
@@ -733,6 +733,12 @@
     
     function render() {
       const root = document.getElementById('root');
+      if (!root) {
+        console.error('Root element not found!');
+        return;
+      }
+      
+      console.log('Rendering view:', state.view);
       
       if (state.view === 'home') {
         root.innerHTML = `
@@ -1009,6 +1015,9 @@
       askForCard
     };
     
+    // Initialize
+    console.log('App starting...');
+    console.log('Supabase client:', sb ? 'loaded' : 'NOT loaded');
     render();
   </script>
 </body>
