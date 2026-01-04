@@ -9,76 +9,23 @@
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <style>
-    .poker-table {
-      background: radial-gradient(ellipse at center, #1a5f3a 0%, #0d3b24 100%);
-      border-radius: 50%;
-      box-shadow: 
-        0 0 0 15px #8b4513,
-        0 0 0 20px #654321,
-        0 30px 80px rgba(0,0,0,0.8);
-      border: 3px solid #2d1810;
-      position: relative;
-      min-height: 600px;
-    }
-    .seat {
-      position: absolute;
-    }
-    .seat.pos-bottom {
-      bottom: 5%;
-      left: 50%;
-      transform: translateX(-50%);
-    }
-    .seat.pos-top {
-      top: 5%;
-      left: 50%;
-      transform: translateX(-50%);
-    }
-    .seat.pos-left {
-      left: 5%;
-      top: 50%;
-      transform: translateY(-50%);
-    }
-    .seat.pos-right {
-      right: 5%;
-      top: 50%;
-      transform: translateY(-50%);
-    }
-    .seat.pos-top-left {
-      left: 15%;
-      top: 15%;
-    }
-    .seat.pos-top-right {
-      right: 15%;
-      top: 15%;
-    }
-    .seat.pos-bottom-left {
-      left: 15%;
-      bottom: 20%;
-    }
-    .seat.pos-bottom-right {
-      right: 15%;
-      bottom: 20%;
-    }
-    .card-mini {
-      width: 25px;
-      height: 35px;
-      background: linear-gradient(135deg, #1e40af, #1e3a8a);
-      border-radius: 3px;
-      border: 1px solid #1e293b;
-    }
-  </style>
 </head>
 <body>
   <div id="root"></div>
   <script type="text/babel">
     const { useState, useEffect, useMemo } = React;
 
+    /* ============================================================
+       SUPABASE CONFIGURATION
+       ============================================================ */
     const SUPABASE_URL = 'https://vngdiukjrfmzwlbefmjf.supabase.co';
     const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZuZ2RpdWtqcmZtendsYmVmbWpmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc0Njk5MDUsImV4cCI6MjA4MzA0NTkwNX0.XBr7aEzSPj-Iw0HYf27T8yXo1nbZ01MhBVa-VIdNZG4';
     
     const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+    /* ============================================================
+       PERSISTENT CLIENT ID
+       ============================================================ */
     const CLIENT_ID_KEY = 'literature-client-id';
     function getClientId() {
       let id = localStorage.getItem(CLIENT_ID_KEY);
@@ -89,6 +36,9 @@
       return id;
     }
 
+    /* ============================================================
+       SET DEFINITIONS
+       ============================================================ */
     const SETS = [
       { name: 'Spades 2-7', cards: ['2♠', '3♠', '4♠', '5♠', '6♠', '7♠'] },
       { name: 'Spades 9-A', cards: ['9♠', '10♠', 'J♠', 'Q♠', 'K♠', 'A♠'] },
@@ -101,6 +51,8 @@
       { name: '8s + Jokers', cards: ['8♥', '8♦', '8♠', '8♣', 'RJ', 'BJ'] }
     ];
 
+    const findSet = card => SETS.find(s => s.cards.includes(card));
+
     const shuffle = deck => {
       for (let i = deck.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
@@ -108,6 +60,9 @@
       }
     };
 
+    /* ============================================================
+       BOT LOGIC
+       ============================================================ */
     function createBot(players) {
       let n = 1;
       while (players.some(p => p.name === `Bot ${n}`)) n++;
@@ -115,10 +70,41 @@
         id: `bot-${crypto.randomUUID()}`,
         name: `Bot ${n}`,
         hand: [],
-        isBot: true
+        isBot: true,
+        memory: {}
       };
     }
 
+    function botDecide(bot, gameData) {
+      const myTeam = gameData.teams.team1.includes(bot.id) ? 'team1' : 'team2';
+      const oppTeam = myTeam === 'team1' ? 'team2' : 'team1';
+      const opponents = gameData.players.filter(p => gameData.teams[oppTeam].includes(p.id));
+
+      let askableCards = [];
+      bot.hand.forEach(card => {
+        const set = findSet(card);
+        if (set) {
+          set.cards.forEach(c => {
+            if (!bot.hand.includes(c) && !askableCards.includes(c)) {
+              askableCards.push(c);
+            }
+          });
+        }
+      });
+
+      if (askableCards.length === 0) {
+        return null;
+      }
+
+      const card = askableCards[Math.floor(Math.random() * askableCards.length)];
+      const target = opponents[Math.floor(Math.random() * opponents.length)];
+
+      return { targetId: target.id, card };
+    }
+
+    /* ============================================================
+       MAIN APP
+       ============================================================ */
     const App = () => {
       const myId = useMemo(() => getClientId(), []);
       
@@ -130,7 +116,11 @@
 
       const [selectedOpponent, setSelectedOpponent] = useState('');
       const [selectedCard, setSelectedCard] = useState('');
+      const [showCallModal, setShowCallModal] = useState(false);
+      const [callSetIndex, setCallSetIndex] = useState(0);
+      const [callCards, setCallCards] = useState({});
 
+      /* ========================= SAVE/LOAD ========================= */
       const saveGame = async (data) => {
         try {
           if (!roomCode) return;
@@ -147,9 +137,6 @@
           if (error) {
             console.error('Supabase save error:', error);
           }
-          
-          // CRITICAL: Update state immediately
-          setGameData({...data});
         } catch (e) {
           console.error('saveGame error', e);
         }
@@ -165,7 +152,33 @@
             .single();
           
           if (!error && data) {
-            setGameData(data.game_data);
+            const gameData = data.game_data;
+            localStorage.setItem(`game:${roomCode}`, JSON.stringify(gameData));
+            setGameData(gameData);
+
+            if (gameData.phase === 'game' && !gameData.botThinking) {
+              const current = gameData.players.find(p => p.id === gameData.currentTurn);
+              if (current?.isBot) {
+                gameData.botThinking = true;
+                await saveGame(gameData);
+                setTimeout(() => executeBotTurn(current, gameData), 2500);
+              }
+            }
+            return;
+          }
+          
+          const raw = localStorage.getItem(`game:${roomCode}`);
+          if (!raw) return;
+          const localData = JSON.parse(raw);
+          setGameData(localData);
+
+          if (localData.phase === 'game' && !localData.botThinking) {
+            const current = localData.players.find(p => p.id === localData.currentTurn);
+            if (current?.isBot) {
+              localData.botThinking = true;
+              await saveGame(localData);
+              setTimeout(() => executeBotTurn(current, localData), 2500);
+            }
           }
         } catch (e) {
           console.error('Load error:', e);
@@ -174,11 +187,40 @@
 
       useEffect(() => {
         if (!roomCode) return;
+
         loadGame();
-        const interval = setInterval(loadGame, 2000);
+
+        const interval = setInterval(async () => {
+          try {
+            const { data, error } = await supabase
+              .from('games')
+              .select('game_data')
+              .eq('room_code', roomCode)
+              .single();
+            
+            if (!error && data && data.game_data) {
+              const val = data.game_data;
+              localStorage.setItem(`game:${roomCode}`, JSON.stringify(val));
+              setGameData(val);
+
+              if (val.phase === 'game' && !val.botThinking) {
+                const current = val.players.find(p => p.id === val.currentTurn);
+                if (current?.isBot) {
+                  val.botThinking = true;
+                  await saveGame(val);
+                  setTimeout(() => executeBotTurn(current, val), 2500);
+                }
+              }
+            }
+          } catch (e) {
+            console.error('Polling error:', e);
+          }
+        }, 2000);
+
         return () => clearInterval(interval);
       }, [roomCode]);
 
+      /* ========================= CREATE ROOM ========================= */
       const createRoom = () => {
         if (!playerName.trim()) {
           alert('Please enter your name');
@@ -208,17 +250,23 @@
           claimedSets: [],
           askHistory: [],
           gameLog: [],
+          lastAskedPlayer: '',
+          botThinking: false,
+          turnStartTime: null,
           settings: {
             showAskHistory: true,
             askHistoryCount: 2,
-            showCardCounts: false
+            showCardCounts: false,
+            turnTimeLimit: 0
           }
         };
 
         await saveGame(initialData);
         setView('lobby');
+        loadGame();
       };
 
+      /* ========================= JOIN ROOM ========================= */
       const joinRoom = async () => {
         if (!playerName.trim()) {
           alert('Please enter your name');
@@ -233,7 +281,7 @@
           const { data, error } = await supabase
             .from('games')
             .select('game_data')
-            .eq('room_code', roomCode.toUpperCase())
+            .eq('room_code', roomCode)
             .single();
 
           if (error || !data) {
@@ -245,6 +293,12 @@
           
           if (gameData.players.some(p => p.id === myId)) {
             setView('lobby');
+            loadGame();
+            return;
+          }
+
+          if (gameData.players.some(p => p.name.toLowerCase() === playerName.toLowerCase())) {
+            alert('Name already taken!');
             return;
           }
 
@@ -272,11 +326,13 @@
           gameData.teams[selectedTeam].push(myId);
           await saveGame(gameData);
           setView('lobby');
+          loadGame();
         } catch (e) {
           alert('Error joining room');
         }
       };
 
+      /* ========================= ADD BOTS ========================= */
       const addBot = async (team) => {
         try {
           const { data } = await supabase
@@ -285,16 +341,15 @@
             .eq('room_code', roomCode)
             .single();
 
-          if (!data) return;
-
           const gameData = data.game_data;
           const bot = createBot(gameData.players);
           gameData.players.push(bot);
           gameData.teams[team].push(bot.id);
-          
           await saveGame(gameData);
+          await loadGame();
         } catch (e) {
           console.error('Error adding bot:', e);
+          alert('Error adding bot');
         }
       };
 
@@ -306,19 +361,19 @@
             .eq('room_code', roomCode)
             .single();
 
-          if (!data) return;
-
           const gameData = data.game_data;
           gameData.players = gameData.players.filter(p => p.id !== playerId);
           gameData.teams.team1 = gameData.teams.team1.filter(id => id !== playerId);
           gameData.teams.team2 = gameData.teams.team2.filter(id => id !== playerId);
-          
           await saveGame(gameData);
+          await loadGame();
         } catch (e) {
           console.error('Error removing player:', e);
+          alert('Error removing player');
         }
       };
 
+      /* ========================= START GAME ========================= */
       const startGame = async () => {
         try {
           const { data } = await supabase
@@ -334,6 +389,11 @@
             return;
           }
 
+          if (gameData.teams.team1.length === 0 || gameData.teams.team2.length === 0) {
+            alert('Both teams need at least one player!');
+            return;
+          }
+
           let deck = [];
           SETS.forEach(set => deck.push(...set.cards));
           shuffle(deck);
@@ -345,15 +405,91 @@
 
           gameData.phase = 'game';
           gameData.currentTurn = gameData.players[0].id;
+          gameData.turnStartTime = Date.now();
           gameData.gameLog.unshift('Game started!');
 
           await saveGame(gameData);
           setView('game');
+          loadGame();
         } catch (e) {
           alert('Error starting game');
         }
       };
 
+      /* ========================= SETTINGS ========================= */
+      const toggleAskHistory = async () => {
+        try {
+          const { data } = await supabase
+            .from('games')
+            .select('game_data')
+            .eq('room_code', roomCode)
+            .single();
+
+          const gameData = data.game_data;
+          gameData.settings.showAskHistory = !gameData.settings.showAskHistory;
+          await saveGame(gameData);
+          await loadGame();
+        } catch (e) {
+          console.error('Error toggling setting:', e);
+          alert('Error toggling setting');
+        }
+      };
+
+      const toggleCardCounts = async () => {
+        try {
+          const { data } = await supabase
+            .from('games')
+            .select('game_data')
+            .eq('room_code', roomCode)
+            .single();
+
+          const gameData = data.game_data;
+          gameData.settings.showCardCounts = !gameData.settings.showCardCounts;
+          await saveGame(gameData);
+          await loadGame();
+        } catch (e) {
+          console.error('Error toggling setting:', e);
+          alert('Error toggling setting');
+        }
+      };
+
+      const setAskHistoryCount = async (count) => {
+        try {
+          const { data } = await supabase
+            .from('games')
+            .select('game_data')
+            .eq('room_code', roomCode)
+            .single();
+
+          const gameData = data.game_data;
+          gameData.settings.askHistoryCount = count;
+          await saveGame(gameData);
+          await loadGame();
+        } catch (e) {
+          console.error('Error changing setting:', e);
+          alert('Error changing setting');
+        }
+      };
+
+      const setTurnTimeLimit = async (seconds) => {
+        try {
+          const { data } = await supabase
+            .from('games')
+            .select('game_data')
+            .eq('room_code', roomCode)
+            .single();
+
+          const gameData = data.game_data;
+          gameData.settings.turnTimeLimit = seconds;
+          await saveGame(gameData);
+          await loadGame();
+        } catch (e) {
+          console.error('Error changing setting:', e);
+          alert('Error changing setting');
+        }
+      };
+
+      /* ========================= ASK FOR CARD ========================= */
       const askForCard = async () => {
         if (!selectedOpponent || !selectedCard) {
           alert('Select opponent and card!');
@@ -370,6 +506,8 @@
           const gameData = data.game_data;
           const opponent = gameData.players.find(p => p.id === selectedOpponent);
           const me = gameData.players.find(p => p.id === myId);
+
+          if (!opponent || !me) return;
 
           const hasCard = opponent.hand.includes(selectedCard);
 
@@ -389,51 +527,169 @@
           await saveGame(gameData);
           setSelectedCard('');
           setSelectedOpponent('');
+          loadGame();
         } catch (e) {
           alert('Error making move');
         }
       };
 
-      const getPlayerPosition = (index, total) => {
-        if (total <= 4) {
-          return ['bottom', 'left', 'top', 'right'][index] || 'bottom';
+      /* ========================= BOT TURN ========================= */
+      const executeBotTurn = async (bot, data) => {
+        const decision = botDecide(bot, data);
+        
+        if (!decision) {
+          const myTeam = data.teams.team1.includes(bot.id) ? 'team1' : 'team2';
+          const oppTeam = myTeam === 'team1' ? 'team2' : 'team1';
+          data.currentTurn = data.teams[oppTeam][0];
+          data.turnStartTime = Date.now();
+          data.botThinking = false;
+          await saveGame(data);
+          loadGame();
+          return;
         }
-        const positions = ['bottom', 'left', 'top-left', 'top', 'top-right', 'right', 'bottom-right', 'bottom-left'];
-        return positions[index] || 'bottom';
+
+        const target = data.players.find(p => p.id === decision.targetId);
+        const hasCard = target.hand.includes(decision.card);
+
+        if (hasCard) {
+          target.hand = target.hand.filter(c => c !== decision.card);
+          bot.hand.push(decision.card);
+          data.gameLog.unshift(`${bot.name} asked ${target.name} - SUCCESS!`);
+          data.askHistory.unshift({ from: bot.name, to: target.name, card: decision.card, success: true });
+          data.lastAskedPlayer = target.id;
+          data.turnStartTime = Date.now();
+        } else {
+          data.currentTurn = target.id;
+          data.turnStartTime = Date.now();
+          data.lastAskedPlayer = '';
+          data.gameLog.unshift(`${bot.name} asked ${target.name} - FAILED`);
+          data.askHistory.unshift({ from: bot.name, to: target.name, card: decision.card, success: false });
+        }
+
+        data.askHistory = data.askHistory.slice(0, data.settings.askHistoryCount);
+        data.botThinking = false;
+        await saveGame(data);
+        loadGame();
       };
 
-      // HOME VIEW
+      /* ========================= CALL SET ========================= */
+      const submitCall = async () => {
+        const set = SETS[callSetIndex];
+        if (Object.values(callCards).length !== set.cards.length) {
+          alert('Must assign all cards in the set!');
+          return;
+        }
+
+        try {
+          const { data } = await supabase
+            .from('games')
+            .select('game_data')
+            .eq('room_code', roomCode)
+            .single();
+
+          const gameData = data.game_data;
+          let correct = true;
+          const actualLocations = {};
+
+          set.cards.forEach(card => {
+            const holder = gameData.players.find(p => p.hand.includes(card));
+            if (holder) actualLocations[card] = holder.id;
+          });
+
+          set.cards.forEach(card => {
+            if (callCards[card] !== actualLocations[card]) {
+              correct = false;
+            }
+          });
+
+          const me = gameData.players.find(p => p.id === myId);
+          const myTeam = gameData.teams.team1.includes(myId) ? 'team1' : 'team2';
+          const oppTeam = myTeam === 'team1' ? 'team2' : 'team1';
+
+          if (correct) {
+            gameData.scores[myTeam]++;
+            gameData.gameLog.unshift(`${me.name} correctly called ${set.name}! ${myTeam === 'team1' ? 'Team 1' : 'Team 2'} scores!`);
+            gameData.claimedSets.push(set.name);
+          } else {
+            gameData.scores[oppTeam]++;
+            gameData.gameLog.unshift(`${me.name} INCORRECTLY called ${set.name}! ${oppTeam === 'team1' ? 'Team 1' : 'Team 2'} gets the set!`);
+            gameData.claimedSets.push(set.name);
+          }
+
+          set.cards.forEach(card => {
+            gameData.players.forEach(p => {
+              p.hand = p.hand.filter(c => c !== card);
+            });
+          });
+
+          await saveGame(gameData);
+          setShowCallModal(false);
+          setCallCards({});
+          loadGame();
+
+          if (gameData.scores.team1 + gameData.scores.team2 === 9) {
+            setTimeout(() => {
+              alert(`Game Over! ${gameData.scores.team1 > gameData.scores.team2 ? 'Team 1' : 'Team 2'} wins ${gameData.scores.team1}-${gameData.scores.team2}!`);
+            }, 500);
+          }
+        } catch (e) {
+          alert('Error submitting call');
+        }
+      };
+
+      /* ========================= GET ASKABLE CARDS ========================= */
+      const getAskableCards = () => {
+        if (!gameData) return [];
+        const me = gameData.players.find(p => p.id === myId);
+        if (!me || !me.hand.length) return [];
+
+        let askable = [];
+        me.hand.forEach(card => {
+          const set = findSet(card);
+          if (set) {
+            set.cards.forEach(c => {
+              if (!me.hand.includes(c) && !askable.includes(c)) {
+                askable.push(c);
+              }
+            });
+          }
+        });
+        return askable;
+      };
+
+      /* ========================= RENDER VIEWS ========================= */
+
       if (view === 'home') {
         return (
-          <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 flex items-center justify-center p-4">
-            <div className="bg-slate-800 rounded-3xl shadow-2xl p-8 max-w-md w-full border border-slate-700">
-              <h1 className="text-5xl font-bold text-center mb-2 bg-gradient-to-r from-yellow-400 to-yellow-200 bg-clip-text text-transparent">
-                LITERATURE
-              </h1>
-              <p className="text-slate-400 text-center mb-8">The Classic Card Game</p>
+          <div className="min-h-screen bg-gradient-to-br from-green-700 via-green-800 to-green-900 flex items-center justify-center p-4">
+            <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-md w-full">
+              <div className="text-center mb-8">
+                <h1 className="text-5xl font-bold text-green-800 mb-2">Literature</h1>
+                <p className="text-gray-600">Card Game - 9 Sets</p>
+              </div>
 
               <input
                 type="text"
                 placeholder="Your Name"
                 value={playerName}
                 onChange={(e) => setPlayerName(e.target.value)}
-                className="w-full px-4 py-3 bg-slate-900 border-2 border-slate-700 rounded-lg mb-4 text-white focus:outline-none focus:border-yellow-500"
+                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg mb-4 focus:outline-none focus:border-green-600"
               />
 
               <button
                 onClick={createRoom}
                 disabled={!playerName.trim()}
-                className="w-full bg-gradient-to-r from-yellow-500 to-yellow-400 text-slate-900 py-3 rounded-lg font-bold hover:from-yellow-400 hover:to-yellow-300 disabled:opacity-50 mb-4"
+                className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 disabled:bg-gray-300 mb-4"
               >
                 Create New Game
               </button>
 
               <div className="relative my-6">
                 <div className="absolute inset-0 flex items-center">
-                  <div className="w-full border-t border-slate-700"></div>
+                  <div className="w-full border-t border-gray-300"></div>
                 </div>
                 <div className="relative flex justify-center text-sm">
-                  <span className="px-2 bg-slate-800 text-slate-400">OR</span>
+                  <span className="px-2 bg-white text-gray-500">or</span>
                 </div>
               </div>
 
@@ -442,13 +698,13 @@
                 placeholder="Room Code"
                 value={roomCode}
                 onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
-                className="w-full px-4 py-3 bg-slate-900 border-2 border-slate-700 rounded-lg mb-4 text-white focus:outline-none focus:border-yellow-500"
+                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg mb-4 focus:outline-none focus:border-green-600"
               />
 
               <button
                 onClick={joinRoom}
                 disabled={!playerName.trim() || !roomCode.trim()}
-                className="w-full bg-slate-700 text-white py-3 rounded-lg font-bold hover:bg-slate-600 disabled:opacity-50"
+                className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 disabled:bg-gray-300"
               >
                 Join Game
               </button>
@@ -457,43 +713,42 @@
         );
       }
 
-      // TEAM SELECT VIEW
       if (view === 'teamSelect') {
         return (
-          <div className="min-h-screen bg-gradient-to-br from-slate-900 to-blue-900 flex items-center justify-center p-4">
-            <div className="bg-slate-800 rounded-2xl shadow-2xl p-8 max-w-md w-full border border-slate-700">
-              <h2 className="text-2xl font-bold text-center mb-6 text-white">Choose Your Team</h2>
+          <div className="min-h-screen bg-gradient-to-br from-green-700 to-green-900 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full">
+              <h2 className="text-2xl font-bold text-center mb-6">Choose Your Team</h2>
 
               <div className="space-y-4">
                 <button
                   onClick={() => setSelectedTeam('team1')}
                   className={`w-full p-6 rounded-lg border-4 transition-all ${
                     selectedTeam === 'team1'
-                      ? 'border-red-500 bg-red-900/30'
-                      : 'border-slate-700 bg-slate-900 hover:border-red-400'
+                      ? 'border-blue-600 bg-blue-50'
+                      : 'border-gray-300 bg-white hover:border-blue-400'
                   }`}
                 >
-                  <div className="text-2xl font-bold text-red-400 mb-2">Team 1</div>
-                  <div className="text-sm text-slate-400">Red Team</div>
+                  <div className="text-2xl font-bold text-blue-600 mb-2">Team 1</div>
+                  <div className="text-sm text-gray-600">Blue Team</div>
                 </button>
 
                 <button
                   onClick={() => setSelectedTeam('team2')}
                   className={`w-full p-6 rounded-lg border-4 transition-all ${
                     selectedTeam === 'team2'
-                      ? 'border-blue-500 bg-blue-900/30'
-                      : 'border-slate-700 bg-slate-900 hover:border-blue-400'
+                      ? 'border-red-600 bg-red-50'
+                      : 'border-gray-300 bg-white hover:border-red-400'
                   }`}
                 >
-                  <div className="text-2xl font-bold text-blue-400 mb-2">Team 2</div>
-                  <div className="text-sm text-slate-400">Blue Team</div>
+                  <div className="text-2xl font-bold text-red-600 mb-2">Team 2</div>
+                  <div className="text-sm text-gray-600">Red Team</div>
                 </button>
               </div>
 
               <button
                 onClick={gameData ? confirmTeamJoin : confirmTeamCreate}
                 disabled={!selectedTeam}
-                className="w-full mt-6 bg-gradient-to-r from-yellow-500 to-yellow-400 text-slate-900 py-3 rounded-lg font-bold hover:from-yellow-400 hover:to-yellow-300 disabled:opacity-50"
+                className="w-full mt-6 bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 disabled:bg-gray-300"
               >
                 Confirm Team
               </button>
@@ -504,7 +759,7 @@
                   setSelectedTeam('');
                   setRoomCode('');
                 }}
-                className="w-full mt-2 bg-slate-700 text-white py-2 rounded-lg font-bold hover:bg-slate-600"
+                className="w-full mt-2 bg-gray-300 text-gray-700 py-2 rounded-lg font-semibold hover:bg-gray-400"
               >
                 Cancel
               </button>
@@ -513,22 +768,74 @@
         );
       }
 
-      // LOBBY VIEW
       if (view === 'lobby' && gameData) {
         const isHost = gameData.hostId === myId;
+        const myTeamName = gameData.teams.team1.includes(myId) ? 'Team 1' : 'Team 2';
 
         return (
-          <div className="min-h-screen bg-gradient-to-br from-slate-900 to-blue-900 p-4">
+          <div className="min-h-screen bg-gradient-to-br from-green-700 to-green-900 p-4">
             <div className="max-w-4xl mx-auto">
-              <div className="bg-slate-800 rounded-3xl shadow-2xl p-8 border border-slate-700">
+              <div className="bg-white rounded-3xl shadow-2xl p-8">
                 <div className="text-center mb-6">
-                  <h2 className="text-3xl font-bold mb-2 text-white">Room Code</h2>
-                  <div className="text-5xl font-mono font-bold text-yellow-400 tracking-widest">{roomCode}</div>
+                  <h2 className="text-3xl font-bold mb-2">Room Code</h2>
+                  <div className="text-5xl font-mono font-bold text-green-600">{roomCode}</div>
+                  <div className="text-lg text-gray-600 mt-2">You're on {myTeamName}</div>
+                </div>
+
+                <div className="mb-6">
+                  <div className="space-y-3">
+                    <label className="flex items-center justify-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={gameData.settings.showAskHistory}
+                        onChange={toggleAskHistory}
+                        className="w-5 h-5"
+                      />
+                      <span className="font-semibold">Show Ask History</span>
+                    </label>
+
+                    {gameData.settings.showAskHistory && (
+                      <div className="flex items-center justify-center gap-2">
+                        <span className="text-sm">Number of asks to show:</span>
+                        <select
+                          value={gameData.settings.askHistoryCount}
+                          onChange={(e) => setAskHistoryCount(Number(e.target.value))}
+                          className="px-3 py-1 border-2 border-gray-300 rounded text-gray-800"
+                        >
+                          <option value={2}>2</option>
+                          <option value={3}>3</option>
+                        </select>
+                      </div>
+                    )}
+
+                    <label className="flex items-center justify-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={gameData.settings.showCardCounts}
+                        onChange={toggleCardCounts}
+                        className="w-5 h-5"
+                      />
+                      <span className="font-semibold">Show Card Counts</span>
+                    </label>
+
+                    <div className="flex items-center justify-center gap-2">
+                      <span className="text-sm">Turn Time Limit:</span>
+                      <select
+                        value={gameData.settings.turnTimeLimit}
+                        onChange={(e) => setTurnTimeLimit(Number(e.target.value))}
+                        className="px-3 py-1 border-2 border-gray-300 rounded text-gray-800"
+                      >
+                        <option value={0}>No Limit</option>
+                        <option value={60}>1 Minute</option>
+                        <option value={120}>2 Minutes</option>
+                      </select>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="grid md:grid-cols-2 gap-6 mb-6">
                   <div>
-                    <h3 className="font-bold text-xl mb-3 text-red-400 text-center">
+                    <h3 className="font-bold text-xl mb-3 text-blue-600 text-center">
                       Team 1 ({gameData.teams.team1.length})
                     </h3>
                     {gameData.players
@@ -536,15 +843,15 @@
                       .map(p => (
                         <div
                           key={p.id}
-                          className="bg-red-900/20 border border-red-800 px-4 py-3 rounded-lg mb-2 flex items-center justify-between"
+                          className="bg-blue-50 px-4 py-3 rounded-lg mb-2 flex items-center justify-between"
                         >
-                          <span className="text-white">
+                          <span>
                             {p.name} {p.id === myId && '(You)'}
                           </span>
                           {isHost && p.isBot && (
                             <button
                               onClick={() => removePlayer(p.id)}
-                              className="text-red-400 hover:text-red-300 text-sm"
+                              className="text-red-600 hover:text-red-800 text-sm"
                             >
                               Remove
                             </button>
@@ -554,7 +861,7 @@
                     {isHost && (
                       <button
                         onClick={() => addBot('team1')}
-                        className="w-full bg-red-700 text-white py-2 rounded-lg mt-2 hover:bg-red-600"
+                        className="w-full bg-blue-600 text-white py-2 rounded-lg mt-2 hover:bg-blue-700"
                       >
                         + Add Bot
                       </button>
@@ -562,7 +869,7 @@
                   </div>
 
                   <div>
-                    <h3 className="font-bold text-xl mb-3 text-blue-400 text-center">
+                    <h3 className="font-bold text-xl mb-3 text-red-600 text-center">
                       Team 2 ({gameData.teams.team2.length})
                     </h3>
                     {gameData.players
@@ -570,15 +877,15 @@
                       .map(p => (
                         <div
                           key={p.id}
-                          className="bg-blue-900/20 border border-blue-800 px-4 py-3 rounded-lg mb-2 flex items-center justify-between"
+                          className="bg-red-50 px-4 py-3 rounded-lg mb-2 flex items-center justify-between"
                         >
-                          <span className="text-white">
+                          <span>
                             {p.name} {p.id === myId && '(You)'}
                           </span>
                           {isHost && p.isBot && (
                             <button
                               onClick={() => removePlayer(p.id)}
-                              className="text-blue-400 hover:text-blue-300 text-sm"
+                              className="text-red-600 hover:text-red-800 text-sm"
                             >
                               Remove
                             </button>
@@ -588,7 +895,7 @@
                     {isHost && (
                       <button
                         onClick={() => addBot('team2')}
-                        className="w-full bg-blue-700 text-white py-2 rounded-lg mt-2 hover:bg-blue-600"
+                        className="w-full bg-red-600 text-white py-2 rounded-lg mt-2 hover:bg-red-700"
                       >
                         + Add Bot
                       </button>
@@ -599,8 +906,7 @@
                 {isHost && (
                   <button
                     onClick={startGame}
-                    disabled={gameData.players.length < 4}
-                    className="w-full bg-gradient-to-r from-yellow-500 to-yellow-400 text-slate-900 py-4 rounded-lg font-bold text-xl hover:from-yellow-400 hover:to-yellow-300 disabled:opacity-50"
+                    className="w-full bg-green-600 text-white py-4 rounded-lg font-bold text-xl hover:bg-green-700"
                   >
                     {gameData.players.length < 4
                       ? `Waiting for ${4 - gameData.players.length} more players...`
@@ -613,125 +919,295 @@
         );
       }
 
-      // GAME VIEW - POKER TABLE
       if (view === 'game' && gameData) {
         const me = gameData.players.find(p => p.id === myId);
         const myTeam = gameData.teams.team1.includes(myId) ? 'team1' : 'team2';
         const isMyTurn = gameData.currentTurn === myId;
         const currentPlayer = gameData.players.find(p => p.id === gameData.currentTurn);
-        const otherPlayers = gameData.players.filter(p => p.id !== myId);
+
+        const [timeRemaining, setTimeRemaining] = useState(null);
+        
+        useEffect(() => {
+          if (!gameData.settings.turnTimeLimit || !gameData.turnStartTime) return;
+          
+          const interval = setInterval(async () => {
+            const elapsed = Math.floor((Date.now() - gameData.turnStartTime) / 1000);
+            const remaining = gameData.settings.turnTimeLimit - elapsed;
+            setTimeRemaining(remaining);
+
+            if (remaining <= 0 && isMyTurn) {
+              try {
+                const { data } = await supabase
+                  .from('games')
+                  .select('game_data')
+                  .eq('room_code', roomCode)
+                  .single();
+
+                const updatedData = data.game_data;
+                const oppTeam = myTeam === 'team1' ? 'team2' : 'team1';
+                updatedData.currentTurn = updatedData.teams[oppTeam][0];
+                updatedData.turnStartTime = Date.now();
+                updatedData.gameLog.unshift(`${me.name}'s turn timed out!`);
+                await saveGame(updatedData);
+                loadGame();
+              } catch (e) {
+                console.error('Error timing out turn:', e);
+              }
+            }
+          }, 1000);
+
+          return () => clearInterval(interval);
+        }, [gameData.turnStartTime, isMyTurn]);
 
         return (
-          <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-800 p-4 flex items-center justify-center">
-            <div className="poker-table w-full max-w-6xl aspect-[16/10]">
-              
-              {/* Center Info */}
-              <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-center">
-                <div className="text-4xl font-bold text-yellow-400 tracking-widest mb-2">{roomCode}</div>
-                <div className="text-white bg-black/50 px-4 py-2 rounded-full">
-                  {isMyTurn ? "YOUR TURN" : `${currentPlayer?.name}'s Turn`}
-                </div>
-                <div className="text-yellow-300 mt-2">
-                  Team 1: {gameData.scores.team1} | Team 2: {gameData.scores.team2}
-                </div>
-              </div>
-
-              {/* Other Players */}
-              {otherPlayers.map((player, idx) => {
-                const position = getPlayerPosition(idx + 1, gameData.players.length);
-                const playerTeam = gameData.teams.team1.includes(player.id) ? 'team1' : 'team2';
-                const isActive = gameData.currentTurn === player.id;
-
-                return (
-                  <div key={player.id} className={`seat pos-${position}`}>
-                    <div className={`${isActive ? 'ring-4 ring-yellow-400' : ''} bg-slate-800 border-2 ${playerTeam === 'team1' ? 'border-red-500' : 'border-blue-500'} rounded-xl p-3 text-center min-w-[140px]`}>
-                      <div className="font-bold text-white">{player.name}</div>
-                      <div className={`text-xs ${playerTeam === 'team1' ? 'text-red-400' : 'text-blue-400'}`}>
-                        {playerTeam === 'team1' ? 'Team 1' : 'Team 2'}
+          <div className="min-h-screen bg-gradient-to-br from-green-700 to-green-900 p-4">
+            <div className="max-w-7xl mx-auto">
+              <div className="bg-white rounded-2xl shadow-2xl p-6 mb-4">
+                <div className="flex justify-between items-center mb-4">
+                  <h1 className="text-2xl font-bold">Room {roomCode}</h1>
+                  <div className="text-right">
+                    <div className="text-sm text-gray-600">Current Turn: {currentPlayer?.name}</div>
+                    {gameData.settings.turnTimeLimit > 0 && timeRemaining !== null && (
+                      <div className={`text-lg font-bold ${timeRemaining <= 10 ? 'text-red-600' : 'text-green-600'}`}>
+                        {Math.max(0, timeRemaining)}s
                       </div>
-                      <div className="text-xs text-slate-400 mt-1">{player.hand?.length || 0} cards</div>
-                      <div className="flex gap-1 justify-center mt-2">
-                        {Array(Math.min(player.hand?.length || 0, 5)).fill(0).map((_, i) => (
-                          <div key={i} className="card-mini"></div>
-                        ))}
-                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid md:grid-cols-3 gap-4 mb-4">
+                  <div className="bg-blue-50 p-4 rounded-lg">
+                    <h3 className="font-bold text-blue-600 mb-2">Team 1: {gameData.scores.team1}</h3>
+                    {gameData.players
+                      .filter(p => gameData.teams.team1.includes(p.id))
+                      .map(p => (
+                        <div key={p.id} className="text-sm mb-1">
+                          {gameData.currentTurn === p.id && '(Current Asker) '}
+                          {gameData.lastAskedPlayer === p.id && '(Interrogated) '}
+                          {p.name} {p.id === myId && '(You)'}
+                          {gameData.settings.showCardCounts && ` - ${p.hand.length} cards`}
+                        </div>
+                      ))}
+                  </div>
+
+                  <div className="bg-red-50 p-4 rounded-lg">
+                    <h3 className="font-bold text-red-600 mb-2">Team 2: {gameData.scores.team2}</h3>
+                    {gameData.players
+                      .filter(p => gameData.teams.team2.includes(p.id))
+                      .map(p => (
+                        <div key={p.id} className="text-sm mb-1">
+                          {gameData.currentTurn === p.id && '(Current Asker) '}
+                          {gameData.lastAskedPlayer === p.id && '(Interrogated) '}
+                          {p.name} {p.id === myId && '(You)'}
+                          {gameData.settings.showCardCounts && ` - ${p.hand.length} cards`}
+                        </div>
+                      ))}
+                  </div>
+
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <h3 className="font-bold mb-2">Game Log</h3>
+                    <div className="text-sm max-h-24 overflow-y-auto">
+                      {gameData.gameLog.slice(0, 5).map((log, i) => (
+                        <div key={i} className="mb-1">{log}</div>
+                      ))}
                     </div>
                   </div>
-                );
-              })}
+                </div>
 
-              {/* Your Hand Panel */}
-              <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-slate-800 border-2 border-slate-600 rounded-2xl p-4 max-w-[90%] shadow-2xl">
-                <div className="text-sm text-slate-400 mb-2 text-center">YOUR HAND ({me?.hand?.length || 0} cards)</div>
-                
-                <div className="flex gap-2 flex-wrap justify-center mb-3">
-                  {me?.hand?.sort().map((card, i) => {
-                    const isRed = card.includes('♥') || card.includes('♦');
-                    return (
+                {gameData.settings.showAskHistory && gameData.askHistory.length > 0 && (
+                  <div className="bg-yellow-50 border-2 border-yellow-400 p-4 rounded-lg mb-4">
+                    <h3 className="font-bold mb-2">Recent Asks (Last {gameData.settings.askHistoryCount})</h3>
+                    {gameData.askHistory.map((ask, i) => (
+                      <div key={i} className="text-sm mb-1">
+                        <span className="font-semibold">{ask.from}</span> asked{' '}
+                        <span className="font-semibold">{ask.to}</span> for{' '}
+                        <span className="font-bold text-blue-600">{ask.card}</span>
+                        {ask.success ? (
+                          <span className="text-green-600 font-bold"> ✓ SUCCESS</span>
+                        ) : (
+                          <span className="text-red-600 font-bold"> ✗ FAILED</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="grid md:grid-cols-2 gap-4">
+                <div className="bg-white rounded-2xl shadow-2xl p-6">
+                  <h2 className="text-xl font-bold mb-4">Your Hand ({me?.hand.length || 0} cards)</h2>
+                  <div className="flex flex-wrap gap-2 mb-6">
+                    {me?.hand.sort().map((card, i) => (
                       <div
                         key={i}
-                        onClick={() => {
-                          if (!isMyTurn) {
-                            alert('Not your turn!');
-                            return;
-                          }
-                          setSelectedCard(selectedCard === card ? '' : card);
-                        }}
-                        className={`
-                          w-16 h-24 bg-white rounded-lg flex items-center justify-center text-2xl font-bold cursor-pointer
-                          transition-all hover:scale-105
-                          ${isRed ? 'text-red-600' : 'text-black'}
-                          ${selectedCard === card ? 'ring-4 ring-yellow-400 scale-110' : ''}
-                        `}
+                        className="bg-gradient-to-br from-gray-50 to-gray-100 border-2 border-gray-300 rounded-lg px-4 py-3 font-bold text-lg shadow-sm"
                       >
                         {card}
                       </div>
-                    );
-                  })}
+                    ))}
+                  </div>
+
+                  {isMyTurn && (
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block font-semibold mb-2">Select Opponent:</label>
+                        <select
+                          value={selectedOpponent}
+                          onChange={(e) => setSelectedOpponent(e.target.value)}
+                          className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg"
+                        >
+                          <option value="">Choose opponent...</option>
+                          {gameData.players
+                            .filter(
+                              p =>
+                                p.id !== myId &&
+                                gameData.teams[myTeam === 'team1' ? 'team2' : 'team1'].includes(p.id)
+                            )
+                            .map(p => (
+                              <option key={p.id} value={p.id}>
+                                {p.name}
+                              </option>
+                            ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block font-semibold mb-2">Ask for Card:</label>
+                        <select
+                          value={selectedCard}
+                          onChange={(e) => setSelectedCard(e.target.value)}
+                          className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg"
+                        >
+                          <option value="">Choose card...</option>
+                          {getAskableCards()
+                            .sort()
+                            .map(card => (
+                              <option key={card} value={card}>
+                                {card}
+                              </option>
+                            ))}
+                        </select>
+                      </div>
+
+                      <button
+                        onClick={askForCard}
+                        disabled={!selectedOpponent || !selectedCard}
+                        className="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 disabled:bg-gray-300"
+                      >
+                        Ask for Card
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          setShowCallModal(true);
+                          setCallCards({});
+                        }}
+                        className="w-full bg-yellow-600 text-white py-3 rounded-lg font-semibold hover:bg-yellow-700"
+                      >
+                        Call a Set
+                      </button>
+                    </div>
+                  )}
+
+                  {!isMyTurn && (
+                    <div className="bg-gray-100 p-4 rounded-lg text-center">
+                      <p className="font-semibold">Waiting for {currentPlayer?.name}...</p>
+                    </div>
+                  )}
                 </div>
 
-                {isMyTurn && (
-                  <div className="flex gap-2 flex-wrap justify-center">
-                    <select
-                      value={selectedOpponent}
-                      onChange={(e) => setSelectedOpponent(e.target.value)}
-                      className="px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white text-sm"
-                    >
-                      <option value="">Select Opponent</option>
-                      {gameData.players
-                        .filter(p => 
-                          p.id !== myId && 
-                          gameData.teams[myTeam === 'team1' ? 'team2' : 'team1'].includes(p.id)
-                        )
-                        .map(p => (
-                          <option key={p.id} value={p.id}>{p.name}</option>
-                        ))}
-                    </select>
-                    
-                    <button
-                      onClick={askForCard}
-                      disabled={!selectedCard || !selectedOpponent}
-                      className="px-4 py-2 bg-gradient-to-r from-yellow-500 to-yellow-400 text-slate-900 rounded-lg font-bold text-sm hover:from-yellow-400 hover:to-yellow-300 disabled:opacity-50"
-                    >
-                      Ask for Card
-                    </button>
-                    
-                    <button
-                      onClick={() => alert('Call set feature coming soon')}
-                      className="px-4 py-2 bg-slate-700 text-white rounded-lg font-bold text-sm hover:bg-slate-600"
-                    >
-                      Call Set
-                    </button>
+                <div className="bg-white rounded-2xl shadow-2xl p-6">
+                  <h2 className="text-xl font-bold mb-4">Sets Status</h2>
+                  <div className="space-y-3">
+                    {SETS.map((set, i) => (
+                      <div
+                        key={i}
+                        className={`border-2 rounded-lg p-3 ${
+                          gameData.claimedSets.includes(set.name)
+                            ? 'border-green-500 bg-green-50 opacity-50'
+                            : 'border-gray-200'
+                        }`}
+                      >
+                        <div className="font-semibold mb-1">
+                          {set.name}
+                          {gameData.claimedSets.includes(set.name) && (
+                            <span className="ml-2 text-green-600">✓ Claimed</span>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap gap-1 text-sm">
+                          {set.cards.map(card => (
+                            <span key={card} className="bg-gray-100 px-2 py-1 rounded">
+                              {card}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                )}
-
-                {!isMyTurn && (
-                  <div className="text-center text-slate-400 text-sm">
-                    Waiting for {currentPlayer?.name}...
-                  </div>
-                )}
+                </div>
               </div>
             </div>
+
+            {showCallModal && (
+              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                  <h2 className="text-2xl font-bold mb-4">Call a Set</h2>
+
+                  <div className="mb-4">
+                    <label className="block font-semibold mb-2">Select Set:</label>
+                    <select
+                      value={callSetIndex}
+                      onChange={(e) => {
+                        setCallSetIndex(Number(e.target.value));
+                        setCallCards({});
+                      }}
+                      className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg"
+                    >
+                      {SETS.map((set, i) => (
+                        <option key={i} value={i}>
+                          {set.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-3 mb-4">
+                    {SETS[callSetIndex].cards.map(card => (
+                      <div key={card} className="flex items-center gap-3">
+                        <span className="font-bold w-16">{card}</span>
+                        <select
+                          value={callCards[card] || ''}
+                          onChange={(e) => setCallCards({ ...callCards, [card]: e.target.value })}
+                          className="flex-1 px-4 py-2 border-2 border-gray-300 rounded-lg"
+                        >
+                          <option value="">Who has this card?</option>
+                          {gameData.players.map(p => (
+                            <option key={p.id} value={p.id}>
+                              {p.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="flex gap-3">
+                    <button
+                      onClick={submitCall}
+                      className="flex-1 bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700"
+                    >
+                      Submit Call
+                    </button>
+                    <button
+                      onClick={() => setShowCallModal(false)}
+                      className="flex-1 bg-gray-300 text-gray-700 py-3 rounded-lg font-semibold hover:bg-gray-400"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         );
       }
