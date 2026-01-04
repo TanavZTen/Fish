@@ -346,6 +346,9 @@
     const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZuZ2RpdWtqcmZtendsYmVmbWpmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc0Njk5MDUsImV4cCI6MjA4MzA0NTkwNX0.XBr7aEzSPj-Iw0HYf27T8yXo1nbZ01MhBVa-VIdNZG4';
     const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
     
+    // Expose for debugging
+    window.sbClient = sb;
+    
     const SETS = [
       { name: 'Spades 2-7', cards: ['2♠','3♠','4♠','5♠','6♠','7♠'] },
       { name: 'Spades 9-A', cards: ['9♠','10♠','J♠','Q♠','K♠','A♠'] },
