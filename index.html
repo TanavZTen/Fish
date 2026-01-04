@@ -404,7 +404,7 @@
           game_data: data,
           updated_at: new Date().toISOString()
         });
-        state.gameData = data;
+        state.gameData = JSON.parse(JSON.stringify(data)); // Deep clone
         render();
       } catch (e) {
         console.error('Save error:', e);
@@ -540,13 +540,21 @@
           .eq('room_code', state.roomCode)
           .single();
         
-        const gameData = data.game_data;
+        if (!data) {
+          console.error('No game data found');
+          return;
+        }
+        
+        const gameData = JSON.parse(JSON.stringify(data.game_data)); // Deep clone
         const bot = createBot(gameData.players);
         gameData.players.push(bot);
         gameData.teams[team].push(bot.id);
+        
+        console.log('Adding bot:', bot.name, 'to', team);
         await saveGame(gameData);
       } catch (e) {
         console.error('Bot error:', e);
+        alert('Error adding bot: ' + e.message);
       }
     }
     
@@ -649,11 +657,19 @@
           .eq('room_code', state.roomCode)
           .single();
         
-        const gameData = data.game_data;
+        if (!data) {
+          console.error('No game data found');
+          return;
+        }
+        
+        const gameData = JSON.parse(JSON.stringify(data.game_data)); // Deep clone
         gameData.settings[key] = !gameData.settings[key];
+        
+        console.log('Toggling setting:', key, 'to', gameData.settings[key]);
         await saveGame(gameData);
       } catch (e) {
         console.error('Setting error:', e);
+        alert('Error toggling setting: ' + e.message);
       }
     }
     
@@ -665,11 +681,19 @@
           .eq('room_code', state.roomCode)
           .single();
         
-        const gameData = data.game_data;
+        if (!data) {
+          console.error('No game data found');
+          return;
+        }
+        
+        const gameData = JSON.parse(JSON.stringify(data.game_data)); // Deep clone
         gameData.settings[key] = value;
+        
+        console.log('Changing setting:', key, 'to', value);
         await saveGame(gameData);
       } catch (e) {
         console.error('Setting error:', e);
+        alert('Error changing setting: ' + e.message);
       }
     }
     
