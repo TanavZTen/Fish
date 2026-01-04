@@ -399,12 +399,32 @@
     async function saveGame(data) {
       if (!state.roomCode) return;
       try {
-        await supabase.from('games').upsert({
-          room_code: state.roomCode,
-          game_data: data,
-          updated_at: new Date().toISOString()
-        });
-        state.gameData = JSON.parse(JSON.stringify(data)); // Deep clone
+        // Try to update first
+        const { error: updateError } = await supabase
+          .from('games')
+          .update({
+            game_data: data,
+            updated_at: new Date().toISOString()
+          })
+          .eq('room_code', state.roomCode);
+        
+        // If update failed (row doesn't exist), insert it
+        if (updateError) {
+          const { error: insertError } = await supabase
+            .from('games')
+            .insert({
+              room_code: state.roomCode,
+              game_data: data,
+              updated_at: new Date().toISOString()
+            });
+          
+          if (insertError) {
+            console.error('Insert error:', insertError);
+            return;
+          }
+        }
+        
+        state.gameData = JSON.parse(JSON.stringify(data));
         render();
       } catch (e) {
         console.error('Save error:', e);
