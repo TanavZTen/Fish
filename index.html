@@ -100,24 +100,35 @@
     
     async function joinRoom() {
       if (!state.name || !state.code) return alert('Enter name and code');
+      state.code = state.code.toUpperCase().trim();
+      
       try {
-        const { data, error } = await DB.from('games').select('*').eq('room_code', state.code.toUpperCase()).single();
+        console.log('Trying to join room:', state.code);
+        const { data, error } = await DB.from('games').select('*').eq('room_code', state.code).maybeSingle();
+        
+        console.log('Join query result:', { data, error });
+        
         if (error || !data) {
           console.error('Join error:', error);
-          return alert('Room not found');
+          return alert('Room not found - check the code');
         }
-        state.code = state.code.toUpperCase();
+        
         state.game = data.game_data;
+        
+        // Check if player already in game
         if (data.game_data.players.some(p => p.id === myId)) {
+          console.log('Player already in game, going to lobby');
           state.view = 'lobby';
         } else {
+          console.log('New player, selecting team');
           state.view = 'team';
         }
+        
         render();
         setInterval(load, 2000);
       } catch (e) {
         console.error('Join exception:', e);
-        alert('Room not found');
+        alert('Error joining room: ' + e.message);
       }
     }
     
@@ -133,7 +144,8 @@
           phase: 'lobby',
           scores: { team1: 0, team2: 0 },
           currentTurn: '',
-          log: []
+          log: [],
+          settings: { showHistory: true, showCounts: false }
         };
         game.teams[team].push(myId);
         await save(game);
@@ -149,6 +161,82 @@
       
       state.view = 'lobby';
       setInterval(load, 2000);
+    }
+    
+    async function toggleSetting(key) {
+      const game = state.game;
+      if (!game.settings) game.settings = {};
+      game.settings[key] = !game.settings[key];
+      console.log('Toggle setting:', key, 'to', game.settings[key]);
+      await save(game);
+    }
+    
+    async function leaveRoom() {
+      if (!confirm('Leave this room?')) return;
+      
+      try {
+        const { data } = await DB.from('games').select('*').eq('room_code', state.code).maybeSingle();
+        if (!data) {
+          state.view = 'home';
+          state.code = '';
+          state.game = null;
+          render();
+          return;
+        }
+        
+        const game = data.game_data;
+        
+        // If in game phase, replace with bot
+        if (game.phase === 'game') {
+          const me = game.players.find(p => p.id === myId);
+          if (me) {
+            let n = 1;
+            while (game.players.some(p => p.name === `Bot ${n}`)) n++;
+            const bot = { id: `bot-${Date.now()}`, name: `${me.name} (Bot)`, hand: me.hand, isBot: true };
+            
+            const playerIndex = game.players.findIndex(p => p.id === myId);
+            game.players[playerIndex] = bot;
+            
+            if (game.teams.team1.includes(myId)) {
+              game.teams.team1 = game.teams.team1.map(id => id === myId ? bot.id : id);
+            } else {
+              game.teams.team2 = game.teams.team2.map(id => id === myId ? bot.id : id);
+            }
+            
+            if (game.currentTurn === myId) {
+              game.currentTurn = bot.id;
+            }
+            
+            game.log.unshift(`${me.name} left and was replaced by a bot`);
+            await save(game);
+          }
+        } else {
+          // In lobby, just remove player
+          game.players = game.players.filter(p => p.id !== myId);
+          game.teams.team1 = game.teams.team1.filter(id => id !== myId);
+          game.teams.team2 = game.teams.team2.filter(id => id !== myId);
+          
+          // If no players left, delete room
+          if (game.players.length === 0) {
+            await DB.from('games').delete().eq('room_code', state.code);
+          } else {
+            // Transfer host if needed
+            if (game.hostId === myId) {
+              game.hostId = game.players[0].id;
+            }
+            await save(game);
+          }
+        }
+        
+        state.view = 'home';
+        state.code = '';
+        state.game = null;
+        render();
+      } catch (e) {
+        console.error('Leave error:', e);
+        state.view = 'home';
+        render();
+      }
     }
     
     async function addBot(team) {
@@ -223,20 +311,26 @@
       
       if (state.view === 'lobby' && state.game) {
         const isHost = state.game.hostId === myId;
+        const myTeamKey = state.game.teams.team1.includes(myId) ? 'team1' : 'team2';
+        const myTeamName = myTeamKey === 'team1' ? 'Team 1 (Red)' : 'Team 2 (Blue)';
+        
         app.innerHTML = `
           <div class="container">
             <div class="card">
               <h1 style="font-size:32px">${state.code}</h1>
-              <p style="text-align:center;color:#888;margin-bottom:20px">Share this code</p>
+              <p style="text-align:center;color:#888;margin-bottom:5px">Share this code</p>
+              <p style="text-align:center;color:${myTeamKey === 'team1' ? '#ef4444' : '#3b82f6'};font-weight:700;margin-bottom:20px">
+                You're on ${myTeamName}
+              </p>
               
               ${isHost ? `
                 <div style="background:#1a1f2e;padding:15px;border-radius:8px;margin-bottom:20px">
-                  <h3 style="margin-bottom:10px">Game Settings</h3>
-                  <label style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+                  <h3 style="margin-bottom:10px;font-size:16px">Game Settings (Host Only)</h3>
+                  <label style="display:flex;align-items:center;gap:10px;margin-bottom:8px;cursor:pointer">
                     <input type="checkbox" id="show-history" ${state.game.settings?.showHistory ? 'checked' : ''}>
                     <span>Show Ask History</span>
                   </label>
-                  <label style="display:flex;align-items:center;gap:10px">
+                  <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
                     <input type="checkbox" id="show-counts" ${state.game.settings?.showCounts ? 'checked' : ''}>
                     <span>Show Card Counts</span>
                   </label>
@@ -268,10 +362,14 @@
               </div>
               
               ${isHost ? `
-                <button onclick="window.startGame()" ${state.game.players.length < 4 ? 'disabled' : ''}>
-                  ${state.game.players.length < 4 ? `Need ${4 - state.game.players.length} more` : 'Start Game'}
+                <button onclick="window.startGame()" ${state.game.players.length < 4 ? 'disabled' : ''} style="margin-top:15px">
+                  ${state.game.players.length < 4 ? `Need ${4 - state.game.players.length} more players` : 'Start Game'}
                 </button>
-              ` : '<p style="text-align:center;color:#888;margin-top:20px">Waiting for host...</p>'}
+              ` : '<p style="text-align:center;color:#888;margin-top:20px">Waiting for host to start...</p>'}
+              
+              <button onclick="window.leaveRoom()" class="btn-sm" style="margin-top:10px;background:#ef4444;width:auto;padding:8px 16px">
+                Leave Room
+              </button>
             </div>
           </div>
         `;
