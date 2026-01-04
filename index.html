@@ -213,8 +213,8 @@
           <div class="container">
             <div class="card">
               <h2 style="text-align:center;margin-bottom:20px">Choose Team</h2>
-              <button onclick="selectTeam('team1')" style="background:#ef4444;color:#fff">Team 1</button>
-              <button onclick="selectTeam('team2')" style="background:#3b82f6;color:#fff">Team 2</button>
+              <button onclick="window.selectTeam('team1')" style="background:#ef4444;color:#fff;margin-bottom:10px">Team 1 (Red)</button>
+              <button onclick="window.selectTeam('team2')" style="background:#3b82f6;color:#fff">Team 2 (Blue)</button>
             </div>
           </div>
         `;
@@ -229,16 +229,30 @@
               <h1 style="font-size:32px">${state.code}</h1>
               <p style="text-align:center;color:#888;margin-bottom:20px">Share this code</p>
               
+              ${isHost ? `
+                <div style="background:#1a1f2e;padding:15px;border-radius:8px;margin-bottom:20px">
+                  <h3 style="margin-bottom:10px">Game Settings</h3>
+                  <label style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+                    <input type="checkbox" id="show-history" ${state.game.settings?.showHistory ? 'checked' : ''}>
+                    <span>Show Ask History</span>
+                  </label>
+                  <label style="display:flex;align-items:center;gap:10px">
+                    <input type="checkbox" id="show-counts" ${state.game.settings?.showCounts ? 'checked' : ''}>
+                    <span>Show Card Counts</span>
+                  </label>
+                </div>
+              ` : ''}
+              
               <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
                 <div class="team">
                   <h3 class="t1">Team 1 (${state.game.teams.team1.length})</h3>
                   ${state.game.players.filter(p => state.game.teams.team1.includes(p.id)).map(p => `
                     <div class="player">
                       <span>${p.name} ${p.id === myId ? '(You)' : ''}</span>
-                      ${isHost && p.isBot ? `<button class="btn-sm" onclick="removeBot('${p.id}')">Remove</button>` : ''}
+                      ${isHost && p.isBot ? `<button class="btn-sm" onclick="window.removeBot('${p.id}')">Remove</button>` : ''}
                     </div>
                   `).join('')}
-                  ${isHost ? '<button onclick="addBot(\'team1\')">+ Add Bot</button>' : ''}
+                  ${isHost ? '<button onclick="window.addBot(\'team1\')">+ Add Bot</button>' : ''}
                 </div>
                 
                 <div class="team">
@@ -246,21 +260,29 @@
                   ${state.game.players.filter(p => state.game.teams.team2.includes(p.id)).map(p => `
                     <div class="player">
                       <span>${p.name} ${p.id === myId ? '(You)' : ''}</span>
-                      ${isHost && p.isBot ? `<button class="btn-sm" onclick="removeBot('${p.id}')">Remove</button>` : ''}
+                      ${isHost && p.isBot ? `<button class="btn-sm" onclick="window.removeBot('${p.id}')">Remove</button>` : ''}
                     </div>
                   `).join('')}
-                  ${isHost ? '<button onclick="addBot(\'team2\')">+ Add Bot</button>' : ''}
+                  ${isHost ? '<button onclick="window.addBot(\'team2\')">+ Add Bot</button>' : ''}
                 </div>
               </div>
               
               ${isHost ? `
-                <button onclick="startGame()" ${state.game.players.length < 4 ? 'disabled' : ''}>
+                <button onclick="window.startGame()" ${state.game.players.length < 4 ? 'disabled' : ''}>
                   ${state.game.players.length < 4 ? `Need ${4 - state.game.players.length} more` : 'Start Game'}
                 </button>
               ` : '<p style="text-align:center;color:#888;margin-top:20px">Waiting for host...</p>'}
             </div>
           </div>
         `;
+        
+        if (isHost) {
+          const historyCheck = document.getElementById('show-history');
+          const countsCheck = document.getElementById('show-counts');
+          if (historyCheck) historyCheck.onchange = () => toggleSetting('showHistory');
+          if (countsCheck) countsCheck.onchange = () => toggleSetting('showCounts');
+        }
+        
         return;
       }
       
