@@ -248,7 +248,8 @@
       selectedOpponent: '',
       showCallModal: false,
       callSetIndex: 0,
-      callAssignments: {}
+      callAssignments: {},
+      startPlayer: 'random'
     };
     
     function getSetForCard(card) {
@@ -479,7 +480,15 @@
       const per = Math.floor(deck.length / game.players.length);
       game.players.forEach((p, i) => p.hand = deck.slice(i * per, (i + 1) * per));
       game.phase = 'game';
-      game.currentTurn = game.players[0].id;
+      
+      // Determine starting player
+      if (state.startPlayer === 'random') {
+        const randomIndex = Math.floor(Math.random() * game.players.length);
+        game.currentTurn = game.players[randomIndex].id;
+      } else {
+        game.currentTurn = state.startPlayer;
+      }
+      
       game.log.unshift('Game started!');
       
       await save(game);
@@ -549,6 +558,18 @@
             p.hand = p.hand.filter(c => c !== card);
           });
         });
+        
+        // If current player has no cards, pass to teammate
+        const currentPlayer = game.players.find(p => p.id === game.currentTurn);
+        if (currentPlayer && currentPlayer.hand.length === 0) {
+          const currentTeam = game.teams.team1.includes(game.currentTurn) ? 'team1' : 'team2';
+          const teammates = game.players.filter(p => 
+            game.teams[currentTeam].includes(p.id) && p.hand.length > 0
+          );
+          if (teammates.length > 0) {
+            game.currentTurn = teammates[0].id;
+          }
+        }
       } else {
         const oppTeam = myTeam === 'team1' ? 'team2' : 'team1';
         game.scores[oppTeam]++;
@@ -560,6 +581,24 @@
             p.hand = p.hand.filter(c => c !== card);
           });
         });
+        
+        // Pass turn to opponent team if caller has no cards
+        if (me.hand.length === 0) {
+          const oppTeamPlayers = game.players.filter(p => 
+            game.teams[oppTeam].includes(p.id) && p.hand.length > 0
+          );
+          if (oppTeamPlayers.length > 0) {
+            game.currentTurn = oppTeamPlayers[0].id;
+          }
+        } else if (game.currentTurn === myId && me.hand.length === 0) {
+          // If I was current turn and now have no cards, pass to teammate
+          const teammates = game.players.filter(p => 
+            game.teams[myTeam].includes(p.id) && p.hand.length > 0
+          );
+          if (teammates.length > 0) {
+            game.currentTurn = teammates[0].id;
+          }
+        }
       }
       
       state.showCallModal = false;
@@ -705,6 +744,18 @@
                   ${state.game.players.length < 4 ? `Need ${4 - state.game.players.length} more players` : 'Start Game'}
                 </button>
               ` : '<p style="text-align: center; color: #8b949e; margin-top: 20px;">Waiting for host to start...</p>'}
+              
+              ${isHost ? `
+                <div style="margin-top: 15px;">
+                  <label style="display: block; margin-bottom: 8px; color: #8b949e;">Starting Player:</label>
+                  <select id="start-player" style="margin-bottom: 10px;">
+                    <option value="random">Random Player</option>
+                    ${state.game.players.map(p => 
+                      `<option value="${p.id}">${p.name}</option>`
+                    ).join('')}
+                  </select>
+                </div>
+              ` : ''}
             </div>
           </div>
         `;
@@ -714,11 +765,13 @@
           const countsCheck = document.getElementById('show-counts');
           const histCountSel = document.getElementById('history-count');
           const timeLimitSel = document.getElementById('time-limit');
+          const startPlayerSel = document.getElementById('start-player');
           
           if (histCheck) histCheck.onchange = () => toggleSetting('showHistory');
           if (countsCheck) countsCheck.onchange = () => toggleSetting('showCounts');
           if (histCountSel) histCountSel.onchange = (e) => changeSetting('historyCount', Number(e.target.value));
           if (timeLimitSel) timeLimitSel.onchange = (e) => changeSetting('timeLimit', Number(e.target.value));
+          if (startPlayerSel) startPlayerSel.onchange = (e) => { state.startPlayer = e.target.value; };
         }
         return;
       }
