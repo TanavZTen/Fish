@@ -108,6 +108,10 @@
     .team-player.you {
       border-color: #58a6ff;
     }
+    .team-player.disconnected {
+      opacity: 0.5;
+      border-color: #f85149;
+    }
     .settings {
       background: #0d1117;
       border: 1px solid #30363d;
@@ -217,6 +221,15 @@
       flex-direction: column;
       gap: 20px;
     }
+    .spectator-badge {
+      background: #8b949e;
+      color: #0d1117;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 700;
+      margin-left: 8px;
+    }
   </style>
 </head>
 <body>
@@ -258,7 +271,9 @@
       callSetIndex: 0,
       callAssignments: {},
       startPlayer: 'random',
-      hasCards: true
+      hasCards: true,
+      isSpectator: false,
+      lastHeartbeat: Date.now()
     };
     
     function getSetForCard(card) {
@@ -300,62 +315,74 @@
       return askable;
     }
     
+    async function updateHeartbeat() {
+      if (!state.game || !state.code) return;
+      
+      const game = state.game;
+      const player = game.players.find(p => p.id === myId);
+      if (player) {
+        player.lastSeen = Date.now();
+        await save(game);
+      }
+    }
+    
     async function save(game) {
       if (!state.code) return;
       try {
-        const { data: existingData, error: checkError } = await DB
+        const { data: existingData } = await DB
           .from('games')
           .select('id')
           .eq('room_code', state.code)
           .maybeSingle();
         
-        const exists = existingData !== null;
-        
-        if (exists) {
-          const { error: updateError } = await DB
-            .from('games')
+        if (existingData) {
+          await DB.from('games')
             .update({ game_data: game, updated_at: new Date().toISOString() })
             .eq('room_code', state.code);
-          
-          if (updateError) {
-            alert('Save failed: ' + updateError.message);
-            return;
-          }
         } else {
-          const { error: insertError } = await DB
-            .from('games')
+          await DB.from('games')
             .insert({ room_code: state.code, game_data: game, updated_at: new Date().toISOString() });
-          
-          if (insertError) {
-            alert('Save failed: ' + insertError.message);
-            return;
-          }
         }
         
         state.game = game;
         render();
       } catch (e) {
-        alert('Error: ' + e.message);
+        console.error(e);
       }
     }
     
     async function load() {
       if (!state.code) return;
       try {
-        const { data: gameData, error: loadError } = await DB
+        const { data: gameData } = await DB
           .from('games')
           .select('game_data')
           .eq('room_code', state.code)
           .maybeSingle();
         
-        if (loadError) return;
-        
         if (gameData && gameData.game_data) {
           const oldPhase = state.game?.phase;
           state.game = gameData.game_data;
           
+          // Mark disconnected players
+          const now = Date.now();
+          state.game.players.forEach(p => {
+            if (!p.isBot && p.lastSeen && now - p.lastSeen > 10000) {
+              p.disconnected = true;
+            } else {
+              p.disconnected = false;
+            }
+          });
+          
           if (oldPhase === 'lobby' && state.game.phase === 'game') {
-            state.view = 'game';
+            const player = state.game.players.find(p => p.id === myId);
+            if (player) {
+              state.view = 'game';
+              state.isSpectator = false;
+            } else {
+              state.view = 'game';
+              state.isSpectator = true;
+            }
           }
           
           render();
@@ -378,20 +405,29 @@
       state.code = state.code.toUpperCase().trim();
       
       try {
-        const { data: roomData, error: joinError } = await DB
+        const { data: roomData } = await DB
           .from('games')
           .select('game_data')
           .eq('room_code', state.code)
           .maybeSingle();
         
-        if (joinError || !roomData) {
-          return alert('Room not found!');
-        }
+        if (!roomData) return alert('Room not found!');
         
         state.game = roomData.game_data;
         
-        if (state.game.players.some(p => p.id === myId)) {
+        const existingPlayer = state.game.players.find(p => p.id === myId);
+        
+        if (existingPlayer) {
+          existingPlayer.lastSeen = Date.now();
+          existingPlayer.disconnected = false;
+          await save(state.game);
           state.view = state.game.phase === 'game' ? 'game' : 'lobby';
+          state.isSpectator = false;
+          render();
+          startPolling();
+        } else if (state.game.phase === 'game') {
+          state.view = 'game';
+          state.isSpectator = true;
           render();
           startPolling();
         } else {
@@ -410,7 +446,7 @@
         const game = {
           hostId: myId,
           phase: 'lobby',
-          players: [{ id: myId, name: state.name, hand: [] }],
+          players: [{ id: myId, name: state.name, hand: [], lastSeen: Date.now() }],
           teams: { team1: [], team2: [] },
           currentTurn: '',
           scores: { team1: 0, team2: 0 },
@@ -430,7 +466,7 @@
       } else {
         const game = state.game;
         if (!game.players.find(p => p.id === myId)) {
-          game.players.push({ id: myId, name: state.name, hand: [] });
+          game.players.push({ id: myId, name: state.name, hand: [], lastSeen: Date.now() });
           game.teams[team].push(myId);
           await save(game);
         }
@@ -490,7 +526,6 @@
       game.players.forEach((p, i) => p.hand = deck.slice(i * per, (i + 1) * per));
       game.phase = 'game';
       
-      // Determine starting player
       if (state.startPlayer === 'random') {
         const randomIndex = Math.floor(Math.random() * game.players.length);
         game.currentTurn = game.players[randomIndex].id;
@@ -521,10 +556,8 @@
         me.hand.push(state.selectedCard);
         game.log.unshift(`${me.name} (Asker) asked ${opponent.name} (Interrogated) for ${state.selectedCard} - SUCCESS!`);
         
-        // Check if I still have cards
         if (me.hand.length === 0) {
           state.hasCards = false;
-          // Pass turn to teammate with cards
           const myTeam = game.teams.team1.includes(myId) ? 'team1' : 'team2';
           const teammates = game.players.filter(p => 
             game.teams[myTeam].includes(p.id) && p.hand.length > 0 && p.id !== myId
@@ -544,8 +577,16 @@
     }
     
     function openCallModal() {
+      const me = state.game.players.find(p => p.id === myId);
+      const myTeam = state.game.teams.team1.includes(myId) ? 'team1' : 'team2';
+      const teammates = state.game.players.filter(p => state.game.teams[myTeam].includes(p.id));
+      const teamHasCards = teammates.some(p => p.hand.length > 0);
+      
+      if (!teamHasCards) {
+        return alert('Your team has no cards left! Cannot call a set.');
+      }
+      
       state.showCallModal = true;
-      // Find first unclaimed set
       const unclaimedSets = SETS.filter(s => !state.game.claimedSets?.includes(s.name));
       state.callSetIndex = unclaimedSets.length > 0 ? SETS.indexOf(unclaimedSets[0]) : 0;
       state.callAssignments = {};
@@ -581,7 +622,6 @@
           });
         });
         
-        // If I was the asker and now have no cards, pick teammate to continue
         if (game.currentTurn === myId && me.hand.length === 0) {
           state.hasCards = false;
           const teammates = game.players.filter(p => 
@@ -603,7 +643,6 @@
           });
         });
         
-        // If I ran out of cards, pass to teammate
         if (me.hand.length === 0) {
           state.hasCards = false;
           const teammates = game.players.filter(p => 
@@ -628,9 +667,15 @@
     }
     
     let pollInterval = null;
+    let heartbeatInterval = null;
+    
     function startPolling() {
       if (pollInterval) clearInterval(pollInterval);
+      if (heartbeatInterval) clearInterval(heartbeatInterval);
+      
       pollInterval = setInterval(load, 2000);
+      heartbeatInterval = setInterval(updateHeartbeat, 5000);
+      updateHeartbeat();
     }
     
     function render() {
@@ -727,6 +772,16 @@
                   <label>Show Card Counts</label>
                   <input type="checkbox" id="show-counts" ${state.game.settings?.showCounts ? 'checked' : ''}>
                 </div>
+                
+                <div class="setting-row">
+                  <label>Starting Player</label>
+                  <select id="start-player">
+                    <option value="random" ${state.startPlayer === 'random' ? 'selected' : ''}>Random Player</option>
+                    ${state.game.players.map(p => 
+                      `<option value="${p.id}" ${state.startPlayer === p.id ? 'selected' : ''}>${p.name}</option>`
+                    ).join('')}
+                  </select>
+                </div>
               </div>
               ` : ''}
               
@@ -734,8 +789,8 @@
                 <div class="team-section t1">
                   <h3>Team 1 (${state.game.teams.team1.length})</h3>
                   ${state.game.players.filter(p => state.game.teams.team1.includes(p.id)).map(p => `
-                    <div class="team-player ${p.id === myId ? 'you' : ''}">
-                      <span>${p.name} ${p.id === myId ? '(You)' : ''}</span>
+                    <div class="team-player ${p.id === myId ? 'you' : ''} ${p.disconnected ? 'disconnected' : ''}">
+                      <span>${p.name} ${p.id === myId ? '(You)' : ''} ${p.disconnected ? '(Disconnected)' : ''}</span>
                       ${isHost && p.isBot ? `<button class="btn-small" onclick="app.removeBot('${p.id}')">Remove</button>` : ''}
                     </div>
                   `).join('')}
@@ -745,8 +800,8 @@
                 <div class="team-section t2">
                   <h3>Team 2 (${state.game.teams.team2.length})</h3>
                   ${state.game.players.filter(p => state.game.teams.team2.includes(p.id)).map(p => `
-                    <div class="team-player ${p.id === myId ? 'you' : ''}">
-                      <span>${p.name} ${p.id === myId ? '(You)' : ''}</span>
+                    <div class="team-player ${p.id === myId ? 'you' : ''} ${p.disconnected ? 'disconnected' : ''}">
+                      <span>${p.name} ${p.id === myId ? '(You)' : ''} ${p.disconnected ? '(Disconnected)' : ''}</span>
                       ${isHost && p.isBot ? `<button class="btn-small" onclick="app.removeBot('${p.id}')">Remove</button>` : ''}
                     </div>
                   `).join('')}
@@ -758,16 +813,6 @@
                 <button onclick="app.startGame()" ${state.game.players.length < 4 ? 'disabled' : ''}>
                   ${state.game.players.length < 4 ? `Need ${4 - state.game.players.length} more players` : 'Start Game'}
                 </button>
-                
-                <div style="margin-top: 15px;">
-                  <label style="display: block; margin-bottom: 8px; color: #8b949e;">Starting Player:</label>
-                  <select id="start-player" style="margin-bottom: 10px;">
-                    <option value="random">Random Player</option>
-                    ${state.game.players.map(p => 
-                      `<option value="${p.id}" ${state.startPlayer === p.id ? 'selected' : ''}>${p.name}</option>`
-                    ).join('')}
-                  </select>
-                </div>
               ` : '<p style="text-align: center; color: #8b949e; margin-top: 20px;">Waiting for host to start...</p>'}
             </div>
           </div>
@@ -790,6 +835,73 @@
       }
       
       if (state.view === 'game' && state.game) {
+        if (state.isSpectator) {
+          const currentPlayer = state.game.players.find(p => p.id === state.game.currentTurn);
+          
+          app.innerHTML = `
+            <div class="container">
+              <div class="card">
+                <div style="background: #8b949e; color: #0d1117; padding: 12px; border-radius: 8px; margin-bottom: 20px; text-align: center; font-weight: 700;">
+                  👁️ SPECTATOR MODE - You are watching this game
+                </div>
+                
+                <h2>Room ${state.code}</h2>
+                <p style="margin: 10px 0;">Scores - Team 1: ${state.game.scores.team1} | Team 2: ${state.game.scores.team2}</p>
+                <p style="margin: 10px 0; font-weight: 700; color: #888;">
+                  ⏳ ${currentPlayer?.name}'s Turn
+                </p>
+                
+                <div class="game-sidebar">
+                  <div>
+                    <h3 style="color: #da3633; margin-bottom: 10px;">Team 1</h3>
+                    ${state.game.players.filter(p => state.game.teams.team1.includes(p.id)).map(p => `
+                      <div class="team-player ${p.disconnected ? 'disconnected' : ''}">
+                        <span>
+                          ${p.name} ${p.disconnected ? '(Disconnected)' : ''}
+                          ${state.game.settings?.showCounts ? ` (${p.hand.length})` : ''}
+                        </span>
+                        ${state.game.currentTurn === p.id ? '<span style="color: #4ade80;">👉</span>' : ''}
+                      </div>
+                    `).join('')}
+                  </div>
+                  
+                  <div>
+                    <h3 style="color: #1f6feb; margin-bottom: 10px;">Team 2</h3>
+                    ${state.game.players.filter(p => state.game.teams.team2.includes(p.id)).map(p => `
+                      <div class="team-player ${p.disconnected ? 'disconnected' : ''}">
+                        <span>
+                          ${p.name} ${p.disconnected ? '(Disconnected)' : ''}
+                          ${state.game.settings?.showCounts ? ` (${p.hand.length})` : ''}
+                        </span>
+                        ${state.game.currentTurn === p.id ? '<span style="color: #4ade80;">👉</span>' : ''}
+                      </div>
+                    `).join('')}
+                  </div>
+                </div>
+                
+                <div style="margin-top: 20px;">
+                  <h3 style="margin-bottom: 10px;">Recent Activity</h3>
+                  ${state.game.log?.slice(0, 5).map(log => 
+                    `<div style="font-size: 14px; color: #8b949e; margin-bottom: 4px; padding: 8px; background: #0d1117; border-radius: 6px;">${log}</div>`
+                  ).join('') || '<div style="font-size: 14px; color: #8b949e;">No activity yet</div>'}
+                </div>
+                
+                <div class="sets-status" style="margin-top: 20px;">
+                  <h3 style="margin-bottom: 10px;">Sets Status</h3>
+                  ${SETS.map((set, i) => `
+                    <div class="set-item ${state.game.claimedSets?.includes(set.name) ? 'claimed' : ''}">
+                      <strong>${set.name}</strong> 
+                      ${state.game.claimedSets?.includes(set.name) ? '<span style="color: #4ade80;">✓ Claimed</span>' : '<span style="color: #8b949e;">Available</span>'}
+                      <div style="font-size: 12px; color: #8b949e; margin-top: 4px;">${set.cards.join(', ')}</div>
+                    </div>
+                  `).join('')}
+                </div>
+              </div>
+            </div>
+          `;
+          return;
+        }
+        
         const me = state.game.players.find(p => p.id === myId);
         const myTeam = state.game.teams.team1.includes(myId) ? 'team1' : 'team2';
         const isMyTurn = state.game.currentTurn === myId;
@@ -802,7 +914,6 @@
         const sortedHand = sortHand(me?.hand || []);
         const askableCards = getAskableCards(me?.hand || []);
         
-        // Update hasCards status
         if (me && me.hand.length === 0) {
           state.hasCards = false;
         }
@@ -820,9 +931,9 @@
                 <div>
                   <h3 style="color: #da3633; margin-bottom: 10px;">Team 1</h3>
                   ${state.game.players.filter(p => state.game.teams.team1.includes(p.id)).map(p => `
-                    <div class="team-player ${p.id === myId ? 'you' : ''}">
+                    <div class="team-player ${p.id === myId ? 'you' : ''} ${p.disconnected ? 'disconnected' : ''}">
                       <span>
-                        ${p.name} ${p.id === myId ? '(You)' : ''}
+                        ${p.name} ${p.id === myId ? '(You)' : ''} ${p.disconnected ? '(DC)' : ''}
                         ${state.game.settings?.showCounts ? ` (${p.hand.length})` : ''}
                       </span>
                       ${state.game.currentTurn === p.id ? '<span style="color: #4ade80;">👉</span>' : ''}
@@ -833,9 +944,9 @@
                 <div>
                   <h3 style="color: #1f6feb; margin-bottom: 10px;">Team 2</h3>
                   ${state.game.players.filter(p => state.game.teams.team2.includes(p.id)).map(p => `
-                    <div class="team-player ${p.id === myId ? 'you' : ''}">
+                    <div class="team-player ${p.id === myId ? 'you' : ''} ${p.disconnected ? 'disconnected' : ''}">
                       <span>
-                        ${p.name} ${p.id === myId ? '(You)' : ''}
+                        ${p.name} ${p.id === myId ? '(You)' : ''} ${p.disconnected ? '(DC)' : ''}
                         ${state.game.settings?.showCounts ? ` (${p.hand.length})` : ''}
                       </span>
                       ${state.game.currentTurn === p.id ? '<span style="color: #4ade80;">👉</span>' : ''}
@@ -868,14 +979,14 @@
                         <select id="opponent-select" style="margin-bottom: 10px;">
                           <option value="">Select Opponent to Ask</option>
                           ${opponents.map(p => 
-                            `<option value="${p.id}">${p.name}</option>`
+                            `<option value="${p.id}" ${state.selectedOpponent === p.id ? 'selected' : ''}>${p.name}</option>`
                           ).join('')}
                         </select>
                         
                         <select id="card-select" style="margin-bottom: 10px;">
                           <option value="">Select Card to Ask For</option>
                           ${askableCards.sort().map(card => 
-                            `<option value="${card}">${card}</option>`
+                            `<option value="${card}" ${state.selectedCard === card ? 'selected' : ''}>${card}</option>`
                           ).join('')}
                         </select>
                         
@@ -922,8 +1033,8 @@
           </div>
           
           ${state.showCallModal ? `
-            <div class="modal" onclick="if(event.target === this) app.closeCallModal()">
-              <div class="modal-content" onclick="event.stopPropagation()">
+            <div class="modal">
+              <div class="modal-content">
                 <h2 style="margin-bottom: 20px;">Call a Set</h2>
                 
                 <div style="margin-bottom: 20px;">
@@ -968,37 +1079,36 @@
         const setSelect = document.getElementById('set-select');
         
         if (oppSelect) {
-          oppSelect.value = state.selectedOpponent;
-          oppSelect.onchange = e => {
+          oppSelect.addEventListener('change', (e) => {
+            e.stopPropagation();
             state.selectedOpponent = e.target.value;
-            render();
-          };
+          });
         }
         
         if (cardSelect) {
-          cardSelect.value = state.selectedCard;
-          cardSelect.onchange = e => {
+          cardSelect.addEventListener('change', (e) => {
+            e.stopPropagation();
             state.selectedCard = e.target.value;
-            render();
-          };
+          });
         }
         
         if (setSelect) {
-          setSelect.onchange = e => {
+          setSelect.addEventListener('change', (e) => {
+            e.stopPropagation();
             state.callSetIndex = Number(e.target.value);
             state.callAssignments = {};
             render();
-          };
+          });
         }
         
         if (state.showCallModal) {
           const assignSelects = document.querySelectorAll('.card-assign-select');
           assignSelects.forEach(sel => {
             const card = sel.getAttribute('data-card');
-            sel.onchange = e => {
+            sel.addEventListener('change', (e) => {
+              e.stopPropagation();
               state.callAssignments[card] = e.target.value;
-              render();
-            };
+            });
           });
         }
         
@@ -1014,6 +1124,8 @@
         state.view = 'home';
         state.code = '';
         state.game = null;
+        if (pollInterval) clearInterval(pollInterval);
+        if (heartbeatInterval) clearInterval(heartbeatInterval);
         render();
       },
       addBot,
