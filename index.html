@@ -1,7 +1,4 @@
-confirmStartPlayer: () => {
-        state.view = 'teamSelect';
-        render();
-      },<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -16,7 +13,7 @@ confirmStartPlayer: () => {
       color: #c9d1d9;
       min-height: 100vh;
     }
-    .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+    .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
     .card {
       background: #161b22;
       border: 1px solid #30363d;
@@ -138,12 +135,22 @@ confirmStartPlayer: () => {
       width: auto;
       margin: 0;
     }
+    .game-layout {
+      display: grid;
+      grid-template-columns: 1fr 400px;
+      gap: 20px;
+    }
+    .game-left {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
     .game-hand {
       display: flex;
       gap: 8px;
       flex-wrap: wrap;
-      justify-content: center;
-      margin: 20px 0;
+      justify-content: flex-start;
+      margin: 15px 0;
     }
     .game-card {
       width: 60px;
@@ -155,26 +162,20 @@ confirmStartPlayer: () => {
       justify-content: center;
       font-size: 20px;
       font-weight: 800;
-      cursor: pointer;
+      cursor: default;
       transition: all 0.2s;
       box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-    }
-    .game-card:hover { transform: translateY(-5px); }
-    .game-card.selected {
-      transform: translateY(-10px);
-      box-shadow: 0 0 0 3px #ffd700;
     }
     .game-card.red { color: #dc2626; }
     .game-card.black { color: #000; }
     .sets-status {
-      background: #0d1117;
+      background: #161b22;
       border: 1px solid #30363d;
       padding: 15px;
       border-radius: 8px;
-      margin: 20px 0;
     }
     .set-item {
-      background: #161b22;
+      background: #0d1117;
       border: 1px solid #30363d;
       padding: 10px;
       border-radius: 6px;
@@ -211,6 +212,11 @@ confirmStartPlayer: () => {
       grid-template-columns: 1fr 1fr;
       gap: 20px;
       margin-bottom: 20px;
+    }
+    @media (max-width: 1200px) {
+      .game-layout {
+        grid-template-columns: 1fr;
+      }
     }
   </style>
 </head>
@@ -252,8 +258,7 @@ confirmStartPlayer: () => {
       showCallModal: false,
       callSetIndex: 0,
       callAssignments: {},
-      startPlayer: 'random',
-      dropdownOpen: false
+      startPlayer: 'random'
     };
     
     function getSetForCard(card) {
@@ -280,11 +285,11 @@ confirmStartPlayer: () => {
       return sorted;
     }
     
-    function getAskableCards(myHand) {
+    function getAskableCards(myHand, claimedSets) {
       const askable = [];
       myHand.forEach(card => {
         const set = getSetForCard(card);
-        if (set) {
+        if (set && !claimedSets.includes(set.name)) {
           set.cards.forEach(c => {
             if (!myHand.includes(c) && !askable.includes(c)) {
               askable.push(c);
@@ -298,52 +303,36 @@ confirmStartPlayer: () => {
     async function save(game) {
       if (!state.code) return;
       try {
-        const { data: existingData, error: checkError } = await DB
+        const { data: existingData } = await DB
           .from('games')
           .select('id')
           .eq('room_code', state.code)
           .maybeSingle();
         
-        const exists = existingData !== null;
-        
-        if (exists) {
-          const { error: updateError } = await DB
-            .from('games')
+        if (existingData) {
+          await DB.from('games')
             .update({ game_data: game, updated_at: new Date().toISOString() })
             .eq('room_code', state.code);
-          
-          if (updateError) {
-            alert('Save failed: ' + updateError.message);
-            return;
-          }
         } else {
-          const { error: insertError } = await DB
-            .from('games')
+          await DB.from('games')
             .insert({ room_code: state.code, game_data: game, updated_at: new Date().toISOString() });
-          
-          if (insertError) {
-            alert('Save failed: ' + insertError.message);
-            return;
-          }
         }
         
         state.game = game;
         render();
       } catch (e) {
-        alert('Error: ' + e.message);
+        console.error(e);
       }
     }
     
     async function load() {
       if (!state.code) return;
       try {
-        const { data: gameData, error: loadError } = await DB
+        const { data: gameData } = await DB
           .from('games')
           .select('game_data')
           .eq('room_code', state.code)
           .maybeSingle();
-        
-        if (loadError) return;
         
         if (gameData && gameData.game_data) {
           const oldPhase = state.game?.phase;
@@ -363,7 +352,7 @@ confirmStartPlayer: () => {
     function createRoom() {
       if (!state.name.trim()) return alert('Enter your name');
       state.code = Math.random().toString(36).substring(2, 8).toUpperCase();
-      state.view = 'teamSelect';
+      state.view = 'startPlayer';
       render();
     }
     
@@ -373,15 +362,13 @@ confirmStartPlayer: () => {
       state.code = state.code.toUpperCase().trim();
       
       try {
-        const { data: roomData, error: joinError } = await DB
+        const { data: roomData } = await DB
           .from('games')
           .select('game_data')
           .eq('room_code', state.code)
           .maybeSingle();
         
-        if (joinError || !roomData) {
-          return alert('Room not found!');
-        }
+        if (!roomData) return alert('Room not found!');
         
         state.game = roomData.game_data;
         
@@ -411,12 +398,14 @@ confirmStartPlayer: () => {
           scores: { team1: 0, team2: 0 },
           claimedSets: [],
           log: [],
+          askHistory: [],
           settings: { 
             showHistory: true,
             historyCount: 2,
             timeLimit: 0,
             showCounts: false
-          }
+          },
+          startPlayer: state.startPlayer
         };
         game.teams[team].push(myId);
         await save(game);
@@ -482,17 +471,18 @@ confirmStartPlayer: () => {
       }
       
       const per = Math.floor(deck.length / game.players.length);
-      game.players.forEach((p, i) => p.hand = deck.slice(i * per, (i + 1) * per));
+      game.players.forEach((p, i) => p.hand = sortHand(deck.slice(i * per, (i + 1) * per)));
       game.phase = 'game';
       
-      // Determine starting player
-      if (state.startPlayer === 'random') {
+      if (game.startPlayer === 'random') {
         const randomIndex = Math.floor(Math.random() * game.players.length);
         game.currentTurn = game.players[randomIndex].id;
       } else {
-        game.currentTurn = state.startPlayer;
+        game.currentTurn = game.startPlayer;
       }
       
+      game.log = [];
+      game.askHistory = [];
       game.log.unshift('Game started!');
       
       await save(game);
@@ -508,17 +498,23 @@ confirmStartPlayer: () => {
       const game = state.game;
       const opponent = game.players.find(p => p.id === state.selectedOpponent);
       const me = game.players.find(p => p.id === myId);
+      const myTeam = game.teams.team1.includes(myId) ? 'team1' : 'team2';
       
       const hasCard = opponent.hand.includes(state.selectedCard);
       
       if (hasCard) {
         opponent.hand = opponent.hand.filter(c => c !== state.selectedCard);
         me.hand.push(state.selectedCard);
-        game.log.unshift(`${me.name} (Asker) asked ${opponent.name} (Interrogated) for ${state.selectedCard} - SUCCESS!`);
+        me.hand = sortHand(me.hand);
+        game.log.unshift(`✅ ${me.name} (Asker) asked ${opponent.name} (Interrogated) for ${state.selectedCard} - SUCCESS!`);
+        game.askHistory.unshift({ asker: me.name, interrogated: opponent.name, card: state.selectedCard, success: true });
       } else {
         game.currentTurn = opponent.id;
-        game.log.unshift(`${me.name} (Asker) asked ${opponent.name} (Interrogated) for ${state.selectedCard} - FAILED`);
+        game.log.unshift(`❌ ${me.name} (Asker) asked ${opponent.name} (Interrogated) for ${state.selectedCard} - FAILED`);
+        game.askHistory.unshift({ asker: me.name, interrogated: opponent.name, card: state.selectedCard, success: false });
       }
+      
+      game.askHistory = game.askHistory.slice(0, game.settings.historyCount);
       
       state.selectedCard = '';
       state.selectedOpponent = '';
@@ -527,7 +523,6 @@ confirmStartPlayer: () => {
     
     function openCallModal() {
       state.showCallModal = true;
-      // Find first unclaimed set
       const unclaimedSets = SETS.filter(s => !state.game.claimedSets?.includes(s.name));
       state.callSetIndex = unclaimedSets.length > 0 ? SETS.indexOf(unclaimedSets[0]) : 0;
       state.callAssignments = {};
@@ -555,63 +550,38 @@ confirmStartPlayer: () => {
       if (correct) {
         game.scores[myTeam]++;
         game.claimedSets.push(set.name);
-        game.log.unshift(`${me.name} correctly called ${set.name}! ${myTeam === 'team1' ? 'Team 1' : 'Team 2'} scores!`);
-        
-        set.cards.forEach(card => {
-          game.players.forEach(p => {
-            p.hand = p.hand.filter(c => c !== card);
-          });
-        });
-        
-        // If current player has no cards, pass to teammate
-        const currentPlayer = game.players.find(p => p.id === game.currentTurn);
-        if (currentPlayer && currentPlayer.hand.length === 0) {
-          const currentTeam = game.teams.team1.includes(game.currentTurn) ? 'team1' : 'team2';
-          const teammates = game.players.filter(p => 
-            game.teams[currentTeam].includes(p.id) && p.hand.length > 0
-          );
-          if (teammates.length > 0) {
-            game.currentTurn = teammates[0].id;
-          }
-        }
+        game.log.unshift(`🎯 ${me.name} correctly called ${set.name}! ${myTeam === 'team1' ? 'Team 1' : 'Team 2'} scores!`);
       } else {
         const oppTeam = myTeam === 'team1' ? 'team2' : 'team1';
         game.scores[oppTeam]++;
         game.claimedSets.push(set.name);
-        game.log.unshift(`${me.name} INCORRECTLY called ${set.name}! ${oppTeam === 'team1' ? 'Team 1' : 'Team 2'} gets the set!`);
-        
-        set.cards.forEach(card => {
-          game.players.forEach(p => {
-            p.hand = p.hand.filter(c => c !== card);
-          });
+        game.log.unshift(`💥 ${me.name} INCORRECTLY called ${set.name}! ${oppTeam === 'team1' ? 'Team 1' : 'Team 2'} gets the set!`);
+      }
+      
+      set.cards.forEach(card => {
+        game.players.forEach(p => {
+          p.hand = p.hand.filter(c => c !== card);
         });
-        
-        // Pass turn to opponent team if caller has no cards
-        if (me.hand.length === 0) {
-          const oppTeamPlayers = game.players.filter(p => 
-            game.teams[oppTeam].includes(p.id) && p.hand.length > 0
-          );
-          if (oppTeamPlayers.length > 0) {
-            game.currentTurn = oppTeamPlayers[0].id;
-          }
-        } else if (game.currentTurn === myId && me.hand.length === 0) {
-          // If I was current turn and now have no cards, pass to teammate
-          const teammates = game.players.filter(p => 
-            game.teams[myTeam].includes(p.id) && p.hand.length > 0
-          );
-          if (teammates.length > 0) {
-            game.currentTurn = teammates[0].id;
-          }
+      });
+      
+      // If caller is current turn and runs out of cards, pass to teammate
+      if (game.currentTurn === myId && me.hand.length === 0) {
+        const teammates = game.players.filter(p => 
+          game.teams[myTeam].includes(p.id) && p.hand.length > 0 && p.id !== myId
+        );
+        if (teammates.length > 0) {
+          game.currentTurn = teammates[0].id;
         }
       }
       
       state.showCallModal = false;
+      state.callAssignments = {};
       await save(game);
       
       if (game.claimedSets.length === 9) {
         setTimeout(() => {
           const winner = game.scores.team1 > game.scores.team2 ? 'Team 1' : 'Team 2';
-          alert(`Game Over! ${winner} wins ${game.scores.team1}-${game.scores.team2}!`);
+          alert(`🏆 Game Over! ${winner} wins ${game.scores.team1}-${game.scores.team2}!`);
         }, 500);
       }
     }
@@ -645,6 +615,28 @@ confirmStartPlayer: () => {
         
         document.getElementById('name-input').oninput = e => state.name = e.target.value;
         document.getElementById('code-input').oninput = e => state.code = e.target.value.toUpperCase();
+        return;
+      }
+      
+      if (state.view === 'startPlayer') {
+        app.innerHTML = `
+          <div class="container">
+            <div class="card">
+              <h2 style="text-align:center; margin-bottom:20px;">Select Starting Player</h2>
+              
+              <select id="start-player-select">
+                <option value="random">Random Player</option>
+              </select>
+              
+              <button onclick="app.confirmStartPlayer()">Continue</button>
+              <button onclick="app.cancel()" class="btn-secondary">Cancel</button>
+            </div>
+          </div>
+        `;
+        
+        document.getElementById('start-player-select').onchange = e => {
+          state.startPlayer = e.target.value;
+        };
         return;
       }
       
@@ -689,16 +681,6 @@ confirmStartPlayer: () => {
                 <h3 style="margin-bottom: 15px; font-size: 16px;">Game Settings (Host Only)</h3>
                 
                 <div class="setting-row">
-                  <label>Starting Player</label>
-                  <select id="start-player-select" onfocus="state.dropdownOpen = true" onblur="setTimeout(() => state.dropdownOpen = false, 200)">
-                    <option value="random" ${state.game.startPlayer === 'random' ? 'selected' : ''}>Random Player</option>
-                    ${state.game.players.map(p => 
-                      `<option value="${p.id}" ${state.game.startPlayer === p.id ? 'selected' : ''}>${p.name}</option>`
-                    ).join('')}
-                  </select>
-                </div>
-                
-                <div class="setting-row">
                   <label>Show Ask History</label>
                   <input type="checkbox" id="show-history" ${state.game.settings?.showHistory ? 'checked' : ''}>
                 </div>
@@ -706,7 +688,7 @@ confirmStartPlayer: () => {
                 ${state.game.settings?.showHistory ? `
                 <div class="setting-row">
                   <label>Recent asks to show</label>
-                  <select id="history-count" onfocus="state.dropdownOpen = true" onblur="setTimeout(() => state.dropdownOpen = false, 200)">
+                  <select id="history-count">
                     <option value="2" ${state.game.settings?.historyCount === 2 ? 'selected' : ''}>2 cards</option>
                     <option value="3" ${state.game.settings?.historyCount === 3 ? 'selected' : ''}>3 cards</option>
                   </select>
@@ -715,7 +697,7 @@ confirmStartPlayer: () => {
                 
                 <div class="setting-row">
                   <label>Time Limit per Turn</label>
-                  <select id="time-limit" onfocus="state.dropdownOpen = true" onblur="setTimeout(() => state.dropdownOpen = false, 200)">
+                  <select id="time-limit">
                     <option value="0" ${state.game.settings?.timeLimit === 0 ? 'selected' : ''}>No limit</option>
                     <option value="60" ${state.game.settings?.timeLimit === 60 ? 'selected' : ''}>1 minute</option>
                     <option value="120" ${state.game.settings?.timeLimit === 120 ? 'selected' : ''}>2 minutes</option>
@@ -758,18 +740,6 @@ confirmStartPlayer: () => {
                   ${state.game.players.length < 4 ? `Need ${4 - state.game.players.length} more players` : 'Start Game'}
                 </button>
               ` : '<p style="text-align: center; color: #8b949e; margin-top: 20px;">Waiting for host to start...</p>'}
-              
-              ${isHost ? `
-                <div style="margin-top: 15px;">
-                  <label style="display: block; margin-bottom: 8px; color: #8b949e;">Starting Player:</label>
-                  <select id="start-player" style="margin-bottom: 10px;">
-                    <option value="random">Random Player</option>
-                    ${state.game.players.map(p => 
-                      `<option value="${p.id}">${p.name}</option>`
-                    ).join('')}
-                  </select>
-                </div>
-              ` : ''}
             </div>
           </div>
         `;
@@ -779,13 +749,11 @@ confirmStartPlayer: () => {
           const countsCheck = document.getElementById('show-counts');
           const histCountSel = document.getElementById('history-count');
           const timeLimitSel = document.getElementById('time-limit');
-          const startPlayerSel = document.getElementById('start-player');
           
           if (histCheck) histCheck.onchange = () => toggleSetting('showHistory');
           if (countsCheck) countsCheck.onchange = () => toggleSetting('showCounts');
           if (histCountSel) histCountSel.onchange = (e) => changeSetting('historyCount', Number(e.target.value));
           if (timeLimitSel) timeLimitSel.onchange = (e) => changeSetting('timeLimit', Number(e.target.value));
-          if (startPlayerSel) startPlayerSel.onchange = (e) => { state.startPlayer = e.target.value; };
         }
         return;
       }
@@ -801,112 +769,134 @@ confirmStartPlayer: () => {
         );
         
         const sortedHand = sortHand(me?.hand || []);
-        const askableCards = getAskableCards(me?.hand || []);
+        const askableCards = getAskableCards(me?.hand || [], state.game.claimedSets || []);
+        const canAsk = isMyTurn && me && me.hand.length > 0;
         
         app.innerHTML = `
           <div class="container">
             <div class="card">
-              <h2>Room ${state.code}</h2>
-              <p style="margin: 10px 0;">Scores - Team 1: ${state.game.scores.team1} | Team 2: ${state.game.scores.team2}</p>
-              <p style="margin: 10px 0; font-weight: 700; color: ${isMyTurn ? '#4ade80' : '#888'};">
-                ${isMyTurn ? '🟢 YOUR TURN' : `⏳ ${currentPlayer?.name}'s Turn`}
-              </p>
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2>Room ${state.code}</h2>
+                <div style="text-align: right;">
+                  <div style="font-size: 18px; font-weight: 700;">Team 1: ${state.game.scores.team1} | Team 2: ${state.game.scores.team2}</div>
+                  <div style="font-weight: 700; color: ${isMyTurn ? '#4ade80' : '#888'}; margin-top: 4px;">
+                    ${isMyTurn ? '🟢 YOUR TURN' : `⏳ ${currentPlayer?.name}'s Turn`}
+                  </div>
+                </div>
+              </div>
               
               <div class="game-sidebar">
                 <div>
-                  <h3 class="t1" style="margin-bottom: 10px;">Team 1</h3>
+                  <h3 style="margin-bottom: 10px; color: #da3633;">Team 1</h3>
                   ${state.game.players.filter(p => state.game.teams.team1.includes(p.id)).map(p => `
                     <div class="team-player ${p.id === myId ? 'you' : ''}">
                       <span>
+                        ${p.id === state.game.currentTurn ? '👉 ' : ''}
                         ${p.name} ${p.id === myId ? '(You)' : ''}
                         ${state.game.settings?.showCounts ? ` (${p.hand.length})` : ''}
                       </span>
-                      ${state.game.currentTurn === p.id ? '<span style="color: #4ade80;">👉</span>' : ''}
                     </div>
                   `).join('')}
                 </div>
                 
                 <div>
-                  <h3 class="t2" style="margin-bottom: 10px;">Team 2</h3>
+                  <h3 style="margin-bottom: 10px; color: #1f6feb;">Team 2</h3>
                   ${state.game.players.filter(p => state.game.teams.team2.includes(p.id)).map(p => `
                     <div class="team-player ${p.id === myId ? 'you' : ''}">
                       <span>
+                        ${p.id === state.game.currentTurn ? '👉 ' : ''}
                         ${p.name} ${p.id === myId ? '(You)' : ''}
                         ${state.game.settings?.showCounts ? ` (${p.hand.length})` : ''}
                       </span>
-                      ${state.game.currentTurn === p.id ? '<span style="color: #4ade80;">👉</span>' : ''}
                     </div>
                   `).join('')}
                 </div>
               </div>
               
-              <div class="sets-status">
-                <h3 style="margin-bottom: 10px;">Sets Status</h3>
-                ${SETS.map((set, i) => `
-                  <div class="set-item ${state.game.claimedSets?.includes(set.name) ? 'claimed' : ''}">
-                    <strong>${set.name}</strong> 
-                    ${state.game.claimedSets?.includes(set.name) ? '<span style="color: #4ade80;">✓ Claimed</span>' : '<span style="color: #8b949e;">Available</span>'}
-                    <div style="font-size: 12px; color: #8b949e; margin-top: 4px;">${set.cards.join(', ')}</div>
-                  </div>
-                `).join('')}
-              </div>
-              
-              <div style="margin: 20px 0;">
-                <h3>Your Hand (${me?.hand?.length || 0} cards)</h3>
-                <div class="game-hand">
-                  ${sortedHand.map(card => {
-                    const isRed = card.includes('♥') || card.includes('♦');
-                    return `
-                      <div class="game-card ${isRed ? 'red' : 'black'} ${state.selectedCard === card ? 'selected' : ''}"
-                        onclick="app.selectCard('${card}')">
-                        ${card}
-                      </div>
-                    `;
-                  }).join('') || '<p style="color: #8b949e;">No cards</p>'}
-                </div>
-              </div>
-              
-              ${isMyTurn ? `
-                <div style="margin-top: 20px;">
-                  <h3 style="margin-bottom: 10px;">Your Move</h3>
-                  
-                  <select id="opponent-select" style="margin-bottom: 10px;">
-                    <option value="">Select Opponent to Ask</option>
-                    ${opponents.map(p => 
-                      `<option value="${p.id}" ${state.selectedOpponent === p.id ? 'selected' : ''}>${p.name}</option>`
-                    ).join('')}
-                  </select>
-                  
-                  <select id="card-select" style="margin-bottom: 10px;">
-                    <option value="">Select Card to Ask For</option>
-                    ${askableCards.sort().map(card => 
-                      `<option value="${card}" ${state.selectedCard === card ? 'selected' : ''}>${card}</option>`
-                    ).join('')}
-                  </select>
-                  
-                  <div style="display: flex; gap: 10px;">
-                    <button onclick="app.askForCard()" ${!state.selectedCard || !state.selectedOpponent ? 'disabled' : ''} style="flex: 1;">
-                      Ask for Card
-                    </button>
+              <div class="game-layout">
+                <div class="game-left">
+                  <div class="card" style="margin: 0;">
+                    <h3>Your Hand (${me?.hand?.length || 0} cards)</h3>
+                    ${me && me.hand.length === 0 ? '<p style="color: #8b949e; margin-top: 10px;">You have no cards - you can only watch now</p>' : ''}
+                    <div class="game-hand">
+                      ${sortedHand.map(card => {
+                        const isRed = card.includes('♥') || card.includes('♦');
+                        return `<div class="game-card ${isRed ? 'red' : 'black'}">${card}</div>`;
+                      }).join('')}
+                    </div>
                     
-                    <button onclick="app.openCallModal()" class="btn-secondary" style="flex: 1;">
-                      Call a Set
+                    ${canAsk ? `
+                      <div style="margin-top: 20px;">
+                        <h4 style="margin-bottom: 10px;">Make Your Move</h4>
+                        
+                        <label style="display: block; margin-bottom: 5px; color: #8b949e; font-size: 14px;">Select Opponent:</label>
+                        <select id="opponent-select" style="margin-bottom: 10px;">
+                          <option value="">Choose opponent...</option>
+                          ${opponents.map(p => 
+                            `<option value="${p.id}">${p.name}</option>`
+                          ).join('')}
+                        </select>
+                        
+                        <label style="display: block; margin-bottom: 5px; color: #8b949e; font-size: 14px;">Select Card to Ask:</label>
+                        <select id="card-select" style="margin-bottom: 10px;">
+                          <option value="">Choose card...</option>
+                          ${askableCards.sort().map(card => 
+                            `<option value="${card}">${card}</option>`
+                          ).join('')}
+                        </select>
+                        
+                        <button onclick="app.askForCard()" ${!state.selectedCard || !state.selectedOpponent ? 'disabled' : ''}>
+                          Ask for Card
+                        </button>
+                      </div>
+                    ` : me && me.hand.length > 0 ? '<p style="text-align: center; color: #8b949e; padding: 20px; background: #0d1117; border-radius: 8px; margin-top: 20px;">Waiting for your turn...</p>' : ''}
+                    
+                    <button onclick="app.openCallModal()" class="btn-secondary" style="margin-top: 10px;">
+                      Call a Set (Anyone Can Call)
                     </button>
                   </div>
+                  
+                  <div class="card" style="margin: 0;">
+                    <h3 style="margin-bottom: 10px;">Recent Activity</h3>
+                    ${state.game.settings?.showHistory && state.game.askHistory?.length ? `
+                      <div style="background: #0d1117; padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #ffc107;">
+                        <h4 style="color: #ffc107; margin-bottom: 10px; font-size: 14px;">Last ${state.game.settings.historyCount} Asks:</h4>
+                        ${state.game.askHistory.map(h => `
+                          <div style="padding: 8px; background: #161b22; border-radius: 6px; margin-bottom: 6px; font-size: 13px;">
+                            <strong>${h.asker}</strong> (Asker) asked <strong>${h.interrogated}</strong> (Interrogated) for <strong style="color: #58a6ff;">${h.card}</strong>
+                            <span style="padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; margin-left: 6px; ${h.success ? 'background: #d4edda; color: #155724;' : 'background: #f8d7da; color: #721c24;'}">
+                              ${h.success ? '✓ SUCCESS' : '✗ FAILED'}
+                            </span>
+                          </div>
+                        `).join('')}
+                      </div>
+                    ` : ''}
+                    ${state.game.log?.slice(0, 5).map(log => 
+                      `<div style="font-size: 14px; color: #8b949e; margin-bottom: 8px; padding: 8px; background: #0d1117; border-radius: 6px;">${log}</div>`
+                    ).join('') || '<div style="font-size: 14px; color: #8b949e;">No activity yet</div>'}
+                  </div>
                 </div>
-              ` : '<p style="text-align: center; color: #8b949e; margin-top: 20px;">Waiting for turn...</p>'}
-              
-              <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #30363d;">
-                <h3 style="margin-bottom: 10px;">Recent Activity:</h3>
-                ${state.game.log?.slice(0, state.game.settings?.historyCount || 2).map(log => 
-                  `<div style="font-size: 14px; color: #8b949e; margin-bottom: 4px;">${log}</div>`
-                ).join('') || '<div style="font-size: 14px; color: #8b949e;">No activity yet</div>'}
+                
+                <div class="sets-status">
+                  <h3 style="margin-bottom: 15px;">Sets Status</h3>
+                  ${SETS.map((set, i) => `
+                    <div class="set-item ${state.game.claimedSets?.includes(set.name) ? 'claimed' : ''}">
+                      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                        <strong style="font-size: 14px;">${set.name}</strong>
+                        ${state.game.claimedSets?.includes(set.name) ? 
+                          '<span style="color: #4ade80; font-size: 12px;">✓ Claimed</span>' : 
+                          '<span style="color: #8b949e; font-size: 12px;">Available</span>'}
+                      </div>
+                      <div style="font-size: 11px; color: #8b949e;">${set.cards.join(', ')}</div>
+                    </div>
+                  `).join('')}
+                </div>
               </div>
             </div>
           </div>
           
           ${state.showCallModal ? `
-            <div class="modal" onclick="if(event.target === this) app.closeCallModal()">
+            <div class="modal" onclick="event.target === this && app.closeCallModal()">
               <div class="modal-content" onclick="event.stopPropagation()">
                 <h2 style="margin-bottom: 20px;">Call a Set</h2>
                 
@@ -915,7 +905,7 @@ confirmStartPlayer: () => {
                   <select id="set-select" style="width: 100%;">
                     ${SETS.filter(s => !state.game.claimedSets?.includes(s.name)).map((set, i) => {
                       const actualIndex = SETS.indexOf(set);
-                      return `<option value="${actualIndex}">${set.name}</option>`;
+                      return `<option value="${actualIndex}" ${state.callSetIndex === actualIndex ? 'selected' : ''}>${set.name}</option>`;
                     }).join('')}
                   </select>
                 </div>
@@ -923,14 +913,14 @@ confirmStartPlayer: () => {
                 <div style="margin-bottom: 20px;">
                   <h3 style="margin-bottom: 10px;">Assign each card to a teammate:</h3>
                   ${SETS[state.callSetIndex].cards.map(card => {
-                    const iHaveIt = me.hand.includes(card);
+                    const iHaveIt = me?.hand.includes(card);
                     return `
                       <div style="margin-bottom: 10px;">
                         <label style="display: block; margin-bottom: 5px; font-weight: 700;">${card}</label>
-                        <select id="assign-${card}" style="width: 100%;">
+                        <select class="card-assign" data-card="${card}" style="width: 100%;">
                           <option value="">Who has this card?</option>
                           ${state.game.players.filter(p => state.game.teams[myTeam].includes(p.id)).map(p => 
-                            `<option value="${p.id}">${p.name}${p.id === myId ? ' (You)' : ''}${iHaveIt && p.id === myId ? ' ✓' : ''}</option>`
+                            `<option value="${p.id}" ${state.callAssignments[card] === p.id ? 'selected' : ''}>${p.name}${p.id === myId ? ' (You)' : ''}${iHaveIt && p.id === myId ? ' ✓' : ''}</option>`
                           ).join('')}
                         </select>
                       </div>
@@ -952,16 +942,16 @@ confirmStartPlayer: () => {
         const setSelect = document.getElementById('set-select');
         
         if (oppSelect) {
+          oppSelect.value = state.selectedOpponent;
           oppSelect.onchange = e => {
             state.selectedOpponent = e.target.value;
-            // Don't re-render to keep dropdown open
           };
         }
         
         if (cardSelect) {
+          cardSelect.value = state.selectedCard;
           cardSelect.onchange = e => {
             state.selectedCard = e.target.value;
-            // Don't re-render to keep dropdown open
           };
         }
         
@@ -974,15 +964,11 @@ confirmStartPlayer: () => {
         }
         
         if (state.showCallModal) {
-          SETS[state.callSetIndex].cards.forEach(card => {
-            const sel = document.getElementById(`assign-${card}`);
-            if (sel) {
-              sel.value = state.callAssignments[card] || '';
-              sel.onchange = e => {
-                state.callAssignments[card] = e.target.value;
-                // Don't re-render to keep dropdown open
-              };
-            }
+          document.querySelectorAll('.card-assign').forEach(sel => {
+            const card = sel.getAttribute('data-card');
+            sel.onchange = e => {
+              state.callAssignments[card] = e.target.value;
+            };
           });
         }
         
@@ -993,27 +979,26 @@ confirmStartPlayer: () => {
     window.app = {
       createRoom,
       joinRoom,
+      confirmStartPlayer: () => {
+        state.view = 'teamSelect';
+        render();
+      },
       confirmTeam,
       cancel: () => {
         state.view = 'home';
         state.code = '';
         state.game = null;
+        state.startPlayer = 'random';
         render();
       },
       addBot,
       removeBot,
       startGame,
-      selectCard: (card) => {
-        if (state.game && state.game.currentTurn !== myId) {
-          return alert('Not your turn!');
-        }
-        state.selectedCard = state.selectedCard === card ? '' : card;
-        render();
-      },
       askForCard,
       openCallModal,
       closeCallModal: () => {
         state.showCallModal = false;
+        state.callAssignments = {};
         render();
       },
       submitCall
