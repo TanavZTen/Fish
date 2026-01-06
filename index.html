@@ -1079,36 +1079,32 @@
         const setSelect = document.getElementById('set-select');
         
         if (oppSelect) {
-          oppSelect.addEventListener('change', (e) => {
-            e.stopPropagation();
+          oppSelect.onchange = (e) => {
             state.selectedOpponent = e.target.value;
-          });
+          };
         }
         
         if (cardSelect) {
-          cardSelect.addEventListener('change', (e) => {
-            e.stopPropagation();
+          cardSelect.onchange = (e) => {
             state.selectedCard = e.target.value;
-          });
+          };
         }
         
         if (setSelect) {
-          setSelect.addEventListener('change', (e) => {
-            e.stopPropagation();
+          setSelect.onchange = (e) => {
             state.callSetIndex = Number(e.target.value);
             state.callAssignments = {};
             render();
-          });
+          };
         }
         
         if (state.showCallModal) {
           const assignSelects = document.querySelectorAll('.card-assign-select');
           assignSelects.forEach(sel => {
             const card = sel.getAttribute('data-card');
-            sel.addEventListener('change', (e) => {
-              e.stopPropagation();
+            sel.onchange = (e) => {
               state.callAssignments[card] = e.target.value;
-            });
+            };
           });
         }
         
