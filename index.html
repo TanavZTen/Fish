@@ -1,4 +1,7 @@
-<!DOCTYPE html>
+confirmStartPlayer: () => {
+        state.view = 'teamSelect';
+        render();
+      },<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -249,7 +252,8 @@
       showCallModal: false,
       callSetIndex: 0,
       callAssignments: {},
-      startPlayer: 'random'
+      startPlayer: 'random',
+      dropdownOpen: false
     };
     
     function getSetForCard(card) {
@@ -686,7 +690,7 @@
                 
                 <div class="setting-row">
                   <label>Starting Player</label>
-                  <select id="start-player-select">
+                  <select id="start-player-select" onfocus="state.dropdownOpen = true" onblur="setTimeout(() => state.dropdownOpen = false, 200)">
                     <option value="random" ${state.game.startPlayer === 'random' ? 'selected' : ''}>Random Player</option>
                     ${state.game.players.map(p => 
                       `<option value="${p.id}" ${state.game.startPlayer === p.id ? 'selected' : ''}>${p.name}</option>`
@@ -702,7 +706,7 @@
                 ${state.game.settings?.showHistory ? `
                 <div class="setting-row">
                   <label>Recent asks to show</label>
-                  <select id="history-count">
+                  <select id="history-count" onfocus="state.dropdownOpen = true" onblur="setTimeout(() => state.dropdownOpen = false, 200)">
                     <option value="2" ${state.game.settings?.historyCount === 2 ? 'selected' : ''}>2 cards</option>
                     <option value="3" ${state.game.settings?.historyCount === 3 ? 'selected' : ''}>3 cards</option>
                   </select>
@@ -711,7 +715,7 @@
                 
                 <div class="setting-row">
                   <label>Time Limit per Turn</label>
-                  <select id="time-limit">
+                  <select id="time-limit" onfocus="state.dropdownOpen = true" onblur="setTimeout(() => state.dropdownOpen = false, 200)">
                     <option value="0" ${state.game.settings?.timeLimit === 0 ? 'selected' : ''}>No limit</option>
                     <option value="60" ${state.game.settings?.timeLimit === 60 ? 'selected' : ''}>1 minute</option>
                     <option value="120" ${state.game.settings?.timeLimit === 120 ? 'selected' : ''}>2 minutes</option>
