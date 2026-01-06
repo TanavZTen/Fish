@@ -514,7 +514,9 @@
     
     function openCallModal() {
       state.showCallModal = true;
-      state.callSetIndex = 0;
+      // Find first unclaimed set
+      const unclaimedSets = SETS.filter(s => !state.game.claimedSets?.includes(s.name));
+      state.callSetIndex = unclaimedSets.length > 0 ? SETS.indexOf(unclaimedSets[0]) : 0;
       state.callAssignments = {};
       render();
     }
@@ -815,13 +817,15 @@
                     ).join('')}
                   </select>
                   
-                  <button onclick="app.askForCard()" ${!state.selectedCard || !state.selectedOpponent ? 'disabled' : ''}>
-                    Ask for Card
-                  </button>
-                  
-                  <button onclick="app.openCallModal()" class="btn-secondary">
-                    Call a Set
-                  </button>
+                  <div style="display: flex; gap: 10px;">
+                    <button onclick="app.askForCard()" ${!state.selectedCard || !state.selectedOpponent ? 'disabled' : ''} style="flex: 1;">
+                      Ask for Card
+                    </button>
+                    
+                    <button onclick="app.openCallModal()" class="btn-secondary" style="flex: 1;">
+                      Call a Set
+                    </button>
+                  </div>
                 </div>
               ` : '<p style="text-align: center; color: #8b949e; margin-top: 20px;">Waiting for turn...</p>'}
               
@@ -883,14 +887,14 @@
         if (oppSelect) {
           oppSelect.onchange = e => {
             state.selectedOpponent = e.target.value;
-            render();
+            // Don't re-render to keep dropdown open
           };
         }
         
         if (cardSelect) {
           cardSelect.onchange = e => {
             state.selectedCard = e.target.value;
-            render();
+            // Don't re-render to keep dropdown open
           };
         }
         
@@ -909,6 +913,7 @@
               sel.value = state.callAssignments[card] || '';
               sel.onchange = e => {
                 state.callAssignments[card] = e.target.value;
+                // Don't re-render to keep dropdown open
               };
             }
           });
