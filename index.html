@@ -352,7 +352,7 @@
     function createRoom() {
       if (!state.name.trim()) return alert('Enter your name');
       state.code = Math.random().toString(36).substring(2, 8).toUpperCase();
-      state.view = 'startPlayer';
+      state.view = 'teamSelect';
       render();
     }
     
@@ -587,9 +587,17 @@
     }
     
     let pollInterval = null;
+    let lastLoadTime = 0;
+    
     function startPolling() {
       if (pollInterval) clearInterval(pollInterval);
-      pollInterval = setInterval(load, 2000);
+      pollInterval = setInterval(() => {
+        const now = Date.now();
+        if (now - lastLoadTime >= 30000) { // 30 seconds
+          lastLoadTime = now;
+          load();
+        }
+      }, 1000);
     }
     
     function render() {
@@ -615,28 +623,6 @@
         
         document.getElementById('name-input').oninput = e => state.name = e.target.value;
         document.getElementById('code-input').oninput = e => state.code = e.target.value.toUpperCase();
-        return;
-      }
-      
-      if (state.view === 'startPlayer') {
-        app.innerHTML = `
-          <div class="container">
-            <div class="card">
-              <h2 style="text-align:center; margin-bottom:20px;">Select Starting Player</h2>
-              
-              <select id="start-player-select">
-                <option value="random">Random Player</option>
-              </select>
-              
-              <button onclick="app.confirmStartPlayer()">Continue</button>
-              <button onclick="app.cancel()" class="btn-secondary">Cancel</button>
-            </div>
-          </div>
-        `;
-        
-        document.getElementById('start-player-select').onchange = e => {
-          state.startPlayer = e.target.value;
-        };
         return;
       }
       
@@ -679,6 +665,16 @@
               ${isHost ? `
               <div class="settings">
                 <h3 style="margin-bottom: 15px; font-size: 16px;">Game Settings (Host Only)</h3>
+                
+                <div class="setting-row">
+                  <label>Starting Player</label>
+                  <select id="start-player">
+                    <option value="random" ${state.game.startPlayer === 'random' ? 'selected' : ''}>Random Player</option>
+                    ${state.game.players.map(p => 
+                      `<option value="${p.id}" ${state.game.startPlayer === p.id ? 'selected' : ''}>${p.name}</option>`
+                    ).join('')}
+                  </select>
+                </div>
                 
                 <div class="setting-row">
                   <label>Show Ask History</label>
@@ -745,11 +741,16 @@
         `;
         
         if (isHost) {
+          const startPlayerSel = document.getElementById('start-player');
           const histCheck = document.getElementById('show-history');
           const countsCheck = document.getElementById('show-counts');
           const histCountSel = document.getElementById('history-count');
           const timeLimitSel = document.getElementById('time-limit');
           
+          if (startPlayerSel) startPlayerSel.onchange = async (e) => {
+            state.game.startPlayer = e.target.value;
+            await save(state.game);
+          };
           if (histCheck) histCheck.onchange = () => toggleSetting('showHistory');
           if (countsCheck) countsCheck.onchange = () => toggleSetting('showCounts');
           if (histCountSel) histCountSel.onchange = (e) => changeSetting('historyCount', Number(e.target.value));
@@ -979,16 +980,13 @@
     window.app = {
       createRoom,
       joinRoom,
-      confirmStartPlayer: () => {
-        state.view = 'teamSelect';
-        render();
-      },
       confirmTeam,
       cancel: () => {
         state.view = 'home';
         state.code = '';
         state.game = null;
         state.startPlayer = 'random';
+        if (pollInterval) clearInterval(pollInterval);
         render();
       },
       addBot,
