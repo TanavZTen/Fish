@@ -112,6 +112,10 @@
       opacity: 0.5;
       border-color: #f85149;
     }
+    .team-player.spectator-mode {
+      border: 2px solid #8b949e;
+      background: #1a1f26;
+    }
     .settings {
       background: #0d1117;
       border: 1px solid #30363d;
@@ -221,14 +225,12 @@
       flex-direction: column;
       gap: 20px;
     }
-    .spectator-badge {
+    .spectator-controls {
       background: #8b949e;
       color: #0d1117;
-      padding: 2px 8px;
-      border-radius: 4px;
-      font-size: 11px;
-      font-weight: 700;
-      margin-left: 8px;
+      padding: 15px;
+      border-radius: 8px;
+      margin-bottom: 20px;
     }
   </style>
 </head>
@@ -268,12 +270,13 @@
       selectedCard: '',
       selectedOpponent: '',
       showCallModal: false,
+      showCounterSetModal: false,
       callSetIndex: 0,
       callAssignments: {},
       startPlayer: 'random',
-      hasCards: true,
       isSpectator: false,
-      lastHeartbeat: Date.now()
+      spectatingPlayerId: null,
+      shouldRender: true
     };
     
     function getSetForCard(card) {
@@ -316,13 +319,27 @@
     }
     
     async function updateHeartbeat() {
-      if (!state.game || !state.code) return;
+      if (!state.game || !state.code || state.isSpectator) return;
       
       const game = state.game;
       const player = game.players.find(p => p.id === myId);
       if (player) {
         player.lastSeen = Date.now();
-        await save(game);
+        player.disconnected = false;
+        
+        const { data: existingData } = await DB
+          .from('games')
+          .select('id')
+          .eq('room_code', state.code)
+          .maybeSingle();
+        
+        if (existingData) {
+          await DB.from('games')
+            .update({ game_data: game, updated_at: new Date().toISOString() })
+            .eq('room_code', state.code);
+        }
+        
+        state.game = game;
       }
     }
     
@@ -345,7 +362,7 @@
         }
         
         state.game = game;
-        render();
+        if (state.shouldRender) render();
       } catch (e) {
         console.error(e);
       }
@@ -364,12 +381,11 @@
           const oldPhase = state.game?.phase;
           state.game = gameData.game_data;
           
-          // Mark disconnected players
           const now = Date.now();
           state.game.players.forEach(p => {
-            if (!p.isBot && p.lastSeen && now - p.lastSeen > 10000) {
+            if (!p.isBot && p.lastSeen && now - p.lastSeen > 15000) {
               p.disconnected = true;
-            } else {
+            } else if (!p.isBot) {
               p.disconnected = false;
             }
           });
@@ -380,12 +396,11 @@
               state.view = 'game';
               state.isSpectator = false;
             } else {
-              state.view = 'game';
-              state.isSpectator = true;
+              state.view = 'spectatorPrompt';
             }
           }
           
-          render();
+          if (state.shouldRender) render();
         }
       } catch (e) {
         console.error(e);
@@ -426,10 +441,8 @@
           render();
           startPolling();
         } else if (state.game.phase === 'game') {
-          state.view = 'game';
-          state.isSpectator = true;
+          state.view = 'spectatorPrompt';
           render();
-          startPolling();
         } else {
           state.view = 'teamSelect';
           render();
@@ -437,6 +450,14 @@
       } catch (e) {
         alert('Error: ' + e.message);
       }
+    }
+    
+    function becomeSpectator() {
+      state.isSpectator = true;
+      state.spectatingPlayerId = state.game.players[0]?.id || null;
+      state.view = 'game';
+      startPolling();
+      render();
     }
     
     async function confirmTeam(team) {
@@ -545,6 +566,8 @@
         return alert('Select a card and opponent');
       }
       
+      state.shouldRender = false;
+      
       const game = state.game;
       const opponent = game.players.find(p => p.id === state.selectedOpponent);
       const me = game.players.find(p => p.id === myId);
@@ -554,10 +577,9 @@
       if (hasCard) {
         opponent.hand = opponent.hand.filter(c => c !== state.selectedCard);
         me.hand.push(state.selectedCard);
-        game.log.unshift(`${me.name} (Asker) asked ${opponent.name} (Interrogated) for ${state.selectedCard} - SUCCESS!`);
+        game.log.unshift(`${me.name} asked ${opponent.name} for ${state.selectedCard} - SUCCESS!`);
         
         if (me.hand.length === 0) {
-          state.hasCards = false;
           const myTeam = game.teams.team1.includes(myId) ? 'team1' : 'team2';
           const teammates = game.players.filter(p => 
             game.teams[myTeam].includes(p.id) && p.hand.length > 0 && p.id !== myId
@@ -568,12 +590,16 @@
         }
       } else {
         game.currentTurn = opponent.id;
-        game.log.unshift(`${me.name} (Asker) asked ${opponent.name} (Interrogated) for ${state.selectedCard} - FAILED`);
+        game.log.unshift(`${me.name} asked ${opponent.name} for ${state.selectedCard} - FAILED`);
       }
       
       state.selectedCard = '';
       state.selectedOpponent = '';
+      
       await save(game);
+      
+      state.shouldRender = true;
+      render();
     }
     
     function openCallModal() {
@@ -587,6 +613,14 @@
       }
       
       state.showCallModal = true;
+      const unclaimedSets = SETS.filter(s => !state.game.claimedSets?.includes(s.name));
+      state.callSetIndex = unclaimedSets.length > 0 ? SETS.indexOf(unclaimedSets[0]) : 0;
+      state.callAssignments = {};
+      render();
+    }
+    
+    function openCounterSetModal() {
+      state.showCounterSetModal = true;
       const unclaimedSets = SETS.filter(s => !state.game.claimedSets?.includes(s.name));
       state.callSetIndex = unclaimedSets.length > 0 ? SETS.indexOf(unclaimedSets[0]) : 0;
       state.callAssignments = {};
@@ -615,46 +649,76 @@
         game.scores[myTeam]++;
         game.claimedSets.push(set.name);
         game.log.unshift(`${me.name} correctly called ${set.name}! ${myTeam === 'team1' ? 'Team 1' : 'Team 2'} scores!`);
-        
-        set.cards.forEach(card => {
-          game.players.forEach(p => {
-            p.hand = p.hand.filter(c => c !== card);
-          });
-        });
-        
-        if (game.currentTurn === myId && me.hand.length === 0) {
-          state.hasCards = false;
-          const teammates = game.players.filter(p => 
-            game.teams[myTeam].includes(p.id) && p.hand.length > 0 && p.id !== myId
-          );
-          if (teammates.length > 0) {
-            game.currentTurn = teammates[0].id;
-          }
-        }
       } else {
         const oppTeam = myTeam === 'team1' ? 'team2' : 'team1';
         game.scores[oppTeam]++;
         game.claimedSets.push(set.name);
         game.log.unshift(`${me.name} INCORRECTLY called ${set.name}! ${oppTeam === 'team1' ? 'Team 1' : 'Team 2'} gets the set!`);
-        
-        set.cards.forEach(card => {
-          game.players.forEach(p => {
-            p.hand = p.hand.filter(c => c !== card);
-          });
+      }
+      
+      set.cards.forEach(card => {
+        game.players.forEach(p => {
+          p.hand = p.hand.filter(c => c !== card);
         });
-        
-        if (me.hand.length === 0) {
-          state.hasCards = false;
-          const teammates = game.players.filter(p => 
-            game.teams[myTeam].includes(p.id) && p.hand.length > 0 && p.id !== myId
-          );
-          if (teammates.length > 0) {
-            game.currentTurn = teammates[0].id;
-          }
+      });
+      
+      if (game.currentTurn === myId && me.hand.length === 0) {
+        const teammates = game.players.filter(p => 
+          game.teams[myTeam].includes(p.id) && p.hand.length > 0 && p.id !== myId
+        );
+        if (teammates.length > 0) {
+          game.currentTurn = teammates[0].id;
         }
       }
       
       state.showCallModal = false;
+      state.callAssignments = {};
+      await save(game);
+      
+      if (game.claimedSets.length === 9) {
+        setTimeout(() => {
+          const winner = game.scores.team1 > game.scores.team2 ? 'Team 1' : 'Team 2';
+          alert(`Game Over! ${winner} wins ${game.scores.team1}-${game.scores.team2}!`);
+        }, 500);
+      }
+    }
+    
+    async function submitCounterSet() {
+      const game = state.game;
+      const set = SETS[state.callSetIndex];
+      const me = game.players.find(p => p.id === myId);
+      const myTeam = game.teams.team1.includes(myId) ? 'team1' : 'team2';
+      const oppTeam = myTeam === 'team1' ? 'team2' : 'team1';
+      
+      if (Object.keys(state.callAssignments).length !== set.cards.length) {
+        return alert('You must assign all cards in the set!');
+      }
+      
+      let correct = true;
+      set.cards.forEach(card => {
+        const actualHolder = game.players.find(p => p.hand.includes(card));
+        if (!actualHolder || state.callAssignments[card] !== actualHolder.id) {
+          correct = false;
+        }
+      });
+      
+      if (correct) {
+        game.scores[myTeam]++;
+        game.claimedSets.push(set.name);
+        game.log.unshift(`${me.name} COUNTER SET correct on ${set.name}! ${myTeam === 'team1' ? 'Team 1' : 'Team 2'} scores!`);
+      } else {
+        game.scores[oppTeam]++;
+        game.claimedSets.push(set.name);
+        game.log.unshift(`${me.name} COUNTER SET wrong on ${set.name}! ${oppTeam === 'team1' ? 'Team 1' : 'Team 2'} gets it FREE!`);
+      }
+      
+      set.cards.forEach(card => {
+        game.players.forEach(p => {
+          p.hand = p.hand.filter(c => c !== card);
+        });
+      });
+      
+      state.showCounterSetModal = false;
       state.callAssignments = {};
       await save(game);
       
@@ -674,8 +738,10 @@
       if (heartbeatInterval) clearInterval(heartbeatInterval);
       
       pollInterval = setInterval(load, 2000);
-      heartbeatInterval = setInterval(updateHeartbeat, 5000);
-      updateHeartbeat();
+      if (!state.isSpectator) {
+        heartbeatInterval = setInterval(updateHeartbeat, 5000);
+        updateHeartbeat();
+      }
     }
     
     function render() {
@@ -701,6 +767,23 @@
         
         document.getElementById('name-input').oninput = e => state.name = e.target.value;
         document.getElementById('code-input').oninput = e => state.code = e.target.value.toUpperCase();
+        return;
+      }
+      
+      if (state.view === 'spectatorPrompt') {
+        app.innerHTML = `
+          <div class="container">
+            <div class="card">
+              <h2 style="text-align:center; margin-bottom:20px;">Game In Progress</h2>
+              <p style="text-align:center; color: #8b949e; margin-bottom: 20px;">
+                This room has an active game. Would you like to spectate?
+              </p>
+              
+              <button onclick="app.becomeSpectator()">Yes, Spectate Game</button>
+              <button onclick="app.cancel()" class="btn-secondary">No, Go Back</button>
+            </div>
+          </div>
+        `;
         return;
       }
       
@@ -753,6 +836,7 @@
                 <div class="setting-row">
                   <label>Recent asks to show</label>
                   <select id="history-count">
+                    <option value="1" ${state.game.settings?.historyCount === 1 ? 'selected' : ''}>1 card</option>
                     <option value="2" ${state.game.settings?.historyCount === 2 ? 'selected' : ''}>2 cards</option>
                     <option value="3" ${state.game.settings?.historyCount === 3 ? 'selected' : ''}>3 cards</option>
                   </select>
@@ -790,7 +874,7 @@
                   <h3>Team 1 (${state.game.teams.team1.length})</h3>
                   ${state.game.players.filter(p => state.game.teams.team1.includes(p.id)).map(p => `
                     <div class="team-player ${p.id === myId ? 'you' : ''} ${p.disconnected ? 'disconnected' : ''}">
-                      <span>${p.name} ${p.id === myId ? '(You)' : ''} ${p.disconnected ? '(Disconnected)' : ''}</span>
+                      <span>${p.name} ${p.id === myId ? '(You)' : ''} ${p.disconnected ? '(DC)' : ''}</span>
                       ${isHost && p.isBot ? `<button class="btn-small" onclick="app.removeBot('${p.id}')">Remove</button>` : ''}
                     </div>
                   `).join('')}
@@ -801,7 +885,7 @@
                   <h3>Team 2 (${state.game.teams.team2.length})</h3>
                   ${state.game.players.filter(p => state.game.teams.team2.includes(p.id)).map(p => `
                     <div class="team-player ${p.id === myId ? 'you' : ''} ${p.disconnected ? 'disconnected' : ''}">
-                      <span>${p.name} ${p.id === myId ? '(You)' : ''} ${p.disconnected ? '(Disconnected)' : ''}</span>
+                      <span>${p.name} ${p.id === myId ? '(You)' : ''} ${p.disconnected ? '(DC)' : ''}</span>
                       ${isHost && p.isBot ? `<button class="btn-small" onclick="app.removeBot('${p.id}')">Remove</button>` : ''}
                     </div>
                   `).join('')}
@@ -837,12 +921,20 @@
       if (state.view === 'game' && state.game) {
         if (state.isSpectator) {
           const currentPlayer = state.game.players.find(p => p.id === state.game.currentTurn);
+          const viewingPlayer = state.game.players.find(p => p.id === state.spectatingPlayerId) || state.game.players[0];
+          const sortedHand = sortHand(viewingPlayer?.hand || []);
           
           app.innerHTML = `
             <div class="container">
               <div class="card">
-                <div style="background: #8b949e; color: #0d1117; padding: 12px; border-radius: 8px; margin-bottom: 20px; text-align: center; font-weight: 700;">
-                  👁️ SPECTATOR MODE - You are watching this game
+                <div class="spectator-controls">
+                  <h3 style="margin-bottom: 10px;">👁️ SPECTATOR MODE</h3>
+                  <label style="display: block; margin-bottom: 5px; font-weight: 700;">Viewing:</label>
+                  <select id="spectator-select" style="background: #fff; color: #000;">
+                    ${state.game.players.map(p => 
+                      `<option value="${p.id}" ${state.spectatingPlayerId === p.id ? 'selected' : ''}>${p.name} ${state.game.currentTurn === p.id ? '👉' : ''}</option>`
+                    ).join('')}
+                  </select>
                 </div>
                 
                 <h2>Room ${state.code}</h2>
@@ -857,7 +949,7 @@
                     ${state.game.players.filter(p => state.game.teams.team1.includes(p.id)).map(p => `
                       <div class="team-player ${p.disconnected ? 'disconnected' : ''}">
                         <span>
-                          ${p.name} ${p.disconnected ? '(Disconnected)' : ''}
+                          ${p.name} ${p.disconnected ? '(DC)' : ''}
                           ${state.game.settings?.showCounts ? ` (${p.hand.length})` : ''}
                         </span>
                         ${state.game.currentTurn === p.id ? '<span style="color: #4ade80;">👉</span>' : ''}
@@ -870,12 +962,22 @@
                     ${state.game.players.filter(p => state.game.teams.team2.includes(p.id)).map(p => `
                       <div class="team-player ${p.disconnected ? 'disconnected' : ''}">
                         <span>
-                          ${p.name} ${p.disconnected ? '(Disconnected)' : ''}
+                          ${p.name} ${p.disconnected ? '(DC)' : ''}
                           ${state.game.settings?.showCounts ? ` (${p.hand.length})` : ''}
                         </span>
                         ${state.game.currentTurn === p.id ? '<span style="color: #4ade80;">👉</span>' : ''}
                       </div>
                     `).join('')}
+                  </div>
+                </div>
+                
+                <div style="margin-top: 20px;">
+                  <h3 style="margin-bottom: 10px;">${viewingPlayer.name}'s Hand (${viewingPlayer.hand.length} cards)</h3>
+                  <div class="game-hand">
+                    ${sortedHand.map(card => {
+                      const isRed = card.includes('♥') || card.includes('♦');
+                      return `<div class="game-card ${isRed ? 'red' : 'black'}">${card}</div>`;
+                    }).join('')}
                   </div>
                 </div>
                 
@@ -899,6 +1001,14 @@
               </div>
             </div>
           `;
+          
+          const specSelect = document.getElementById('spectator-select');
+          if (specSelect) {
+            specSelect.onchange = (e) => {
+              state.spectatingPlayerId = e.target.value;
+              render();
+            };
+          }
           return;
         }
         
@@ -913,10 +1023,7 @@
         
         const sortedHand = sortHand(me?.hand || []);
         const askableCards = getAskableCards(me?.hand || []);
-        
-        if (me && me.hand.length === 0) {
-          state.hasCards = false;
-        }
+        const hasCards = me && me.hand.length > 0;
         
         app.innerHTML = `
           <div class="container">
@@ -931,9 +1038,9 @@
                 <div>
                   <h3 style="color: #da3633; margin-bottom: 10px;">Team 1</h3>
                   ${state.game.players.filter(p => state.game.teams.team1.includes(p.id)).map(p => `
-                    <div class="team-player ${p.id === myId ? 'you' : ''} ${p.disconnected ? 'disconnected' : ''}">
+                    <div class="team-player ${p.id === myId ? 'you' : ''} ${p.disconnected ? 'disconnected' : ''} ${p.id === myId && !hasCards ? 'spectator-mode' : ''}">
                       <span>
-                        ${p.name} ${p.id === myId ? '(You)' : ''} ${p.disconnected ? '(DC)' : ''}
+                        ${p.name} ${p.id === myId ? '(You)' : ''} ${p.disconnected ? '(DC)' : ''} ${p.id === myId && !hasCards ? '(Spectator)' : ''}
                         ${state.game.settings?.showCounts ? ` (${p.hand.length})` : ''}
                       </span>
                       ${state.game.currentTurn === p.id ? '<span style="color: #4ade80;">👉</span>' : ''}
@@ -944,9 +1051,9 @@
                 <div>
                   <h3 style="color: #1f6feb; margin-bottom: 10px;">Team 2</h3>
                   ${state.game.players.filter(p => state.game.teams.team2.includes(p.id)).map(p => `
-                    <div class="team-player ${p.id === myId ? 'you' : ''} ${p.disconnected ? 'disconnected' : ''}">
+                    <div class="team-player ${p.id === myId ? 'you' : ''} ${p.disconnected ? 'disconnected' : ''} ${p.id === myId && !hasCards ? 'spectator-mode' : ''}">
                       <span>
-                        ${p.name} ${p.id === myId ? '(You)' : ''} ${p.disconnected ? '(DC)' : ''}
+                        ${p.name} ${p.id === myId ? '(You)' : ''} ${p.disconnected ? '(DC)' : ''} ${p.id === myId && !hasCards ? '(Spectator)' : ''}
                         ${state.game.settings?.showCounts ? ` (${p.hand.length})` : ''}
                       </span>
                       ${state.game.currentTurn === p.id ? '<span style="color: #4ade80;">👉</span>' : ''}
@@ -962,16 +1069,12 @@
                     <div class="game-hand">
                       ${sortedHand.map(card => {
                         const isRed = card.includes('♥') || card.includes('♦');
-                        return `
-                          <div class="game-card ${isRed ? 'red' : 'black'}">
-                            ${card}
-                          </div>
-                        `;
-                      }).join('') || '<p style="color: #8b949e;">No cards remaining</p>'}
+                        return `<div class="game-card ${isRed ? 'red' : 'black'}">${card}</div>`;
+                      }).join('') || '<p style="color: #8b949e;">No cards - You are now a spectator</p>'}
                     </div>
                   </div>
                   
-                  ${state.hasCards && me?.hand?.length > 0 ? `
+                  ${hasCards ? `
                     <div>
                       <h3 style="margin-bottom: 10px;">Your Actions</h3>
                       
@@ -979,14 +1082,14 @@
                         <select id="opponent-select" style="margin-bottom: 10px;">
                           <option value="">Select Opponent to Ask</option>
                           ${opponents.map(p => 
-                            `<option value="${p.id}" ${state.selectedOpponent === p.id ? 'selected' : ''}>${p.name}</option>`
+                            `<option value="${p.id}">${p.name}</option>`
                           ).join('')}
                         </select>
                         
                         <select id="card-select" style="margin-bottom: 10px;">
                           <option value="">Select Card to Ask For</option>
                           ${askableCards.sort().map(card => 
-                            `<option value="${card}" ${state.selectedCard === card ? 'selected' : ''}>${card}</option>`
+                            `<option value="${card}">${card}</option>`
                           ).join('')}
                         </select>
                         
@@ -1001,10 +1104,10 @@
                     </div>
                   ` : `
                     <div>
-                      <button onclick="app.openCallModal()" class="btn-secondary">
-                        Call a Set
+                      <button onclick="app.openCounterSetModal()" class="btn-secondary">
+                        Counter Set (Spectator Only)
                       </button>
-                      ${me?.hand?.length === 0 ? '<p style="color: #8b949e; margin-top: 10px;">You have no cards. You can still call sets!</p>' : ''}
+                      <p style="color: #8b949e; margin-top: 10px; font-size: 13px;">You have no cards. You can counter-call sets. If correct, your team scores. If wrong, opponent gets it FREE!</p>
                     </div>
                   `}
                   
@@ -1032,10 +1135,11 @@
             </div>
           </div>
           
-          ${state.showCallModal ? `
+          ${state.showCallModal || state.showCounterSetModal ? `
             <div class="modal">
               <div class="modal-content">
-                <h2 style="margin-bottom: 20px;">Call a Set</h2>
+                <h2 style="margin-bottom: 20px;">${state.showCounterSetModal ? 'Counter Set (Risky!)' : 'Call a Set'}</h2>
+                ${state.showCounterSetModal ? '<p style="color: #f85149; margin-bottom: 15px; font-size: 14px;">⚠️ If you\'re wrong, the opposing team gets this set for FREE!</p>' : ''}
                 
                 <div style="margin-bottom: 20px;">
                   <label style="display: block; margin-bottom: 10px; color: #8b949e;">Select Set:</label>
@@ -1048,15 +1152,16 @@
                 </div>
                 
                 <div style="margin-bottom: 20px;">
-                  <h3 style="margin-bottom: 10px;">Assign each card to a teammate:</h3>
+                  <h3 style="margin-bottom: 10px;">Assign each card to a ${state.showCounterSetModal ? 'player' : 'teammate'}:</h3>
                   ${SETS[state.callSetIndex].cards.map(card => {
                     const iHaveIt = me?.hand?.includes(card);
+                    const playersToShow = state.showCounterSetModal ? state.game.players : state.game.players.filter(p => state.game.teams[myTeam].includes(p.id));
                     return `
                       <div style="margin-bottom: 10px;">
                         <label style="display: block; margin-bottom: 5px; font-weight: 700;">${card}</label>
                         <select class="card-assign-select" data-card="${card}" style="width: 100%;">
                           <option value="">Who has this card?</option>
-                          ${state.game.players.filter(p => state.game.teams[myTeam].includes(p.id)).map(p => 
+                          ${playersToShow.map(p => 
                             `<option value="${p.id}" ${state.callAssignments[card] === p.id ? 'selected' : ''}>${p.name}${p.id === myId ? ' (You)' : ''}${iHaveIt && p.id === myId ? ' ✓' : ''}</option>`
                           ).join('')}
                         </select>
@@ -1066,8 +1171,8 @@
                 </div>
                 
                 <div style="display: flex; gap: 10px;">
-                  <button onclick="app.submitCall()" style="flex: 1;">Submit Call</button>
-                  <button onclick="app.closeCallModal()" class="btn-secondary" style="flex: 1;">Cancel</button>
+                  <button onclick="${state.showCounterSetModal ? 'app.submitCounterSet()' : 'app.submitCall()'}" style="flex: 1;">Submit ${state.showCounterSetModal ? 'Counter Set' : 'Call'}</button>
+                  <button onclick="${state.showCounterSetModal ? 'app.closeCounterSetModal()' : 'app.closeCallModal()'}" class="btn-secondary" style="flex: 1;">Cancel</button>
                 </div>
               </div>
             </div>
@@ -1098,7 +1203,7 @@
           };
         }
         
-        if (state.showCallModal) {
+        if (state.showCallModal || state.showCounterSetModal) {
           const assignSelects = document.querySelectorAll('.card-assign-select');
           assignSelects.forEach(sel => {
             const card = sel.getAttribute('data-card');
@@ -1115,11 +1220,13 @@
     window.app = {
       createRoom,
       joinRoom,
+      becomeSpectator,
       confirmTeam,
       cancel: () => {
         state.view = 'home';
         state.code = '';
         state.game = null;
+        state.isSpectator = false;
         if (pollInterval) clearInterval(pollInterval);
         if (heartbeatInterval) clearInterval(heartbeatInterval);
         render();
@@ -1129,12 +1236,19 @@
       startGame,
       askForCard,
       openCallModal,
+      openCounterSetModal,
       closeCallModal: () => {
         state.showCallModal = false;
         state.callAssignments = {};
         render();
       },
-      submitCall
+      closeCounterSetModal: () => {
+        state.showCounterSetModal = false;
+        state.callAssignments = {};
+        render();
+      },
+      submitCall,
+      submitCounterSet
     };
     
     render();
