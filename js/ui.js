@@ -416,14 +416,14 @@ function renderCallModal() {
   const playersToShow = state.showCounterSetModal ? state.game.players : state.game.players.filter(p => state.game.teams[myTeam].includes(p.id));
   
   return `
-    <div class="modal">
-      <div class="modal-content">
+    <div class="modal" onclick="if(event.target === this) window.app.${state.showCounterSetModal ? 'closeCounterSetModal' : 'closeCallModal'}()">
+      <div class="modal-content" onclick="event.stopPropagation()">
         <h2 style="margin-bottom: 20px;">${state.showCounterSetModal ? 'Counter Set (Risky!)' : 'Call a Set'}</h2>
         ${state.showCounterSetModal ? '<p style="color: #f85149; margin-bottom: 15px; font-size: 14px;">⚠️ If you\'re wrong, the opposing team gets this set for FREE!</p>' : ''}
         
         <div style="margin-bottom: 20px;">
           <label style="display: block; margin-bottom: 10px; color: #8b949e;">Select Set:</label>
-          <select id="set-select" style="width: 100%;">
+          <select id="set-select" style="width: 100%;" size="1">
             ${SETS.filter(s => !state.game.claimedSets?.includes(s.name)).map((set, i) => {
               const actualIndex = SETS.indexOf(set);
               return `<option value="${actualIndex}" ${actualIndex === state.callSetIndex ? 'selected' : ''}>${set.name}</option>`;
@@ -431,14 +431,14 @@ function renderCallModal() {
           </select>
         </div>
         
-        <div style="margin-bottom: 20px;">
+        <div class="card-assignments-container" style="margin-bottom: 20px;">
           <h3 style="margin-bottom: 10px;">Assign each card to a ${state.showCounterSetModal ? 'player' : 'teammate'}:</h3>
           ${SETS[state.callSetIndex].cards.map(card => {
             const iHaveIt = me?.hand?.includes(card);
             return `
-              <div style="margin-bottom: 10px;">
+              <div class="card-assignment-row">
                 <label style="display: block; margin-bottom: 5px; font-weight: 700;">${card}</label>
-                <select class="card-assign-select" data-card="${card}" style="width: 100%;">
+                <select class="card-assign-select" data-card="${card}" size="1">
                   <option value="">Who has this card?</option>
                   ${playersToShow.map(p => 
                     `<option value="${p.id}" ${state.callAssignments[card] === p.id ? 'selected' : ''}>${p.name}${p.id === myId ? ' (You)' : ''}${iHaveIt && p.id === myId ? ' ✓' : ''}</option>`
