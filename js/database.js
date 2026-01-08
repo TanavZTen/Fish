@@ -46,7 +46,16 @@ async function load() {
     if (gameData && gameData.game_data) {
       const oldPhase = state.game?.phase;
       const oldView = state.view;
+      
+      // Store current selections before updating
+      const oldSelectedCard = state.selectedCard;
+      const oldSelectedOpponent = state.selectedOpponent;
+      
       state.game = gameData.game_data;
+      
+      // Restore selections after update
+      state.selectedCard = oldSelectedCard;
+      state.selectedOpponent = oldSelectedOpponent;
       
       // Check if we're still in the game
       const amIInGame = state.game.players.find(p => p.id === myId);
