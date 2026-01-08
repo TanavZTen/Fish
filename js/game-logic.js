@@ -65,6 +65,7 @@ async function joinRoom() {
     const existingPlayer = state.game.players.find(p => p.id === myId);
     
     if (existingPlayer) {
+      // Rejoin as existing player
       existingPlayer.lastSeen = Date.now();
       existingPlayer.disconnected = false;
       await save(state.game);
@@ -73,9 +74,11 @@ async function joinRoom() {
       render();
       startPolling();
     } else if (state.game.phase === 'game') {
+      // Game already started, offer spectator mode
       state.view = 'spectatorPrompt';
       render();
     } else {
+      // New player joining lobby
       state.view = 'teamSelect';
       render();
     }
@@ -96,10 +99,11 @@ async function confirmTeam(team) {
   state.team = team;
   
   if (!state.game) {
+    // Creating new game
     const game = {
       hostId: myId,
       phase: 'lobby',
-      players: [{ id: myId, name: state.name, hand: [], lastSeen: Date.now() }],
+      players: [{ id: myId, name: state.name, hand: [], lastSeen: Date.now(), disconnected: false }],
       teams: { team1: [], team2: [] },
       currentTurn: '',
       scores: { team1: 0, team2: 0 },
@@ -117,11 +121,25 @@ async function confirmTeam(team) {
     state.view = 'lobby';
     startPolling();
   } else {
+    // Joining existing game
     const game = state.game;
-    if (!game.players.find(p => p.id === myId)) {
-      game.players.push({ id: myId, name: state.name, hand: [], lastSeen: Date.now() });
+    const existingPlayer = game.players.find(p => p.id === myId);
+    
+    if (!existingPlayer) {
+      // Add new player
+      game.players.push({ id: myId, name: state.name, hand: [], lastSeen: Date.now(), disconnected: false });
       game.teams[team].push(myId);
       await save(game);
+    } else {
+      // Player already exists, just update team if needed
+      if (!game.teams[team].includes(myId)) {
+        // Remove from old team
+        game.teams.team1 = game.teams.team1.filter(id => id !== myId);
+        game.teams.team2 = game.teams.team2.filter(id => id !== myId);
+        // Add to new team
+        game.teams[team].push(myId);
+        await save(game);
+      }
     }
     state.view = 'lobby';
     startPolling();
@@ -132,7 +150,7 @@ async function addBot(team) {
   const game = state.game;
   let n = 1;
   while (game.players.some(p => p.name === `Bot ${n}`)) n++;
-  const bot = { id: `bot-${Date.now()}`, name: `Bot ${n}`, hand: [], isBot: true };
+  const bot = { id: `bot-${Date.now()}`, name: `Bot ${n}`, hand: [], isBot: true, disconnected: false };
   game.players.push(bot);
   game.teams[team].push(bot.id);
   await save(game);
@@ -162,23 +180,49 @@ async function changeSetting(key, value) {
 
 async function startGame() {
   const game = state.game;
-  if (game.players.length < 4) return alert('Need at least 4 players');
-  if (game.teams.team1.length === 0 || game.teams.team2.length === 0) {
-    return alert('Both teams need players');
+  
+  // Filter out disconnected players before starting
+  const activePlayers = game.players.filter(p => !p.disconnected || p.isBot);
+  
+  if (activePlayers.length < 4) {
+    return alert(`Need at least 4 active players. Currently have ${activePlayers.length}.`);
   }
+  
+  // Count active players per team
+  const activeTeam1 = game.teams.team1.filter(id => {
+    const player = activePlayers.find(p => p.id === id);
+    return player !== undefined;
+  });
+  
+  const activeTeam2 = game.teams.team2.filter(id => {
+    const player = activePlayers.find(p => p.id === id);
+    return player !== undefined;
+  });
+  
+  if (activeTeam1.length === 0 || activeTeam2.length === 0) {
+    return alert('Both teams need at least one active player');
+  }
+  
+  // Update game with only active players
+  game.players = activePlayers;
+  game.teams.team1 = activeTeam1;
+  game.teams.team2 = activeTeam2;
   
   const deck = [];
   SETS.forEach(set => deck.push(...set.cards));
   
+  // Shuffle deck
   for (let i = deck.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [deck[i], deck[j]] = [deck[j], deck[i]];
   }
   
+  // Deal cards
   const per = Math.floor(deck.length / game.players.length);
   game.players.forEach((p, i) => p.hand = deck.slice(i * per, (i + 1) * per));
   game.phase = 'game';
   
+  // Set starting player
   if (state.startPlayer === 'random') {
     const randomIndex = Math.floor(Math.random() * game.players.length);
     game.currentTurn = game.players[randomIndex].id;
@@ -368,6 +412,5 @@ function cancel() {
   state.game = null;
   state.isSpectator = false;
   if (pollInterval) clearInterval(pollInterval);
-  if (heartbeatInterval) clearInterval(heartbeatInterval);
   render();
 }
