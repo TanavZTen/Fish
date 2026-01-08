@@ -1,33 +1,17 @@
 // Database operations
 
-async function updateHeartbeat() {
-  if (!state.game || !state.code || state.isSpectator) return;
-  
-  const game = state.game;
-  const player = game.players.find(p => p.id === myId);
-  if (player) {
-    player.lastSeen = Date.now();
-    player.disconnected = false;
-    
-    const { data: existingData } = await DB
-      .from('games')
-      .select('id')
-      .eq('room_code', state.code)
-      .maybeSingle();
-    
-    if (existingData) {
-      await DB.from('games')
-        .update({ game_data: game, updated_at: new Date().toISOString() })
-        .eq('room_code', state.code);
-    }
-    
-    state.game = game;
-  }
-}
-
 async function save(game) {
   if (!state.code) return;
   try {
+    // Mark current player as connected when saving
+    if (!state.isSpectator) {
+      const player = game.players.find(p => p.id === myId);
+      if (player) {
+        player.disconnected = false;
+        player.lastSeen = Date.now();
+      }
+    }
+    
     const { data: existingData } = await DB
       .from('games')
       .select('id')
@@ -61,25 +45,26 @@ async function load() {
     
     if (gameData && gameData.game_data) {
       const oldPhase = state.game?.phase;
+      const oldView = state.view;
       state.game = gameData.game_data;
       
-      const now = Date.now();
-      state.game.players.forEach(p => {
-        if (!p.isBot && p.lastSeen && now - p.lastSeen > 15000) {
-          p.disconnected = true;
-        } else if (!p.isBot) {
-          p.disconnected = false;
-        }
-      });
+      // Check if we're still in the game
+      const amIInGame = state.game.players.find(p => p.id === myId);
       
+      // If phase changed from lobby to game
       if (oldPhase === 'lobby' && state.game.phase === 'game') {
-        const player = state.game.players.find(p => p.id === myId);
-        if (player) {
+        if (amIInGame) {
           state.view = 'game';
           state.isSpectator = false;
         } else {
           state.view = 'spectatorPrompt';
         }
+      }
+      
+      // Mark ourselves as connected on each load (only if we're actually in the game)
+      if (!state.isSpectator && amIInGame) {
+        amIInGame.disconnected = false;
+        amIInGame.lastSeen = Date.now();
       }
       
       if (state.shouldRender) render();
@@ -91,11 +76,10 @@ async function load() {
 
 function startPolling() {
   if (pollInterval) clearInterval(pollInterval);
-  if (heartbeatInterval) clearInterval(heartbeatInterval);
   
+  // Poll every 2 seconds to check for game updates
   pollInterval = setInterval(load, 2000);
-  if (!state.isSpectator) {
-    heartbeatInterval = setInterval(updateHeartbeat, 5000);
-    updateHeartbeat();
-  }
+  
+  // Immediately load once
+  load();
 }
