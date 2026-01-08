@@ -225,6 +225,7 @@ button:disabled {
   border-color: #4ade80;
 }
 
+/* Modal Overlay */
 .modal {
   position: fixed;
   top: 0;
@@ -239,7 +240,12 @@ button:disabled {
   padding: 20px;
 }
 
+/* Modal Content with scrollable inner container */
 .modal-content {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
   background: #161b22;
   border: 1px solid #30363d;
   border-radius: 12px;
@@ -247,46 +253,36 @@ button:disabled {
   max-width: 600px;
   width: 90%;
   max-height: 80vh;
-  overflow-y: scroll;
-  position: relative;
-  /* Prevent scroll-on-open behavior */
+  overflow: hidden; /* outer modal doesn't scroll */
   overscroll-behavior: contain;
 }
 
-/* Fix dropdown scrolling issues */
-.modal-content select {
-  position: static;
-  /* Prevent focus from scrolling modal */
-  scroll-margin: 0;
+/* Inner scrollable container inside modal */
+.modal-scrollable {
+  max-height: 70vh; /* scrollable area */
+  overflow-y: auto;
+  padding-bottom: 20px;
+  -webkit-overflow-scrolling: touch; /* smooth iOS scroll */
 }
 
-/* Make sure dropdowns don't cause page jumps */
+/* Card assignment rows inside scrollable container */
 .card-assignments-container {
-  padding-bottom: 20px;
-  /* Give space for dropdown to open */
   min-height: 300px;
 }
 
+/* Card assignment rows */
 .card-assignment-row {
   margin-bottom: 20px;
   position: relative;
+  z-index: 1;
 }
 
 .card-assignment-row select {
+  position: relative;      /* ensures dropdown is not clipped */
+  z-index: 1001;           /* above scrollable container */
   width: 100%;
   padding: 12px;
-  font-size: 16px;
-}
-
-/* Prevent iOS Safari from zooming on select */
-@media screen and (max-width: 768px) {
-  select {
-    font-size: 16px !important;
-  }
-}
-
-/* Improve select dropdown appearance */
-select {
+  font-size: 16px;         /* prevent iOS zoom */
   appearance: none;
   -webkit-appearance: none;
   -moz-appearance: none;
@@ -294,6 +290,13 @@ select {
   background-repeat: no-repeat;
   background-position: right 12px center;
   padding-right: 36px;
+}
+
+/* Mobile Safari fix */
+@media screen and (max-width: 768px) {
+  select {
+    font-size: 16px !important;
+  }
 }
 
 .game-sidebar {
