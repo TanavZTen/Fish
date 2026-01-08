@@ -236,6 +236,7 @@ button:disabled {
   align-items: center;
   justify-content: center;
   z-index: 1000;
+  padding: 20px;
 }
 
 .modal-content {
@@ -247,6 +248,44 @@ button:disabled {
   width: 90%;
   max-height: 80vh;
   overflow-y: auto;
+  position: relative;
+}
+
+/* Fix dropdown scrolling issues */
+.modal-content select {
+  /* Prevent modal from scrolling when dropdown opens */
+  position: relative;
+  z-index: 1001;
+}
+
+/* Make sure dropdowns don't cause page jumps */
+.modal-content .card-assignments-container {
+  /* Add padding to prevent dropdown from being cut off */
+  padding-bottom: 10px;
+}
+
+.card-assignment-row {
+  margin-bottom: 15px;
+  position: relative;
+}
+
+.card-assignment-row select {
+  width: 100%;
+  padding: 10px;
+  font-size: 16px;
+  /* Increase max-height for better scrolling */
+  max-height: 200px;
+}
+
+/* Improve select dropdown appearance */
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23c9d1d9' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 36px;
 }
 
 .game-sidebar {
