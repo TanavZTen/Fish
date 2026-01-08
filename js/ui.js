@@ -350,14 +350,14 @@ function renderPlayerActions(isMyTurn, opponents, askableCards) {
         <select id="opponent-select" style="margin-bottom: 10px;">
           <option value="">Select Opponent to Ask</option>
           ${opponents.map(p => 
-            `<option value="${p.id}">${p.name}</option>`
+            `<option value="${p.id}" ${state.selectedOpponent === p.id ? 'selected' : ''}>${p.name}</option>`
           ).join('')}
         </select>
         
         <select id="card-select" style="margin-bottom: 10px;">
           <option value="">Select Card to Ask For</option>
           ${askableCards.sort().map(card => 
-            `<option value="${card}">${card}</option>`
+            `<option value="${card}" ${state.selectedCard === card ? 'selected' : ''}>${card}</option>`
           ).join('')}
         </select>
         
@@ -464,14 +464,26 @@ function attachGameHandlers(opponents, askableCards) {
   const setSelect = document.getElementById('set-select');
   
   if (oppSelect) {
+    // Set initial value from state
+    if (state.selectedOpponent) {
+      oppSelect.value = state.selectedOpponent;
+    }
+    
     oppSelect.onchange = (e) => {
       state.selectedOpponent = e.target.value;
+      // Don't re-render, just update state
     };
   }
   
   if (cardSelect) {
+    // Set initial value from state
+    if (state.selectedCard) {
+      cardSelect.value = state.selectedCard;
+    }
+    
     cardSelect.onchange = (e) => {
       state.selectedCard = e.target.value;
+      // Don't re-render, just update state
     };
   }
   
@@ -489,6 +501,7 @@ function attachGameHandlers(opponents, askableCards) {
       const card = sel.getAttribute('data-card');
       sel.onchange = (e) => {
         state.callAssignments[card] = e.target.value;
+        // Don't re-render, just update state
       };
     });
   }
