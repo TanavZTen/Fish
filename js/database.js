@@ -1,6 +1,4 @@
-// Database Operations
-let pollInterval = null;
-let heartbeatInterval = null;
+// Database operations
 
 async function updateHeartbeat() {
   if (!state.game || !state.code || state.isSpectator) return;
