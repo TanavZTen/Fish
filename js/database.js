@@ -28,8 +28,8 @@ async function save(game) {
 async function load() {
   if (!state.code) return;
   
-  // Don't poll/render while modal is open - prevents interruptions
-  if (state.showCallModal || state.showCounterSetModal || state.showPassTurnModal) {
+  // Don't poll/render while modal or dropdown is open - prevents interruptions
+  if (state.showCallModal || state.showCounterSetModal || state.showPassTurnModal || state.dropdownOpen) {
     return;
   }
   
@@ -138,8 +138,8 @@ function startTimer() {
       }
     }
     
-    // Re-render to update timer display (but not if modal is open)
-    if (state.shouldRender && !state.showCallModal && !state.showCounterSetModal && !state.showPassTurnModal) {
+    // Re-render to update timer display (but not if modal or dropdown is open)
+    if (state.shouldRender && !state.showCallModal && !state.showCounterSetModal && !state.showPassTurnModal && !state.dropdownOpen) {
       render();
     }
   }, 1000);
