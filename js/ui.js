@@ -226,7 +226,12 @@ function renderSpectatorView(app) {
           </select>
         </div>
         
-        <h2>Room ${state.code}</h2>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+          <h2>Room ${state.code}</h2>
+          <button onclick="window.app.manualRefresh()" class="btn-small" style="background: #21262d; color: #c9d1d9; border: 1px solid #30363d;">
+            🔄 Refresh
+          </button>
+        </div>
         <p style="margin: 10px 0;">Scores - Team 1: ${state.game.scores.team1} | Team 2: ${state.game.scores.team2}</p>
         <p style="margin: 10px 0; font-weight: 700; color: #888;">
           ⏳ ${currentPlayer?.name}'s Turn
@@ -273,7 +278,12 @@ function renderGameView(app) {
   app.innerHTML = `
     <div class="container">
       <div class="card">
-        <h2>Room ${state.code}</h2>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+          <h2>Room ${state.code}</h2>
+          <button onclick="window.app.manualRefresh()" class="btn-small" style="background: #21262d; color: #c9d1d9; border: 1px solid #30363d;">
+            🔄 Refresh
+          </button>
+        </div>
         <p style="margin: 10px 0;">Scores - Team 1: ${state.game.scores.team1} | Team 2: ${state.game.scores.team2}</p>
         <p style="margin: 10px 0; font-weight: 700; color: ${isMyTurn ? '#4ade80' : '#888'};">
           ${isMyTurn ? '🟢 YOUR TURN' : `⏳ ${currentPlayer?.name}'s Turn`}
@@ -415,31 +425,41 @@ function renderCallModal() {
   const myTeam = state.game.teams.team1.includes(myId) ? 'team1' : 'team2';
   const playersToShow = state.showCounterSetModal ? state.game.players : state.game.players.filter(p => state.game.teams[myTeam].includes(p.id));
   
+  // Only show unclaimed sets
+  const unclaimedSets = SETS.filter(s => !state.game.claimedSets?.includes(s.name));
+  
+  // Make sure current callSetIndex is valid (not claimed)
+  const currentSet = SETS[state.callSetIndex];
+  if (state.game.claimedSets?.includes(currentSet.name) && unclaimedSets.length > 0) {
+    state.callSetIndex = SETS.indexOf(unclaimedSets[0]);
+  }
+  
   return `
     <div class="modal" onclick="if(event.target === this) window.app.${state.showCounterSetModal ? 'closeCounterSetModal' : 'closeCallModal'}()">
       <div class="modal-content" onclick="event.stopPropagation()">
         <h2 style="margin-bottom: 20px;">${state.showCounterSetModal ? 'Counter Set (Risky!)' : 'Call a Set'}</h2>
         ${state.showCounterSetModal ? '<p style="color: #f85149; margin-bottom: 15px; font-size: 14px;">⚠️ If you\'re wrong, the opposing team gets this set for FREE!</p>' : ''}
         
-        <div style="margin-bottom: 20px;">
-          <label style="display: block; margin-bottom: 10px; color: #8b949e;">Select Set:</label>
-          <select id="set-select" style="width: 100%;" size="1">
-            ${SETS.filter(s => !state.game.claimedSets?.includes(s.name)).map((set, i) => {
+        <div style="margin-bottom: 25px;">
+          <label style="display: block; margin-bottom: 10px; color: #8b949e; font-weight: 600;">Select Set:</label>
+          <select id="set-select" style="width: 100%;">
+            ${unclaimedSets.map((set) => {
               const actualIndex = SETS.indexOf(set);
               return `<option value="${actualIndex}" ${actualIndex === state.callSetIndex ? 'selected' : ''}>${set.name}</option>`;
             }).join('')}
           </select>
+          ${unclaimedSets.length === 0 ? '<p style="color: #f85149; margin-top: 10px;">All sets have been claimed!</p>' : ''}
         </div>
         
-        <div class="card-assignments-container" style="margin-bottom: 20px;">
-          <h3 style="margin-bottom: 10px;">Assign each card to a ${state.showCounterSetModal ? 'player' : 'teammate'}:</h3>
+        <div class="card-assignments-container" style="margin-bottom: 25px;">
+          <h3 style="margin-bottom: 15px; font-size: 16px; color: #c9d1d9;">Assign each card to a ${state.showCounterSetModal ? 'player' : 'teammate'}:</h3>
           ${SETS[state.callSetIndex].cards.map(card => {
             const iHaveIt = me?.hand?.includes(card);
             return `
-              <div class="card-assignment-row">
-                <label style="display: block; margin-bottom: 5px; font-weight: 700;">${card}</label>
-                <select class="card-assign-select" data-card="${card}" size="1">
-                  <option value="">Who has this card?</option>
+              <div class="card-assignment-row" style="margin-bottom: 18px;">
+                <label style="display: block; margin-bottom: 8px; font-weight: 700; font-size: 15px; color: #ffd700;">${card}</label>
+                <select class="card-assign-select" data-card="${card}">
+                  <option value="">-- Select who has ${card} --</option>
                   ${playersToShow.map(p => 
                     `<option value="${p.id}" ${state.callAssignments[card] === p.id ? 'selected' : ''}>${p.name}${p.id === myId ? ' (You)' : ''}${iHaveIt && p.id === myId ? ' ✓' : ''}</option>`
                   ).join('')}
@@ -449,9 +469,13 @@ function renderCallModal() {
           }).join('')}
         </div>
         
-        <div style="display: flex; gap: 10px;">
-          <button onclick="window.app.${state.showCounterSetModal ? 'submitCounterSet' : 'submitCall'}()" style="flex: 1;">Submit ${state.showCounterSetModal ? 'Counter Set' : 'Call'}</button>
-          <button onclick="window.app.${state.showCounterSetModal ? 'closeCounterSetModal' : 'closeCallModal'}()" class="btn-secondary" style="flex: 1;">Cancel</button>
+        <div style="display: flex; gap: 10px; margin-top: 30px;">
+          <button onclick="window.app.${state.showCounterSetModal ? 'submitCounterSet' : 'submitCall'}()" style="flex: 1; padding: 14px;">
+            Submit ${state.showCounterSetModal ? 'Counter Set' : 'Call'}
+          </button>
+          <button onclick="window.app.${state.showCounterSetModal ? 'closeCounterSetModal' : 'closeCallModal'}()" class="btn-secondary" style="flex: 1; padding: 14px;">
+            Cancel
+          </button>
         </div>
       </div>
     </div>
@@ -489,8 +513,32 @@ function attachGameHandlers(opponents, askableCards) {
   
   if (setSelect) {
     setSelect.onchange = (e) => {
-      state.callSetIndex = Number(e.target.value);
-      state.callAssignments = {};
+      const newIndex = Number(e.target.value);
+      const selectedSet = SETS[newIndex];
+      
+      // Check if this set is already claimed
+      if (state.game.claimedSets?.includes(selectedSet.name)) {
+        alert('This set has already been claimed! Choose another.');
+        // Reset to first unclaimed set
+        const unclaimedSets = SETS.filter(s => !state.game.claimedSets?.includes(s.name));
+        if (unclaimedSets.length > 0) {
+          state.callSetIndex = SETS.indexOf(unclaimedSets[0]);
+        }
+        render();
+        return;
+      }
+      
+      // Save current assignments before switching
+      const oldSetName = SETS[state.callSetIndex].name;
+      state.allSetAssignments[oldSetName] = {...state.callAssignments};
+      
+      // Switch to new set
+      state.callSetIndex = newIndex;
+      
+      // Restore assignments for this set if they exist
+      const newSetName = SETS[newIndex].name;
+      state.callAssignments = state.allSetAssignments[newSetName] || {};
+      
       render();
     };
   }
@@ -499,8 +547,20 @@ function attachGameHandlers(opponents, askableCards) {
     const assignSelects = document.querySelectorAll('.card-assign-select');
     assignSelects.forEach(sel => {
       const card = sel.getAttribute('data-card');
+      
+      // Restore value if it exists
+      if (state.callAssignments[card]) {
+        sel.value = state.callAssignments[card];
+      }
+      
       sel.onchange = (e) => {
         state.callAssignments[card] = e.target.value;
+        // Also save to allSetAssignments
+        const currentSetName = SETS[state.callSetIndex].name;
+        if (!state.allSetAssignments[currentSetName]) {
+          state.allSetAssignments[currentSetName] = {};
+        }
+        state.allSetAssignments[currentSetName][card] = e.target.value;
         // Don't re-render, just update state
       };
     });
@@ -531,7 +591,10 @@ window.app = {
     render();
   },
   submitCall,
-  submitCounterSet
+  submitCounterSet,
+  manualRefresh: async () => {
+    await load();
+  }
 };
 
 // Initialize app
