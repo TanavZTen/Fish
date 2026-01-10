@@ -501,7 +501,7 @@ function renderCallModal() {
           ${SETS[state.callSetIndex].cards.map(card => {
             const iHaveIt = me?.hand?.includes(card);
             return `
-              <div class="card-assignment-row" style="margin-bottom: 20px;">
+              <div class="card-assignment-row">
                 <label style="display: block; margin-bottom: 8px; font-weight: 700; font-size: 15px; color: #ffd700;">${card}</label>
                 <select class="card-assign-select" data-card="${card}">
                   <option value="">-- Select who has ${card} --</option>
