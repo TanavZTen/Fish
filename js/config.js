@@ -35,6 +35,8 @@ let state = {
   selectedOpponent: '',
   showCallModal: false,
   showCounterSetModal: false,
+  showPassTurnModal: false,
+  selectedPassPlayer: '',
   callSetIndex: 0,
   callAssignments: {},
   startPlayer: 'random',
