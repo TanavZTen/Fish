@@ -107,7 +107,7 @@ function startPolling() {
   if (pollInterval) clearInterval(pollInterval);
   
   // Poll every 45 seconds to avoid interruptions
-  pollInterval = setInterval(load, 45000);
+  pollInterval = setInterval(load, 5000);
   
   // Immediately load once
   load();
