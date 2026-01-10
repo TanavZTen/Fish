@@ -249,11 +249,31 @@ button:disabled {
   max-width: 600px;
   width: 90%;
   position: relative;
-  margin: 20px auto;
+  margin: 0 auto;
   max-height: none;
 }
 
-/* Make sure dropdowns don't cause page jumps */
+.modal-content select {
+  position: relative;
+  background: #0d1117;
+  border: 1px solid #30363d;
+  color: #c9d1d9;
+  padding: 14px;
+  border-radius: 6px;
+  width: 100%;
+  font-size: 16px;
+  cursor: pointer;
+  z-index: 10;
+  min-height: 45px;
+}
+
+.modal-content select:focus {
+  outline: none;
+  border-color: #ffd700;
+  background: #0d1117;
+  z-index: 100;
+}
+
 .card-assignments-container {
   padding-bottom: 20px;
 }
@@ -270,7 +290,14 @@ button:disabled {
   color: #c9d1d9;
 }
 
-/* CRITICAL: Use native dropdown behavior - works across all browsers */
+/* Prevent iOS Safari from zooming on select */
+@media screen and (max-width: 768px) {
+  select {
+    font-size: 16px !important;
+  }
+}
+
+/* CRITICAL: Cross-browser dropdown styling - DO NOT CHANGE */
 select {
   appearance: menulist;
   -webkit-appearance: menulist;
@@ -295,7 +322,6 @@ select:focus {
   transition: none;
 }
 
-/* Make dropdown options more visible */
 select option {
   padding: 12px;
   background-color: #0d1117;
@@ -305,35 +331,6 @@ select option {
 
 select option:checked {
   background-color: #21262d;
-}
-
-/* Modal-specific select styling */
-.modal-content select {
-  position: relative;
-  background: #0d1117;
-  border: 1px solid #30363d;
-  color: #c9d1d9;
-  padding: 12px;
-  border-radius: 6px;
-  width: 100%;
-  font-size: 16px;
-  cursor: pointer;
-  z-index: 10;
-  min-height: 45px;
-}
-
-.modal-content select:focus {
-  outline: none;
-  border-color: #ffd700;
-  background: #0d1117;
-  z-index: 100;
-}
-
-/* Prevent iOS Safari from zooming on select */
-@media screen and (max-width: 768px) {
-  select {
-    font-size: 16px !important;
-  }
 }
 
 .game-sidebar {
