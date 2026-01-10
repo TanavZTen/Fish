@@ -3,15 +3,6 @@
 async function save(game) {
   if (!state.code) return;
   try {
-    // Mark current player as connected when saving
-    if (!state.isSpectator) {
-      const player = game.players.find(p => p.id === myId);
-      if (player) {
-        player.disconnected = false;
-        player.lastSeen = Date.now();
-      }
-    }
-    
     const { data: existingData } = await DB
       .from('games')
       .select('id')
@@ -51,7 +42,7 @@ async function load() {
     
     if (gameData && gameData.game_data) {
       const oldPhase = state.game?.phase;
-      const oldView = state.view;
+      const oldTurn = state.game?.currentTurn;
       
       // Store current selections before updating
       const oldSelectedCard = state.selectedCard;
@@ -76,10 +67,11 @@ async function load() {
         }
       }
       
-      // Mark ourselves as connected on each load (only if we're actually in the game)
-      if (!state.isSpectator && amIInGame) {
-        amIInGame.disconnected = false;
-        amIInGame.lastSeen = Date.now();
+      // If turn changed, reset timer
+      if (oldTurn !== state.game.currentTurn && state.game.settings?.timeLimit > 0) {
+        state.turnStartTime = Date.now();
+        state.timeRemaining = state.game.settings.timeLimit;
+        startTimer();
       }
       
       if (state.shouldRender) render();
@@ -97,4 +89,50 @@ function startPolling() {
   
   // Immediately load once
   load();
+}
+
+function startTimer() {
+  if (timerInterval) clearInterval(timerInterval);
+  
+  if (!state.game?.settings?.timeLimit || state.game.settings.timeLimit === 0) {
+    return;
+  }
+  
+  // Update timer every second
+  timerInterval = setInterval(() => {
+    if (!state.turnStartTime) return;
+    
+    const elapsed = Math.floor((Date.now() - state.turnStartTime) / 1000);
+    state.timeRemaining = state.game.settings.timeLimit - elapsed;
+    
+    // Time's up!
+    if (state.timeRemaining <= 0) {
+      clearInterval(timerInterval);
+      state.timeRemaining = 0;
+      
+      // Auto-pass turn if it's my turn
+      if (state.game.currentTurn === myId) {
+        handleTimeExpired();
+      }
+    }
+    
+    // Re-render to update timer display
+    if (state.shouldRender) render();
+  }, 1000);
+}
+
+async function handleTimeExpired() {
+  const game = state.game;
+  const me = game.players.find(p => p.id === myId);
+  const myTeam = game.teams.team1.includes(myId) ? 'team1' : 'team2';
+  
+  // Find next player on opposing team
+  const oppTeam = myTeam === 'team1' ? 'team2' : 'team1';
+  const opponents = game.players.filter(p => game.teams[oppTeam].includes(p.id) && p.hand.length > 0);
+  
+  if (opponents.length > 0) {
+    game.currentTurn = opponents[0].id;
+    game.log.unshift(`${me.name}'s time expired! Turn passed to ${opponents[0].name}`);
+    await save(game);
+  }
 }
