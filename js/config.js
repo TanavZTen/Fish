@@ -4,7 +4,9 @@ const DB = window.supabase.createClient(
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZuZ2RpdWtqcmZtendsYmVmbWpmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc0Njk5MDUsImV4cCI6MjA4MzA0NTkwNX0.XBr7aEzSPj-Iw0HYf27T8yXo1nbZ01MhBVa-VIdNZG4'
 );
 
-// Card sets definition
+// Card sets definition - 54 cards total
+// Each suit: 2-A (13 cards) × 4 suits = 52 cards + 2 Jokers = 54 cards
+// 9 sets total: 4 suits × 2 sets each (2-7 and 9-A) + 1 set (8's + Jokers)
 const SETS = [
   { name: 'Spades 2-7', cards: ['2♠', '3♠', '4♠', '5♠', '6♠', '7♠'] },
   { name: 'Spades 9-A', cards: ['9♠', '10♠', 'J♠', 'Q♠', 'K♠', 'A♠'] },
@@ -45,7 +47,8 @@ let state = {
   shouldRender: true,
   allSetAssignments: {},
   turnStartTime: null,
-  timeRemaining: 0
+  timeRemaining: 0,
+  dropdownOpen: false
 };
 
 // Polling interval
