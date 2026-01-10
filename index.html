@@ -3,34 +3,16 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Literature Card Game - Debug</title>
+  <title>Fish Card Game</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <link rel="stylesheet" href="styles-COMPLETELY-FIXED.css">
-  <script>
-    console.log('1. HTML loaded');
-    window.addEventListener('error', function(e) {
-      console.error('ERROR:', e.message, 'at', e.filename, 'line', e.lineno);
-      document.body.innerHTML = '<div style="color: red; padding: 20px; font-family: monospace;">ERROR: ' + e.message + '<br>File: ' + e.filename + '<br>Line: ' + e.lineno + '</div>';
-    });
-  </script>
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <div id="app">Loading...</div>
+  <div id="app"></div>
   
-  <script>console.log('2. About to load config');</script>
-  <script src="config-COMPLETELY-FIXED.js"></script>
-  <script>console.log('3. Config loaded, state:', typeof state);</script>
-  
-  <script>console.log('4. About to load game-logic');</script>
-  <script src="game-logic-FIXED.js"></script>
-  <script>console.log('5. Game logic loaded');</script>
-  
-  <script>console.log('6. About to load database');</script>
-  <script src="database-FIXED.js"></script>
-  <script>console.log('7. Database loaded');</script>
-  
-  <script>console.log('8. About to load UI');</script>
-  <script src="ui-COMPLETELY-FIXED.js"></script>
-  <script>console.log('9. UI loaded, render should have been called');</script>
+  <script src="config.js"></script>
+  <script src="game-logic.js"></script>
+  <script src="database.js"></script>
+  <script src="ui.js"></script>
 </body>
 </html>
