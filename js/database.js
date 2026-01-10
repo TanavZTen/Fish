@@ -43,7 +43,6 @@ async function load() {
     if (gameData && gameData.game_data) {
       const oldPhase = state.game?.phase;
       const oldTurn = state.game?.currentTurn;
-      const wasInLobby = state.view === 'lobby';
       
       // Store current selections before updating
       const oldSelectedCard = state.selectedCard;
@@ -58,13 +57,19 @@ async function load() {
       // CRITICAL: Check if we're still in the game
       const amIInGame = state.game.players.find(p => p.id === myId);
       
-      // Prevent being kicked to spectator if we're a real player
-      if (!state.isSpectator && amIInGame) {
-        // We're a player, make sure we stay in the right view
-        if (state.game.phase === 'lobby' && (state.view === 'game' || state.view === 'spectatorPrompt')) {
-          state.view = 'lobby';
-        } else if (state.game.phase === 'game' && state.view !== 'game') {
-          state.view = 'game';
+      // If we're in the players list, NEVER become a spectator
+      if (amIInGame) {
+        state.isSpectator = false;
+        
+        // Keep us in the correct view
+        if (state.game.phase === 'lobby') {
+          if (state.view !== 'lobby') {
+            state.view = 'lobby';
+          }
+        } else if (state.game.phase === 'game') {
+          if (state.view !== 'game') {
+            state.view = 'game';
+          }
         }
       }
       
@@ -80,12 +85,6 @@ async function load() {
             state.turnStartTime = Date.now();
             state.timeRemaining = state.game.settings.timeLimit;
             startTimer();
-          }
-        } else if (!state.isSpectator) {
-          // Not in players list and not intentionally spectating
-          // Only show prompt if we weren't in lobby (new joiner)
-          if (!wasInLobby) {
-            state.view = 'spectatorPrompt';
           }
         }
       }
@@ -107,8 +106,8 @@ async function load() {
 function startPolling() {
   if (pollInterval) clearInterval(pollInterval);
   
-  // Poll every 10 seconds (fast enough to see others' moves, slow enough to not interrupt)
-  pollInterval = setInterval(load, 10000);
+  // Poll every 45 seconds to avoid interruptions
+  pollInterval = setInterval(load, 45000);
   
   // Immediately load once
   load();
