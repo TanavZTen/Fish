@@ -127,7 +127,17 @@ async function confirmTeam(team) {
     const game = state.game;
     const existingPlayer = game.players.find(p => p.id === myId);
     
+    // Check if adding this player would exceed limits
     if (!existingPlayer) {
+      if (game.players.length >= 16) {
+        return alert('Game is full! Maximum 16 players allowed.');
+      }
+      
+      if (game.teams[team].length >= 8) {
+        const teamName = team === 'team1' ? 'Team 1' : 'Team 2';
+        return alert(`${teamName} is full! Maximum 8 players per team.`);
+      }
+      
       // Add new player with the name they entered
       game.players.push({ id: myId, name: state.name, hand: [] });
       game.teams[team].push(myId);
@@ -138,6 +148,12 @@ async function confirmTeam(team) {
       
       // Update team if needed
       if (!game.teams[team].includes(myId)) {
+        // Check if new team is full
+        if (game.teams[team].length >= 8) {
+          const teamName = team === 'team1' ? 'Team 1' : 'Team 2';
+          return alert(`${teamName} is full! Maximum 8 players per team.`);
+        }
+        
         // Remove from old team
         game.teams.team1 = game.teams.team1.filter(id => id !== myId);
         game.teams.team2 = game.teams.team2.filter(id => id !== myId);
@@ -187,12 +203,27 @@ async function changeSetting(key, value) {
 async function startGame() {
   const game = state.game;
   
+  // Validate player count (4-16 players)
   if (game.players.length < 4) {
     return alert(`Need at least 4 players. Currently have ${game.players.length}.`);
   }
   
+  if (game.players.length > 16) {
+    return alert(`Maximum 16 players allowed. Currently have ${game.players.length}.`);
+  }
+  
+  // Validate teams
   if (game.teams.team1.length === 0 || game.teams.team2.length === 0) {
     return alert('Both teams need at least one player');
+  }
+  
+  // Validate max 8 players per team
+  if (game.teams.team1.length > 8) {
+    return alert(`Team 1 has ${game.teams.team1.length} players. Maximum 8 players per team.`);
+  }
+  
+  if (game.teams.team2.length > 8) {
+    return alert(`Team 2 has ${game.teams.team2.length} players. Maximum 8 players per team.`);
   }
   
   const deck = [];
@@ -204,9 +235,25 @@ async function startGame() {
     [deck[i], deck[j]] = [deck[j], deck[i]];
   }
   
-  // Deal cards
-  const per = Math.floor(deck.length / game.players.length);
-  game.players.forEach((p, i) => p.hand = deck.slice(i * per, (i + 1) * per));
+  // Deal cards - distribute ALL 54 cards
+  // 4 players: 13 each, 2 players get 14
+  // 6 players: 9 each
+  // 8 players: 6 each, 6 players get 7
+  // 10 players: 5 each, 4 players get 6
+  // 12 players: 4 each, 6 players get 5
+  // 14 players: 3 each, 12 players get 4
+  // 16 players: 3 each, 6 players get 4
+  const cardsPerPlayer = Math.floor(deck.length / game.players.length);
+  const remainder = deck.length % game.players.length;
+  
+  let cardIndex = 0;
+  game.players.forEach((p, i) => {
+    // First 'remainder' players get one extra card
+    const numCards = i < remainder ? cardsPerPlayer + 1 : cardsPerPlayer;
+    p.hand = deck.slice(cardIndex, cardIndex + numCards);
+    cardIndex += numCards;
+  });
+  
   game.phase = 'game';
   
   // Set starting player
