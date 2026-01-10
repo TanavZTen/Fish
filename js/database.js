@@ -29,7 +29,7 @@ async function load() {
   if (!state.code) return;
   
   // Don't poll/render while modal is open - prevents interruptions
-  if (state.showCallModal || state.showCounterSetModal) {
+  if (state.showCallModal || state.showCounterSetModal || state.showPassTurnModal) {
     return;
   }
   
@@ -43,6 +43,7 @@ async function load() {
     if (gameData && gameData.game_data) {
       const oldPhase = state.game?.phase;
       const oldTurn = state.game?.currentTurn;
+      const wasInLobby = state.view === 'lobby';
       
       // Store current selections before updating
       const oldSelectedCard = state.selectedCard;
@@ -54,16 +55,38 @@ async function load() {
       state.selectedCard = oldSelectedCard;
       state.selectedOpponent = oldSelectedOpponent;
       
-      // Check if we're still in the game
+      // CRITICAL: Check if we're still in the game
       const amIInGame = state.game.players.find(p => p.id === myId);
       
-      // If phase changed from lobby to game
+      // Prevent being kicked to spectator if we're a real player
+      if (!state.isSpectator && amIInGame) {
+        // We're a player, make sure we stay in the right view
+        if (state.game.phase === 'lobby' && (state.view === 'game' || state.view === 'spectatorPrompt')) {
+          state.view = 'lobby';
+        } else if (state.game.phase === 'game' && state.view !== 'game') {
+          state.view = 'game';
+        }
+      }
+      
+      // Handle phase transitions carefully
       if (oldPhase === 'lobby' && state.game.phase === 'game') {
         if (amIInGame) {
+          // We're in the players list - definitely join the game
           state.view = 'game';
           state.isSpectator = false;
-        } else {
-          state.view = 'spectatorPrompt';
+          
+          // Initialize timer if enabled
+          if (state.game.settings?.timeLimit > 0) {
+            state.turnStartTime = Date.now();
+            state.timeRemaining = state.game.settings.timeLimit;
+            startTimer();
+          }
+        } else if (!state.isSpectator) {
+          // Not in players list and not intentionally spectating
+          // Only show prompt if we weren't in lobby (new joiner)
+          if (!wasInLobby) {
+            state.view = 'spectatorPrompt';
+          }
         }
       }
       
