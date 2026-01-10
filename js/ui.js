@@ -312,9 +312,37 @@ function renderGameView(app) {
     </div>
     
     ${(state.showCallModal || state.showCounterSetModal) ? renderCallModal() : ''}
+    ${state.showPassTurnModal ? renderPassTurnModal() : ''}
   `;
   
   attachGameHandlers(opponents, askableCards);
+}
+
+function renderPassTurnModal() {
+  const myTeam = state.game.teams.team1.includes(myId) ? 'team1' : 'team2';
+  const teammates = state.game.players.filter(p => 
+    state.game.teams[myTeam].includes(p.id) && p.hand.length > 0 && p.id !== myId
+  );
+  
+  return `
+    <div class="modal">
+      <div class="modal-content" onclick="event.stopPropagation()">
+        <h2 style="margin-bottom: 20px;">Pass Turn</h2>
+        <p style="color: #8b949e; margin-bottom: 20px;">You have no cards left. Select a teammate to pass the turn to:</p>
+        
+        <select id="pass-turn-select" style="width: 100%; margin-bottom: 20px;">
+          <option value="">-- Select Teammate --</option>
+          ${teammates.map(p => 
+            `<option value="${p.id}" ${state.selectedPassPlayer === p.id ? 'selected' : ''}>${p.name} (${p.hand.length} cards)</option>`
+          ).join('')}
+        </select>
+        
+        <button onclick="window.app.confirmPassTurn()" ${!state.selectedPassPlayer ? 'disabled' : ''} style="width: 100%;">
+          Pass Turn
+        </button>
+      </div>
+    </div>
+  `;
 }
 
 function renderCard(card) {
@@ -423,7 +451,13 @@ function renderSetsStatus() {
 function renderCallModal() {
   const me = state.game.players.find(p => p.id === myId);
   const myTeam = state.game.teams.team1.includes(myId) ? 'team1' : 'team2';
-  const playersToShow = state.showCounterSetModal ? state.game.players : state.game.players.filter(p => state.game.teams[myTeam].includes(p.id));
+  const oppTeam = myTeam === 'team1' ? 'team2' : 'team1';
+  
+  // For counter set: only show opposing team players
+  // For regular call: only show your team players
+  const playersToShow = state.showCounterSetModal 
+    ? state.game.players.filter(p => state.game.teams[oppTeam].includes(p.id))
+    : state.game.players.filter(p => state.game.teams[myTeam].includes(p.id));
   
   // Only show unclaimed sets
   const unclaimedSets = SETS.filter(s => !state.game.claimedSets?.includes(s.name));
@@ -452,7 +486,7 @@ function renderCallModal() {
         </div>
         
         <div class="card-assignments-container" style="margin-bottom: 25px;">
-          <h3 style="margin-bottom: 15px; font-size: 16px; color: #c9d1d9;">Assign each card to a ${state.showCounterSetModal ? 'player' : 'teammate'}:</h3>
+          <h3 style="margin-bottom: 15px; font-size: 16px; color: #c9d1d9;">Assign each card to ${state.showCounterSetModal ? 'an opposing player' : 'a teammate'}:</h3>
           ${SETS[state.callSetIndex].cards.map(card => {
             const iHaveIt = me?.hand?.includes(card);
             return `
@@ -486,6 +520,7 @@ function attachGameHandlers(opponents, askableCards) {
   const oppSelect = document.getElementById('opponent-select');
   const cardSelect = document.getElementById('card-select');
   const setSelect = document.getElementById('set-select');
+  const passTurnSelect = document.getElementById('pass-turn-select');
   
   if (oppSelect) {
     // Set initial value from state
@@ -508,6 +543,18 @@ function attachGameHandlers(opponents, askableCards) {
     cardSelect.onchange = (e) => {
       state.selectedCard = e.target.value;
       // Don't re-render, just update state
+    };
+  }
+  
+  if (passTurnSelect) {
+    if (state.selectedPassPlayer) {
+      passTurnSelect.value = state.selectedPassPlayer;
+    }
+    
+    passTurnSelect.onchange = (e) => {
+      state.selectedPassPlayer = e.target.value;
+      // Re-render to enable/disable button
+      render();
     };
   }
   
@@ -592,6 +639,7 @@ window.app = {
   },
   submitCall,
   submitCounterSet,
+  confirmPassTurn,
   manualRefresh: async () => {
     await load();
   }
