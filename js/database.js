@@ -138,8 +138,19 @@ function startTimer() {
       }
     }
     
-    // Re-render to update timer display (but not if modal or dropdown is open)
-    if (state.shouldRender && !state.showCallModal && !state.showCounterSetModal && !state.showPassTurnModal && !state.dropdownOpen) {
+    // ONLY re-render timer if:
+    // 1. No modals open
+    // 2. No dropdown open
+    // 3. Time is running low (< 10 seconds) OR not my turn
+    const isMyTurn = state.game?.currentTurn === myId;
+    const timeCritical = state.timeRemaining <= 10;
+    
+    if (state.shouldRender && 
+        !state.showCallModal && 
+        !state.showCounterSetModal && 
+        !state.showPassTurnModal && 
+        !state.dropdownOpen &&
+        (!isMyTurn || timeCritical)) {
       render();
     }
   }, 1000);
