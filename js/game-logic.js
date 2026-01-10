@@ -103,7 +103,7 @@ async function confirmTeam(team) {
     const game = {
       hostId: myId,
       phase: 'lobby',
-      players: [{ id: myId, name: state.name, hand: [], lastSeen: Date.now(), disconnected: false }],
+      players: [{ id: myId, name: state.name, hand: [] }],
       teams: { team1: [], team2: [] },
       currentTurn: '',
       scores: { team1: 0, team2: 0 },
@@ -127,7 +127,7 @@ async function confirmTeam(team) {
     
     if (!existingPlayer) {
       // Add new player
-      game.players.push({ id: myId, name: state.name, hand: [], lastSeen: Date.now(), disconnected: false });
+      game.players.push({ id: myId, name: state.name, hand: [] });
       game.teams[team].push(myId);
       await save(game);
     } else {
@@ -150,7 +150,7 @@ async function addBot(team) {
   const game = state.game;
   let n = 1;
   while (game.players.some(p => p.name === `Bot ${n}`)) n++;
-  const bot = { id: `bot-${Date.now()}`, name: `Bot ${n}`, hand: [], isBot: true, disconnected: false };
+  const bot = { id: `bot-${Date.now()}`, name: `Bot ${n}`, hand: [], isBot: true };
   game.players.push(bot);
   game.teams[team].push(bot.id);
   await save(game);
@@ -181,32 +181,13 @@ async function changeSetting(key, value) {
 async function startGame() {
   const game = state.game;
   
-  // Filter out disconnected players before starting
-  const activePlayers = game.players.filter(p => !p.disconnected || p.isBot);
-  
-  if (activePlayers.length < 4) {
-    return alert(`Need at least 4 active players. Currently have ${activePlayers.length}.`);
+  if (game.players.length < 4) {
+    return alert(`Need at least 4 players. Currently have ${game.players.length}.`);
   }
   
-  // Count active players per team
-  const activeTeam1 = game.teams.team1.filter(id => {
-    const player = activePlayers.find(p => p.id === id);
-    return player !== undefined;
-  });
-  
-  const activeTeam2 = game.teams.team2.filter(id => {
-    const player = activePlayers.find(p => p.id === id);
-    return player !== undefined;
-  });
-  
-  if (activeTeam1.length === 0 || activeTeam2.length === 0) {
-    return alert('Both teams need at least one active player');
+  if (game.teams.team1.length === 0 || game.teams.team2.length === 0) {
+    return alert('Both teams need at least one player');
   }
-  
-  // Update game with only active players
-  game.players = activePlayers;
-  game.teams.team1 = activeTeam1;
-  game.teams.team2 = activeTeam2;
   
   const deck = [];
   SETS.forEach(set => deck.push(...set.cards));
@@ -232,8 +213,20 @@ async function startGame() {
   
   game.log.unshift('Game started!');
   
+  // Initialize turn timer
+  if (game.settings.timeLimit > 0) {
+    state.turnStartTime = Date.now();
+    state.timeRemaining = game.settings.timeLimit;
+  }
+  
   await save(game);
   state.view = 'game';
+  
+  // Start timer if enabled
+  if (game.settings.timeLimit > 0) {
+    startTimer();
+  }
+  
   render();
 }
 
@@ -262,11 +255,23 @@ async function askForCard() {
       );
       if (teammates.length > 0) {
         game.currentTurn = teammates[0].id;
+        
+        // Reset timer for new turn
+        if (game.settings.timeLimit > 0) {
+          state.turnStartTime = Date.now();
+          state.timeRemaining = game.settings.timeLimit;
+        }
       }
     }
   } else {
     game.currentTurn = opponent.id;
     game.log.unshift(`${me.name} asked ${opponent.name} for ${state.selectedCard} - FAILED`);
+    
+    // Reset timer for new turn
+    if (game.settings.timeLimit > 0) {
+      state.turnStartTime = Date.now();
+      state.timeRemaining = game.settings.timeLimit;
+    }
   }
   
   state.selectedCard = '';
@@ -275,6 +280,12 @@ async function askForCard() {
   await save(game);
   
   state.shouldRender = true;
+  
+  // Restart timer if enabled
+  if (game.settings.timeLimit > 0) {
+    startTimer();
+  }
+  
   render();
 }
 
@@ -438,7 +449,19 @@ async function confirmPassTurn() {
   const receiver = game.players.find(p => p.id === state.selectedPassPlayer);
   game.log.unshift(`${passer.name} passed turn to ${receiver.name}`);
   
+  // Reset timer for new turn
+  if (game.settings.timeLimit > 0) {
+    state.turnStartTime = Date.now();
+    state.timeRemaining = game.settings.timeLimit;
+  }
+  
   state.showPassTurnModal = false;
   state.selectedPassPlayer = '';
+  
   await save(game);
+  
+  // Restart timer if enabled
+  if (game.settings.timeLimit > 0) {
+    startTimer();
+  }
 }
