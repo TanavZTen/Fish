@@ -426,8 +426,8 @@ function renderCallModal() {
   const myTeam = state.game.teams.team1.includes(myId) ? 'team1' : 'team2';
   const oppTeam = myTeam === 'team1' ? 'team2' : 'team1';
   
-  // For counter set: only show opposing team players
-  // For regular call: only show your team players
+  // CRITICAL FIX: For counter set, show ONLY opposing team
+  // For regular call, show ONLY your team
   const playersToShow = state.showCounterSetModal 
     ? state.game.players.filter(p => state.game.teams[oppTeam].includes(p.id))
     : state.game.players.filter(p => state.game.teams[myTeam].includes(p.id));
@@ -445,7 +445,7 @@ function renderCallModal() {
     <div class="modal" onclick="if(event.target === this) window.app.${state.showCounterSetModal ? 'closeCounterSetModal' : 'closeCallModal'}()">
       <div class="modal-content" onclick="event.stopPropagation()">
         <h2 style="margin-bottom: 20px;">${state.showCounterSetModal ? 'Counter Set (Risky!)' : 'Call a Set'}</h2>
-        ${state.showCounterSetModal ? '<p style="color: #f85149; margin-bottom: 15px; font-size: 14px;">⚠️ If you\'re wrong, the opposing team gets this set for FREE!</p>' : ''}
+        ${state.showCounterSetModal ? '<p style="color: #f85149; margin-bottom: 15px; font-size: 14px;">⚠️ Counter set shows ONLY opposing team players. If you\'re wrong, they get this set for FREE!</p>' : ''}
         
         <div style="margin-bottom: 25px;">
           <label style="display: block; margin-bottom: 10px; color: #8b949e; font-weight: 600;">Select Set:</label>
@@ -459,7 +459,7 @@ function renderCallModal() {
         </div>
         
         <div class="card-assignments-container" style="margin-bottom: 25px;">
-          <h3 style="margin-bottom: 15px; font-size: 16px; color: #c9d1d9;">Assign each card to ${state.showCounterSetModal ? 'an opposing player' : 'a teammate'}:</h3>
+          <h3 style="margin-bottom: 15px; font-size: 16px; color: #c9d1d9;">Assign each card to ${state.showCounterSetModal ? 'an OPPOSING player' : 'a teammate'}:</h3>
           ${SETS[state.callSetIndex].cards.map(card => {
             const iHaveIt = me?.hand?.includes(card);
             return `
@@ -524,7 +524,6 @@ function attachGameHandlers(opponents, askableCards) {
   const passTurnSelect = document.getElementById('pass-turn-select');
   
   if (oppSelect) {
-    // Set initial value from state
     if (state.selectedOpponent) {
       oppSelect.value = state.selectedOpponent;
     }
@@ -536,7 +535,6 @@ function attachGameHandlers(opponents, askableCards) {
   }
   
   if (cardSelect) {
-    // Set initial value from state
     if (state.selectedCard) {
       cardSelect.value = state.selectedCard;
     }
@@ -567,7 +565,6 @@ function attachGameHandlers(opponents, askableCards) {
       // Check if this set is already claimed
       if (state.game.claimedSets?.includes(selectedSet.name)) {
         alert('This set has already been claimed! Choose another.');
-        // Reset to first unclaimed set
         const unclaimedSets = SETS.filter(s => !state.game.claimedSets?.includes(s.name));
         if (unclaimedSets.length > 0) {
           state.callSetIndex = SETS.indexOf(unclaimedSets[0]);
