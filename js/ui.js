@@ -112,8 +112,8 @@ function renderLobby(app) {
           <div class="team-section t1">
             <h3>Team 1 (${state.game.teams.team1.length})</h3>
             ${state.game.players.filter(p => state.game.teams.team1.includes(p.id)).map(p => `
-              <div class="team-player ${p.id === myId ? 'you' : ''}">
-                <span>${p.name} ${p.id === myId ? '(You)' : ''}</span>
+              <div class="team-player ${p.id === myId ? 'you' : ''} ${p.disconnected ? 'disconnected' : ''}">
+                <span>${p.name} ${p.id === myId ? '(You)' : ''} ${p.disconnected ? '(DC)' : ''}</span>
                 ${isHost && p.isBot ? `<button class="btn-small" onclick="window.app.removeBot('${p.id}')">Remove</button>` : ''}
               </div>
             `).join('')}
@@ -123,8 +123,8 @@ function renderLobby(app) {
           <div class="team-section t2">
             <h3>Team 2 (${state.game.teams.team2.length})</h3>
             ${state.game.players.filter(p => state.game.teams.team2.includes(p.id)).map(p => `
-              <div class="team-player ${p.id === myId ? 'you' : ''}">
-                <span>${p.name} ${p.id === myId ? '(You)' : ''}</span>
+              <div class="team-player ${p.id === myId ? 'you' : ''} ${p.disconnected ? 'disconnected' : ''}">
+                <span>${p.name} ${p.id === myId ? '(You)' : ''} ${p.disconnected ? '(DC)' : ''}</span>
                 ${isHost && p.isBot ? `<button class="btn-small" onclick="window.app.removeBot('${p.id}')">Remove</button>` : ''}
               </div>
             `).join('')}
@@ -275,16 +275,6 @@ function renderGameView(app) {
   const askableCards = getAskableCards(me?.hand || []);
   const hasCards = me && me.hand.length > 0;
   
-  // Format time remaining
-  const formatTime = (seconds) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
-  
-  const showTimer = state.game.settings?.timeLimit > 0;
-  const timerColor = state.timeRemaining <= 10 ? '#f85149' : (state.timeRemaining <= 30 ? '#ffa657' : '#4ade80');
-  
   app.innerHTML = `
     <div class="container">
       <div class="card">
@@ -297,7 +287,6 @@ function renderGameView(app) {
         <p style="margin: 10px 0;">Scores - Team 1: ${state.game.scores.team1} | Team 2: ${state.game.scores.team2}</p>
         <p style="margin: 10px 0; font-weight: 700; color: ${isMyTurn ? '#4ade80' : '#888'};">
           ${isMyTurn ? '🟢 YOUR TURN' : `⏳ ${currentPlayer?.name}'s Turn`}
-          ${showTimer && isMyTurn ? `<span style="color: ${timerColor}; margin-left: 10px;">⏱️ ${formatTime(state.timeRemaining)}</span>` : ''}
         </p>
         
         ${renderTeamSidebar()}
@@ -329,33 +318,6 @@ function renderGameView(app) {
   attachGameHandlers(opponents, askableCards);
 }
 
-function renderPassTurnModal() {
-  const myTeam = state.game.teams.team1.includes(myId) ? 'team1' : 'team2';
-  const teammates = state.game.players.filter(p => 
-    state.game.teams[myTeam].includes(p.id) && p.hand.length > 0 && p.id !== myId
-  );
-  
-  return `
-    <div class="modal">
-      <div class="modal-content" onclick="event.stopPropagation()">
-        <h2 style="margin-bottom: 20px;">Pass Turn</h2>
-        <p style="color: #8b949e; margin-bottom: 20px;">You have no cards left. Select a teammate to pass the turn to:</p>
-        
-        <select id="pass-turn-select" style="width: 100%; margin-bottom: 20px;">
-          <option value="">-- Select Teammate --</option>
-          ${teammates.map(p => 
-            `<option value="${p.id}" ${state.selectedPassPlayer === p.id ? 'selected' : ''}>${p.name} (${p.hand.length} cards)</option>`
-          ).join('')}
-        </select>
-        
-        <button onclick="window.app.confirmPassTurn()" ${!state.selectedPassPlayer ? 'disabled' : ''} style="width: 100%;">
-          Pass Turn
-        </button>
-      </div>
-    </div>
-  `;
-}
-
 function renderCard(card) {
   const isRed = card.includes('♥') || card.includes('♦');
   return `<div class="game-card ${isRed ? 'red' : 'black'}">${card}</div>`;
@@ -380,9 +342,9 @@ function renderTeamSidebar() {
 function renderTeamPlayer(p) {
   const hasCards = p.hand && p.hand.length > 0;
   return `
-    <div class="team-player ${p.id === myId ? 'you' : ''} ${p.id === myId && !hasCards ? 'spectator-mode' : ''}">
+    <div class="team-player ${p.id === myId ? 'you' : ''} ${p.disconnected ? 'disconnected' : ''} ${p.id === myId && !hasCards ? 'spectator-mode' : ''}">
       <span>
-        ${p.name} ${p.id === myId ? '(You)' : ''} ${p.id === myId && !hasCards ? '(Spectator)' : ''}
+        ${p.name} ${p.id === myId ? '(You)' : ''} ${p.disconnected ? '(DC)' : ''} ${p.id === myId && !hasCards ? '(Spectator)' : ''}
         ${state.game.settings?.showCounts ? ` (${p.hand.length})` : ''}
       </span>
       ${state.game.currentTurn === p.id ? '<span style="color: #4ade80;">👉</span>' : ''}
@@ -463,9 +425,6 @@ function renderCallModal() {
   const me = state.game.players.find(p => p.id === myId);
   const myTeam = state.game.teams.team1.includes(myId) ? 'team1' : 'team2';
   const oppTeam = myTeam === 'team1' ? 'team2' : 'team1';
-  
-  // For counter set: only show opposing team players
-  // For regular call: only show your team players
   const playersToShow = state.showCounterSetModal 
     ? state.game.players.filter(p => state.game.teams[oppTeam].includes(p.id))
     : state.game.players.filter(p => state.game.teams[myTeam].includes(p.id));
@@ -501,7 +460,7 @@ function renderCallModal() {
           ${SETS[state.callSetIndex].cards.map(card => {
             const iHaveIt = me?.hand?.includes(card);
             return `
-              <div class="card-assignment-row">
+              <div class="card-assignment-row" style="margin-bottom: 18px;">
                 <label style="display: block; margin-bottom: 8px; font-weight: 700; font-size: 15px; color: #ffd700;">${card}</label>
                 <select class="card-assign-select" data-card="${card}">
                   <option value="">-- Select who has ${card} --</option>
@@ -527,6 +486,34 @@ function renderCallModal() {
   `;
 }
 
+function renderPassTurnModal() {
+  const me = state.game.players.find(p => p.id === myId);
+  const myTeam = state.game.teams.team1.includes(myId) ? 'team1' : 'team2';
+  const teammates = state.game.players.filter(p => 
+    state.game.teams[myTeam].includes(p.id) && p.hand.length > 0 && p.id !== myId
+  );
+  
+  return `
+    <div class="modal">
+      <div class="modal-content">
+        <h2 style="margin-bottom: 20px;">Pass Turn to Teammate</h2>
+        <p style="margin-bottom: 20px; color: #8b949e;">You have no cards left. Select a teammate with cards to pass the turn to:</p>
+        
+        <select id="pass-turn-select" style="margin-bottom: 20px;">
+          <option value="">-- Select Teammate --</option>
+          ${teammates.map(p => 
+            `<option value="${p.id}" ${state.selectedPassPlayer === p.id ? 'selected' : ''}>${p.name} (${p.hand.length} cards)</option>`
+          ).join('')}
+        </select>
+        
+        <button onclick="window.app.confirmPassTurn()" ${!state.selectedPassPlayer ? 'disabled' : ''}>
+          Confirm
+        </button>
+      </div>
+    </div>
+  `;
+}
+
 function attachGameHandlers(opponents, askableCards) {
   const oppSelect = document.getElementById('opponent-select');
   const cardSelect = document.getElementById('card-select');
@@ -534,26 +521,24 @@ function attachGameHandlers(opponents, askableCards) {
   const passTurnSelect = document.getElementById('pass-turn-select');
   
   if (oppSelect) {
-    // Set initial value from state
     if (state.selectedOpponent) {
       oppSelect.value = state.selectedOpponent;
     }
     
     oppSelect.onchange = (e) => {
+      e.stopPropagation();
       state.selectedOpponent = e.target.value;
-      // Don't re-render, just update state
     };
   }
   
   if (cardSelect) {
-    // Set initial value from state
     if (state.selectedCard) {
       cardSelect.value = state.selectedCard;
     }
     
     cardSelect.onchange = (e) => {
+      e.stopPropagation();
       state.selectedCard = e.target.value;
-      // Don't re-render, just update state
     };
   }
   
@@ -563,21 +548,21 @@ function attachGameHandlers(opponents, askableCards) {
     }
     
     passTurnSelect.onchange = (e) => {
+      e.stopPropagation();
       state.selectedPassPlayer = e.target.value;
-      // Re-render to enable/disable button
       render();
     };
   }
   
   if (setSelect) {
     setSelect.onchange = (e) => {
+      e.stopPropagation();
       const newIndex = Number(e.target.value);
       const selectedSet = SETS[newIndex];
       
       // Check if this set is already claimed
       if (state.game.claimedSets?.includes(selectedSet.name)) {
         alert('This set has already been claimed! Choose another.');
-        // Reset to first unclaimed set
         const unclaimedSets = SETS.filter(s => !state.game.claimedSets?.includes(s.name));
         if (unclaimedSets.length > 0) {
           state.callSetIndex = SETS.indexOf(unclaimedSets[0]);
@@ -606,20 +591,18 @@ function attachGameHandlers(opponents, askableCards) {
     assignSelects.forEach(sel => {
       const card = sel.getAttribute('data-card');
       
-      // Restore value if it exists
       if (state.callAssignments[card]) {
         sel.value = state.callAssignments[card];
       }
       
       sel.onchange = (e) => {
+        e.stopPropagation();
         state.callAssignments[card] = e.target.value;
-        // Also save to allSetAssignments
         const currentSetName = SETS[state.callSetIndex].name;
         if (!state.allSetAssignments[currentSetName]) {
           state.allSetAssignments[currentSetName] = {};
         }
         state.allSetAssignments[currentSetName][card] = e.target.value;
-        // Don't re-render, just update state
       };
     });
   }
