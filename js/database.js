@@ -138,8 +138,10 @@ function startTimer() {
       }
     }
     
-    // Re-render to update timer display
-    if (state.shouldRender) render();
+    // Re-render to update timer display (but not if modal is open)
+    if (state.shouldRender && !state.showCallModal && !state.showCounterSetModal && !state.showPassTurnModal) {
+      render();
+    }
   }, 1000);
 }
 
