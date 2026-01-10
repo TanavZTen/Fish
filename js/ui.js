@@ -529,8 +529,18 @@ function attachGameHandlers(opponents, askableCards) {
       oppSelect.value = state.selectedOpponent;
     }
     
+    // Track when dropdown is opened
+    oppSelect.onfocus = () => {
+      state.dropdownOpen = true;
+    };
+    
+    oppSelect.onblur = () => {
+      state.dropdownOpen = false;
+    };
+    
     oppSelect.onchange = (e) => {
       state.selectedOpponent = e.target.value;
+      state.dropdownOpen = false;
       // Don't re-render, just update state
     };
   }
@@ -540,8 +550,18 @@ function attachGameHandlers(opponents, askableCards) {
       cardSelect.value = state.selectedCard;
     }
     
+    // Track when dropdown is opened
+    cardSelect.onfocus = () => {
+      state.dropdownOpen = true;
+    };
+    
+    cardSelect.onblur = () => {
+      state.dropdownOpen = false;
+    };
+    
     cardSelect.onchange = (e) => {
       state.selectedCard = e.target.value;
+      state.dropdownOpen = false;
       // Don't re-render, just update state
     };
   }
