@@ -36,6 +36,12 @@ async function save(game) {
 
 async function load() {
   if (!state.code) return;
+  
+  // Don't poll/render while modal is open - prevents interruptions
+  if (state.showCallModal || state.showCounterSetModal) {
+    return;
+  }
+  
   try {
     const { data: gameData } = await DB
       .from('games')
@@ -86,8 +92,8 @@ async function load() {
 function startPolling() {
   if (pollInterval) clearInterval(pollInterval);
   
-  // Poll every 2 seconds to check for game updates
-  pollInterval = setInterval(load, 2000);
+  // Poll every 10 seconds (fast enough to see others' moves, slow enough to not interrupt)
+  pollInterval = setInterval(load, 10000);
   
   // Immediately load once
   load();
