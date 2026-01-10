@@ -40,7 +40,9 @@ let state = {
   startPlayer: 'random',
   isSpectator: false,
   spectatingPlayerId: null,
-  shouldRender: true
+  shouldRender: true,
+  // Track all assignments for all sets to preserve them
+  allSetAssignments: {}
 };
 
 // Polling interval (no more heartbeat!)
