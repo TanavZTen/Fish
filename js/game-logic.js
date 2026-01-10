@@ -332,23 +332,36 @@ async function submitCall() {
     game.log.unshift(`${me.name} INCORRECTLY called ${set.name}! ${oppTeam === 'team1' ? 'Team 1' : 'Team 2'} gets the set!`);
   }
   
+  // Remove cards from all players
   set.cards.forEach(card => {
     game.players.forEach(p => {
       p.hand = p.hand.filter(c => c !== card);
     });
   });
   
+  // Check if current player has no cards and it's their turn
   if (game.currentTurn === myId && me.hand.length === 0) {
     const teammates = game.players.filter(p => 
       game.teams[myTeam].includes(p.id) && p.hand.length > 0 && p.id !== myId
     );
+    
     if (teammates.length > 0) {
-      game.currentTurn = teammates[0].id;
+      // Show pass turn modal
+      state.showCallModal = false;
+      state.callAssignments = {};
+      state.allSetAssignments = {};
+      await save(game);
+      
+      // Show pass turn selection
+      state.showPassTurnModal = true;
+      render();
+      return;
     }
   }
   
   state.showCallModal = false;
   state.callAssignments = {};
+  state.allSetAssignments = {};
   await save(game);
   
   if (game.claimedSets.length === 9) {
@@ -413,4 +426,19 @@ function cancel() {
   state.isSpectator = false;
   if (pollInterval) clearInterval(pollInterval);
   render();
+}
+
+async function confirmPassTurn() {
+  if (!state.selectedPassPlayer) return;
+  
+  const game = state.game;
+  game.currentTurn = state.selectedPassPlayer;
+  
+  const passer = game.players.find(p => p.id === myId);
+  const receiver = game.players.find(p => p.id === state.selectedPassPlayer);
+  game.log.unshift(`${passer.name} passed turn to ${receiver.name}`);
+  
+  state.showPassTurnModal = false;
+  state.selectedPassPlayer = '';
+  await save(game);
 }
