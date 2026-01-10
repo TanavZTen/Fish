@@ -225,7 +225,6 @@ button:disabled {
   border-color: #4ade80;
 }
 
-/* Modal Overlay */
 .modal {
   position: fixed;
   top: 0;
@@ -234,55 +233,72 @@ button:disabled {
   bottom: 0;
   background: rgba(0,0,0,0.8);
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   z-index: 1000;
   padding: 20px;
+  overflow-y: auto;
+  /* Prevent scroll jump */
+  overscroll-behavior: contain;
 }
 
-/* Modal Content with scrollable inner container */
 .modal-content {
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
   background: #161b22;
   border: 1px solid #30363d;
   border-radius: 12px;
   padding: 30px;
   max-width: 600px;
   width: 90%;
-  max-height: 80vh;
-  overflow: hidden; /* outer modal doesn't scroll */
-  overscroll-behavior: contain;
+  position: relative;
+  margin: 0 auto;
+  /* Let content be taller than viewport */
+  max-height: none;
 }
 
-/* Inner scrollable container inside modal */
-.modal-scrollable {
-  max-height: 70vh; /* scrollable area */
-  overflow-y: auto;
-  padding-bottom: 20px;
-  -webkit-overflow-scrolling: touch; /* smooth iOS scroll */
+/* Fix dropdown scrolling issues */
+.modal-content select {
+  position: relative;
+  background: #0d1117;
+  border: 1px solid #30363d;
+  color: #c9d1d9;
+  padding: 12px;
+  border-radius: 6px;
+  width: 100%;
+  font-size: 16px;
+  cursor: pointer;
 }
 
-/* Card assignment rows inside scrollable container */
+.modal-content select:focus {
+  outline: none;
+  border-color: #ffd700;
+}
+
+/* Make sure dropdowns don't cause page jumps */
 .card-assignments-container {
-  min-height: 300px;
+  padding-bottom: 20px;
 }
 
-/* Card assignment rows */
 .card-assignment-row {
   margin-bottom: 20px;
   position: relative;
-  z-index: 1;
 }
 
-.card-assignment-row select {
-  position: relative;      /* ensures dropdown is not clipped */
-  z-index: 1001;           /* above scrollable container */
-  width: 100%;
-  padding: 12px;
-  font-size: 16px;         /* prevent iOS zoom */
+.card-assignment-row label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 700;
+  color: #c9d1d9;
+}
+
+/* Prevent iOS Safari from zooming on select */
+@media screen and (max-width: 768px) {
+  select {
+    font-size: 16px !important;
+  }
+}
+
+/* Improve select dropdown appearance */
+select {
   appearance: none;
   -webkit-appearance: none;
   -moz-appearance: none;
@@ -290,13 +306,6 @@ button:disabled {
   background-repeat: no-repeat;
   background-position: right 12px center;
   padding-right: 36px;
-}
-
-/* Mobile Safari fix */
-@media screen and (max-width: 768px) {
-  select {
-    font-size: 16px !important;
-  }
 }
 
 .game-sidebar {
