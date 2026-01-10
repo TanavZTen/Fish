@@ -112,8 +112,8 @@ function renderLobby(app) {
           <div class="team-section t1">
             <h3>Team 1 (${state.game.teams.team1.length})</h3>
             ${state.game.players.filter(p => state.game.teams.team1.includes(p.id)).map(p => `
-              <div class="team-player ${p.id === myId ? 'you' : ''} ${p.disconnected ? 'disconnected' : ''}">
-                <span>${p.name} ${p.id === myId ? '(You)' : ''} ${p.disconnected ? '(DC)' : ''}</span>
+              <div class="team-player ${p.id === myId ? 'you' : ''}">
+                <span>${p.name} ${p.id === myId ? '(You)' : ''}</span>
                 ${isHost && p.isBot ? `<button class="btn-small" onclick="window.app.removeBot('${p.id}')">Remove</button>` : ''}
               </div>
             `).join('')}
@@ -123,8 +123,8 @@ function renderLobby(app) {
           <div class="team-section t2">
             <h3>Team 2 (${state.game.teams.team2.length})</h3>
             ${state.game.players.filter(p => state.game.teams.team2.includes(p.id)).map(p => `
-              <div class="team-player ${p.id === myId ? 'you' : ''} ${p.disconnected ? 'disconnected' : ''}">
-                <span>${p.name} ${p.id === myId ? '(You)' : ''} ${p.disconnected ? '(DC)' : ''}</span>
+              <div class="team-player ${p.id === myId ? 'you' : ''}">
+                <span>${p.name} ${p.id === myId ? '(You)' : ''}</span>
                 ${isHost && p.isBot ? `<button class="btn-small" onclick="window.app.removeBot('${p.id}')">Remove</button>` : ''}
               </div>
             `).join('')}
@@ -275,6 +275,16 @@ function renderGameView(app) {
   const askableCards = getAskableCards(me?.hand || []);
   const hasCards = me && me.hand.length > 0;
   
+  // Format time remaining
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+  
+  const showTimer = state.game.settings?.timeLimit > 0;
+  const timerColor = state.timeRemaining <= 10 ? '#f85149' : (state.timeRemaining <= 30 ? '#ffa657' : '#4ade80');
+  
   app.innerHTML = `
     <div class="container">
       <div class="card">
@@ -287,6 +297,7 @@ function renderGameView(app) {
         <p style="margin: 10px 0;">Scores - Team 1: ${state.game.scores.team1} | Team 2: ${state.game.scores.team2}</p>
         <p style="margin: 10px 0; font-weight: 700; color: ${isMyTurn ? '#4ade80' : '#888'};">
           ${isMyTurn ? '🟢 YOUR TURN' : `⏳ ${currentPlayer?.name}'s Turn`}
+          ${showTimer && isMyTurn ? `<span style="color: ${timerColor}; margin-left: 10px;">⏱️ ${formatTime(state.timeRemaining)}</span>` : ''}
         </p>
         
         ${renderTeamSidebar()}
@@ -369,9 +380,9 @@ function renderTeamSidebar() {
 function renderTeamPlayer(p) {
   const hasCards = p.hand && p.hand.length > 0;
   return `
-    <div class="team-player ${p.id === myId ? 'you' : ''} ${p.disconnected ? 'disconnected' : ''} ${p.id === myId && !hasCards ? 'spectator-mode' : ''}">
+    <div class="team-player ${p.id === myId ? 'you' : ''} ${p.id === myId && !hasCards ? 'spectator-mode' : ''}">
       <span>
-        ${p.name} ${p.id === myId ? '(You)' : ''} ${p.disconnected ? '(DC)' : ''} ${p.id === myId && !hasCards ? '(Spectator)' : ''}
+        ${p.name} ${p.id === myId ? '(You)' : ''} ${p.id === myId && !hasCards ? '(Spectator)' : ''}
         ${state.game.settings?.showCounts ? ` (${p.hand.length})` : ''}
       </span>
       ${state.game.currentTurn === p.id ? '<span style="color: #4ade80;">👉</span>' : ''}
