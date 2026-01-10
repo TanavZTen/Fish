@@ -298,14 +298,66 @@ button:disabled {
 }
 
 /* Improve select dropdown appearance */
+/* Improve select dropdown behavior - works across all browsers */
 select {
-  appearance: none;
-  -webkit-appearance: none;
-  -moz-appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23c9d1d9' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 12px center;
-  padding-right: 36px;
+  appearance: menulist;
+  -webkit-appearance: menulist;
+  -moz-appearance: menulist;
+  background-color: #0d1117;
+  color: #c9d1d9;
+  cursor: pointer;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  padding: 12px;
+  font-size: 16px;
+  width: 100%;
+  /* Prevent any transitions that might interfere */
+  transition: none;
+  /* Ensure dropdown stays on screen */
+  position: relative;
+  z-index: 10;
+}
+
+select:focus {
+  outline: none;
+  border-color: #ffd700;
+  background-color: #0d1117;
+  /* Keep dropdown open */
+  transition: none;
+}
+
+/* Make dropdown options more visible */
+select option {
+  padding: 12px;
+  background-color: #0d1117;
+  color: #c9d1d9;
+  font-size: 16px;
+}
+
+select option:checked {
+  background-color: #21262d;
+}
+
+.modal-content select {
+  position: relative;
+  background: #0d1117;
+  border: 1px solid #30363d;
+  color: #c9d1d9;
+  padding: 14px;
+  border-radius: 6px;
+  width: 100%;
+  font-size: 16px;
+  cursor: pointer;
+  z-index: 10;
+  /* Make dropdown more stable */
+  min-height: 45px;
+}
+
+.modal-content select:focus {
+  outline: none;
+  border-color: #ffd700;
+  background: #0d1117;
+  z-index: 100;
 }
 
 .game-sidebar {
