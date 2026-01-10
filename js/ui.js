@@ -585,7 +585,8 @@ function attachGameHandlers(opponents, askableCards) {
       const newSetName = SETS[newIndex].name;
       state.callAssignments = state.allSetAssignments[newSetName] || {};
       
-      render();
+      // Instead of full re-render, just update the card assignment dropdowns
+      updateCardAssignmentDropdowns();
     };
   }
   
@@ -611,6 +612,60 @@ function attachGameHandlers(opponents, askableCards) {
       };
     });
   }
+}
+
+function updateCardAssignmentDropdowns() {
+  // Get current modal info
+  const me = state.game.players.find(p => p.id === myId);
+  const myTeam = state.game.teams.team1.includes(myId) ? 'team1' : 'team2';
+  const oppTeam = myTeam === 'team1' ? 'team2' : 'team1';
+  const playersToShow = state.showCounterSetModal 
+    ? state.game.players.filter(p => state.game.teams[oppTeam].includes(p.id))
+    : state.game.players.filter(p => state.game.teams[myTeam].includes(p.id));
+  
+  // Get the container
+  const container = document.querySelector('.card-assignments-container');
+  if (!container) return;
+  
+  // Rebuild just the card assignment rows
+  const set = SETS[state.callSetIndex];
+  container.innerHTML = `
+    <h3 style="margin-bottom: 15px; font-size: 16px; color: #c9d1d9;">Assign each card to ${state.showCounterSetModal ? 'an OPPOSING player' : 'a teammate'}:</h3>
+    ${set.cards.map(card => {
+      const iHaveIt = me?.hand?.includes(card);
+      return `
+        <div class="card-assignment-row">
+          <label style="display: block; margin-bottom: 8px; font-weight: 700; font-size: 15px; color: #ffd700;">${card}</label>
+          <select class="card-assign-select" data-card="${card}">
+            <option value="">-- Select who has ${card} --</option>
+            ${playersToShow.map(p => 
+              `<option value="${p.id}" ${state.callAssignments[card] === p.id ? 'selected' : ''}>${p.name}${p.id === myId ? ' (You)' : ''}${iHaveIt && p.id === myId ? ' ✓' : ''}</option>`
+            ).join('')}
+          </select>
+        </div>
+      `;
+    }).join('')}
+  `;
+  
+  // Re-attach event listeners to new dropdowns
+  const assignSelects = container.querySelectorAll('.card-assign-select');
+  assignSelects.forEach(sel => {
+    const card = sel.getAttribute('data-card');
+    
+    if (state.callAssignments[card]) {
+      sel.value = state.callAssignments[card];
+    }
+    
+    sel.onchange = (e) => {
+      state.callAssignments[card] = e.target.value;
+      const currentSetName = SETS[state.callSetIndex].name;
+      if (!state.allSetAssignments[currentSetName]) {
+        state.allSetAssignments[currentSetName] = {};
+      }
+      state.allSetAssignments[currentSetName][card] = e.target.value;
+      // Don't re-render, just update state
+    };
+  });
 }
 
 // Export functions to window.app
