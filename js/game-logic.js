@@ -254,6 +254,12 @@ async function askForCard() {
     me.hand.push(state.selectedCard);
     game.log.unshift(`${me.name} asked ${opponent.name} for ${state.selectedCard} - SUCCESS!`);
     
+    // Reset timer on successful ask since you get to go again
+    if (game.settings.timeLimit > 0) {
+      state.turnStartTime = Date.now();
+      state.timeRemaining = game.settings.timeLimit;
+    }
+    
     if (me.hand.length === 0) {
       const myTeam = game.teams.team1.includes(myId) ? 'team1' : 'team2';
       const teammates = game.players.filter(p => 
@@ -356,23 +362,35 @@ async function submitCall() {
     });
   });
   
-  // Check if current player has no cards and it's their turn
-  if (game.currentTurn === myId && me.hand.length === 0) {
+  // Check if I have no cards left after calling the set
+  if (me.hand.length === 0) {
     const teammates = game.players.filter(p => 
       game.teams[myTeam].includes(p.id) && p.hand.length > 0 && p.id !== myId
     );
     
-    if (teammates.length > 0) {
+    // If I have teammates with cards AND it's my turn (or I just made it my turn by calling correctly)
+    if (teammates.length > 0 && (game.currentTurn === myId || correct)) {
       // Show pass turn modal
       state.showCallModal = false;
       state.callAssignments = {};
       state.allSetAssignments = {};
-      await save(game);
       
-      // Show pass turn selection
-      state.showPassTurnModal = true;
-      render();
-      return;
+      // If call was incorrect, turn should go to opponent team, not pass to teammate
+      if (!correct) {
+        // Incorrect call - opponent team gets the turn
+        const oppTeam = myTeam === 'team1' ? 'team2' : 'team1';
+        const opponents = game.players.filter(p => game.teams[oppTeam].includes(p.id) && p.hand.length > 0);
+        if (opponents.length > 0) {
+          game.currentTurn = opponents[0].id;
+        }
+        await save(game);
+      } else {
+        // Correct call - I can pass to a teammate
+        await save(game);
+        state.showPassTurnModal = true;
+        render();
+        return;
+      }
     }
   }
   
