@@ -529,19 +529,28 @@ function attachGameHandlers(opponents, askableCards) {
       oppSelect.value = state.selectedOpponent;
     }
     
-    // Track when dropdown is opened
-    oppSelect.onfocus = () => {
+    // Track when dropdown is being used - more reliable than focus/blur
+    oppSelect.onmousedown = () => {
       state.dropdownOpen = true;
     };
     
-    oppSelect.onblur = () => {
-      state.dropdownOpen = false;
+    oppSelect.onclick = () => {
+      state.dropdownOpen = true;
     };
     
     oppSelect.onchange = (e) => {
       state.selectedOpponent = e.target.value;
-      state.dropdownOpen = false;
-      // Don't re-render, just update state
+      // Keep dropdown flag true for a moment to ensure selection completes
+      setTimeout(() => {
+        state.dropdownOpen = false;
+      }, 500);
+    };
+    
+    // Also clear on blur as backup
+    oppSelect.onblur = () => {
+      setTimeout(() => {
+        state.dropdownOpen = false;
+      }, 300);
     };
   }
   
@@ -550,19 +559,28 @@ function attachGameHandlers(opponents, askableCards) {
       cardSelect.value = state.selectedCard;
     }
     
-    // Track when dropdown is opened
-    cardSelect.onfocus = () => {
+    // Track when dropdown is being used - more reliable than focus/blur
+    cardSelect.onmousedown = () => {
       state.dropdownOpen = true;
     };
     
-    cardSelect.onblur = () => {
-      state.dropdownOpen = false;
+    cardSelect.onclick = () => {
+      state.dropdownOpen = true;
     };
     
     cardSelect.onchange = (e) => {
       state.selectedCard = e.target.value;
-      state.dropdownOpen = false;
-      // Don't re-render, just update state
+      // Keep dropdown flag true for a moment to ensure selection completes
+      setTimeout(() => {
+        state.dropdownOpen = false;
+      }, 500);
+    };
+    
+    // Also clear on blur as backup
+    cardSelect.onblur = () => {
+      setTimeout(() => {
+        state.dropdownOpen = false;
+      }, 300);
     };
   }
   
