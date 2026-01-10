@@ -65,7 +65,8 @@ async function joinRoom() {
     const existingPlayer = state.game.players.find(p => p.id === myId);
     
     if (existingPlayer) {
-      // Rejoin as existing player
+      // Rejoin as existing player - update name and mark as connected
+      existingPlayer.name = state.name;  // Update name in case it changed
       existingPlayer.lastSeen = Date.now();
       existingPlayer.disconnected = false;
       await save(state.game);
@@ -127,13 +128,12 @@ async function confirmTeam(team) {
     const existingPlayer = game.players.find(p => p.id === myId);
     
     if (!existingPlayer) {
-      // Add new player
+      // Add new player with the name they entered
       game.players.push({ id: myId, name: state.name, hand: [] });
       game.teams[team].push(myId);
       await save(game);
     } else {
-      // Player already exists
-      // Update name in case it changed
+      // Player already exists - update their name and team
       existingPlayer.name = state.name;
       
       // Update team if needed
