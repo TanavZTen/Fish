@@ -119,6 +119,7 @@ async function confirmTeam(team) {
     game.teams[team].push(myId);
     await save(game);
     state.view = 'lobby';
+    state.isSpectator = false;
     startPolling();
   } else {
     // Joining existing game
@@ -131,17 +132,22 @@ async function confirmTeam(team) {
       game.teams[team].push(myId);
       await save(game);
     } else {
-      // Player already exists, just update team if needed
+      // Player already exists
+      // Update name in case it changed
+      existingPlayer.name = state.name;
+      
+      // Update team if needed
       if (!game.teams[team].includes(myId)) {
         // Remove from old team
         game.teams.team1 = game.teams.team1.filter(id => id !== myId);
         game.teams.team2 = game.teams.team2.filter(id => id !== myId);
         // Add to new team
         game.teams[team].push(myId);
-        await save(game);
       }
+      await save(game);
     }
     state.view = 'lobby';
+    state.isSpectator = false;
     startPolling();
   }
 }
