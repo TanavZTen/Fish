@@ -425,6 +425,9 @@ function renderCallModal() {
   const me = state.game.players.find(p => p.id === myId);
   const myTeam = state.game.teams.team1.includes(myId) ? 'team1' : 'team2';
   const oppTeam = myTeam === 'team1' ? 'team2' : 'team1';
+  
+  // For counter set: only show opposing team players
+  // For regular call: only show your team players
   const playersToShow = state.showCounterSetModal 
     ? state.game.players.filter(p => state.game.teams[oppTeam].includes(p.id))
     : state.game.players.filter(p => state.game.teams[myTeam].includes(p.id));
@@ -460,7 +463,7 @@ function renderCallModal() {
           ${SETS[state.callSetIndex].cards.map(card => {
             const iHaveIt = me?.hand?.includes(card);
             return `
-              <div class="card-assignment-row" style="margin-bottom: 18px;">
+              <div class="card-assignment-row">
                 <label style="display: block; margin-bottom: 8px; font-weight: 700; font-size: 15px; color: #ffd700;">${card}</label>
                 <select class="card-assign-select" data-card="${card}">
                   <option value="">-- Select who has ${card} --</option>
@@ -521,24 +524,26 @@ function attachGameHandlers(opponents, askableCards) {
   const passTurnSelect = document.getElementById('pass-turn-select');
   
   if (oppSelect) {
+    // Set initial value from state
     if (state.selectedOpponent) {
       oppSelect.value = state.selectedOpponent;
     }
     
     oppSelect.onchange = (e) => {
-      e.stopPropagation();
       state.selectedOpponent = e.target.value;
+      // Don't re-render, just update state
     };
   }
   
   if (cardSelect) {
+    // Set initial value from state
     if (state.selectedCard) {
       cardSelect.value = state.selectedCard;
     }
     
     cardSelect.onchange = (e) => {
-      e.stopPropagation();
       state.selectedCard = e.target.value;
+      // Don't re-render, just update state
     };
   }
   
@@ -548,21 +553,21 @@ function attachGameHandlers(opponents, askableCards) {
     }
     
     passTurnSelect.onchange = (e) => {
-      e.stopPropagation();
       state.selectedPassPlayer = e.target.value;
+      // Re-render to enable/disable button
       render();
     };
   }
   
   if (setSelect) {
     setSelect.onchange = (e) => {
-      e.stopPropagation();
       const newIndex = Number(e.target.value);
       const selectedSet = SETS[newIndex];
       
       // Check if this set is already claimed
       if (state.game.claimedSets?.includes(selectedSet.name)) {
         alert('This set has already been claimed! Choose another.');
+        // Reset to first unclaimed set
         const unclaimedSets = SETS.filter(s => !state.game.claimedSets?.includes(s.name));
         if (unclaimedSets.length > 0) {
           state.callSetIndex = SETS.indexOf(unclaimedSets[0]);
@@ -591,18 +596,20 @@ function attachGameHandlers(opponents, askableCards) {
     assignSelects.forEach(sel => {
       const card = sel.getAttribute('data-card');
       
+      // Restore value if it exists
       if (state.callAssignments[card]) {
         sel.value = state.callAssignments[card];
       }
       
       sel.onchange = (e) => {
-        e.stopPropagation();
         state.callAssignments[card] = e.target.value;
+        // Also save to allSetAssignments
         const currentSetName = SETS[state.callSetIndex].name;
         if (!state.allSetAssignments[currentSetName]) {
           state.allSetAssignments[currentSetName] = {};
         }
         state.allSetAssignments[currentSetName][card] = e.target.value;
+        // Don't re-render, just update state
       };
     });
   }
