@@ -238,7 +238,6 @@ button:disabled {
   z-index: 1000;
   padding: 20px;
   overflow-y: auto;
-  /* Prevent scroll jump */
   overscroll-behavior: contain;
 }
 
@@ -250,34 +249,10 @@ button:disabled {
   max-width: 600px;
   width: 90%;
   position: relative;
-  margin: 0 auto;
-  /* Let content be taller than viewport */
+  margin: 20px auto;
   max-height: none;
 }
 
-/* Fix dropdown scrolling issues */
-.modal-content select {
-  position: relative;
-  background: #0d1117;
-  border: 1px solid #30363d;
-  color: #c9d1d9;
-  padding: 14px;
-  border-radius: 6px;
-  width: 100%;
-  font-size: 16px;
-  cursor: pointer;
-  z-index: 10;
-  /* Make dropdown more stable */
-  min-height: 45px;
-}
-
-.modal-content select:focus {
-  outline: none;
-  border-color: #ffd700;
-  background: #0d1117;
-  z-index: 100;
-}
-
 /* Make sure dropdowns don't cause page jumps */
 .card-assignments-container {
   padding-bottom: 20px;
@@ -295,50 +270,7 @@ button:disabled {
   color: #c9d1d9;
 }
 
-/* Fix dropdown scrolling issues */
-.modal-content select {
-  position: relative;
-  background: #0d1117;
-  border: 1px solid #30363d;
-  color: #c9d1d9;
-  padding: 12px;
-  border-radius: 6px;
-  width: 100%;
-  font-size: 16px;
-  cursor: pointer;
-}
-
-.modal-content select:focus {
-  outline: none;
-  border-color: #ffd700;
-}
-
-/* Make sure dropdowns don't cause page jumps */
-.card-assignments-container {
-  padding-bottom: 20px;
-}
-
-.card-assignment-row {
-  margin-bottom: 20px;
-  position: relative;
-}
-
-.card-assignment-row label {
-  display: block;
-  margin-bottom: 8px;
-  font-weight: 700;
-  color: #c9d1d9;
-}
-
-/* Prevent iOS Safari from zooming on select */
-@media screen and (max-width: 768px) {
-  select {
-    font-size: 16px !important;
-  }
-}
-
-/* Improve select dropdown appearance */
-/* Improve select dropdown behavior - works across all browsers */
+/* CRITICAL: Use native dropdown behavior - works across all browsers */
 select {
   appearance: menulist;
   -webkit-appearance: menulist;
@@ -373,6 +305,28 @@ select option {
 
 select option:checked {
   background-color: #21262d;
+}
+
+/* Modal-specific select styling */
+.modal-content select {
+  position: relative;
+  background: #0d1117;
+  border: 1px solid #30363d;
+  color: #c9d1d9;
+  padding: 12px;
+  border-radius: 6px;
+  width: 100%;
+  font-size: 16px;
+  cursor: pointer;
+  z-index: 10;
+  min-height: 45px;
+}
+
+.modal-content select:focus {
+  outline: none;
+  border-color: #ffd700;
+  background: #0d1117;
+  z-index: 100;
 }
 
 /* Prevent iOS Safari from zooming on select */
