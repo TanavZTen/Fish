@@ -1,5 +1,11 @@
 // UI rendering and event handlers
 
+function formatTime(seconds) {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
+}
+
 function render() {
   const app = document.getElementById('app');
   
@@ -287,7 +293,7 @@ function renderGameView(app) {
         <p style="margin: 10px 0;">Scores - Team 1: ${state.game.scores.team1} | Team 2: ${state.game.scores.team2}</p>
         <p style="margin: 10px 0; font-weight: 700; color: ${isMyTurn ? '#4ade80' : '#888'};">
           ${isMyTurn ? '🟢 YOUR TURN' : `⏳ ${currentPlayer?.name}'s Turn`}
-          ${state.game.settings?.timeLimit > 0 ? `<span style="margin-left: 10px; color: ${state.timeRemaining <= 10 ? '#f85149' : '#8b949e'};">⏱️ ${Math.max(0, state.timeRemaining)}s</span>` : ''}
+          ${state.game.settings?.timeLimit > 0 ? `<span style="margin-left: 10px; color: ${state.timeRemaining <= 10 ? '#f85149' : '#8b949e'};">⏱️ ${formatTime(Math.max(0, state.timeRemaining))}</span>` : ''}
         </p>
         
         ${renderTeamSidebar()}
