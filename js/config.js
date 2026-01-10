@@ -43,40 +43,11 @@ let state = {
   isSpectator: false,
   spectatingPlayerId: null,
   shouldRender: true,
-  // Track all assignments for all sets to preserve them
-  allSetAssignments: {}
+  allSetAssignments: {},
+  turnStartTime: null,
+  timeRemaining: 0
 };
 
-// Polling interval (no more heartbeat!)
+// Polling interval
 let pollInterval = null;
-
-// Track page visibility - mark as disconnected when user leaves
-document.addEventListener('visibilitychange', async () => {
-  if (document.hidden && state.game && state.code && !state.isSpectator) {
-    await markAsDisconnected();
-  }
-});
-
-// Mark as disconnected when leaving page
-window.addEventListener('beforeunload', async () => {
-  if (state.game && state.code && !state.isSpectator) {
-    await markAsDisconnected();
-  }
-});
-
-async function markAsDisconnected() {
-  const game = state.game;
-  const player = game.players.find(p => p.id === myId);
-  if (player) {
-    player.disconnected = true;
-    player.lastSeen = Date.now();
-    
-    try {
-      await DB.from('games')
-        .update({ game_data: game, updated_at: new Date().toISOString() })
-        .eq('room_code', state.code);
-    } catch (e) {
-      console.error('Failed to mark as disconnected:', e);
-    }
-  }
-}
+let timerInterval = null;
