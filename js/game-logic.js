@@ -170,6 +170,18 @@ async function confirmTeam(team) {
 
 async function addBot(team) {
   const game = state.game;
+  
+  // Check if game is full
+  if (game.players.length >= 16) {
+    return alert('Cannot add bot. Game is full! Maximum 16 players allowed.');
+  }
+  
+  // Check if team is full
+  if (game.teams[team].length >= 8) {
+    const teamName = team === 'team1' ? 'Team 1' : 'Team 2';
+    return alert(`Cannot add bot. ${teamName} is full! Maximum 8 players per team.`);
+  }
+  
   let n = 1;
   while (game.players.some(p => p.name === `Bot ${n}`)) n++;
   const bot = { id: `bot-${Date.now()}`, name: `Bot ${n}`, hand: [], isBot: true };
@@ -301,6 +313,9 @@ async function askForCard() {
     me.hand.push(state.selectedCard);
     game.log.unshift(`${me.name} asked ${opponent.name} for ${state.selectedCard} - SUCCESS!`);
     
+    // Track who we successfully asked (for timer expiry)
+    state.lastSuccessfulAsk = opponent.id;
+    
     // Reset timer on successful ask since you get to go again
     if (game.settings.timeLimit > 0) {
       state.turnStartTime = Date.now();
@@ -325,6 +340,9 @@ async function askForCard() {
   } else {
     game.currentTurn = opponent.id;
     game.log.unshift(`${me.name} asked ${opponent.name} for ${state.selectedCard} - FAILED`);
+    
+    // Clear last successful ask since turn is changing
+    state.lastSuccessfulAsk = null;
     
     // Reset timer for new turn
     if (game.settings.timeLimit > 0) {
@@ -454,10 +472,29 @@ async function submitCall() {
   state.allSetAssignments = {};
   await save(game);
   
-  if (game.claimedSets.length === 9) {
+  // Check if either team has reached 5 sets (winning condition)
+  if (game.scores.team1 >= 5 || game.scores.team2 >= 5) {
+    const winner = game.scores.team1 >= 5 ? 'Team 1' : 'Team 2';
+    const loser = game.scores.team1 >= 5 ? 'Team 2' : 'Team 1';
+    
     setTimeout(() => {
-      const winner = game.scores.team1 > game.scores.team2 ? 'Team 1' : 'Team 2';
-      alert(`Game Over! ${winner} wins ${game.scores.team1}-${game.scores.team2}!`);
+      const goToLobby = confirm(`Game Over!\n\n${winner} wins ${game.scores.team1}-${game.scores.team2}!\n\nClick OK to return to lobby, or Cancel to view final state.`);
+      
+      if (goToLobby) {
+        // Reset game back to lobby
+        game.phase = 'lobby';
+        game.scores = { team1: 0, team2: 0 };
+        game.claimedSets = [];
+        game.log = ['Returned to lobby. Ready for new game!'];
+        game.currentTurn = '';
+        
+        // Reset all player hands
+        game.players.forEach(p => p.hand = []);
+        
+        save(game);
+        state.view = 'lobby';
+        render();
+      }
     }, 500);
   }
 }
@@ -501,10 +538,28 @@ async function submitCounterSet() {
   state.callAssignments = {};
   await save(game);
   
-  if (game.claimedSets.length === 9) {
+  // Check if either team has reached 5 sets (winning condition)
+  if (game.scores.team1 >= 5 || game.scores.team2 >= 5) {
+    const winner = game.scores.team1 >= 5 ? 'Team 1' : 'Team 2';
+    
     setTimeout(() => {
-      const winner = game.scores.team1 > game.scores.team2 ? 'Team 1' : 'Team 2';
-      alert(`Game Over! ${winner} wins ${game.scores.team1}-${game.scores.team2}!`);
+      const goToLobby = confirm(`Game Over!\n\n${winner} wins ${game.scores.team1}-${game.scores.team2}!\n\nClick OK to return to lobby, or Cancel to view final state.`);
+      
+      if (goToLobby) {
+        // Reset game back to lobby
+        game.phase = 'lobby';
+        game.scores = { team1: 0, team2: 0 };
+        game.claimedSets = [];
+        game.log = ['Returned to lobby. Ready for new game!'];
+        game.currentTurn = '';
+        
+        // Reset all player hands
+        game.players.forEach(p => p.hand = []);
+        
+        save(game);
+        state.view = 'lobby';
+        render();
+      }
     }, 500);
   }
 }
@@ -536,6 +591,7 @@ async function confirmPassTurn() {
   
   state.showPassTurnModal = false;
   state.selectedPassPlayer = '';
+  state.lastSuccessfulAsk = null;  // Clear for new turn
   
   await save(game);
   
