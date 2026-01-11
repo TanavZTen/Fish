@@ -160,14 +160,44 @@ async function handleTimeExpired() {
   const game = state.game;
   const me = game.players.find(p => p.id === myId);
   const myTeam = game.teams.team1.includes(myId) ? 'team1' : 'team2';
-  
-  // Find next player on opposing team
   const oppTeam = myTeam === 'team1' ? 'team2' : 'team1';
+  
+  // Get opponents with cards
   const opponents = game.players.filter(p => game.teams[oppTeam].includes(p.id) && p.hand.length > 0);
   
-  if (opponents.length > 0) {
-    game.currentTurn = opponents[0].id;
-    game.log.unshift(`${me.name}'s time expired! Turn passed to ${opponents[0].name}`);
-    await save(game);
+  // Scenario 3: No opponents have cards - pass to teammate
+  if (opponents.length === 0) {
+    const teammates = game.players.filter(p => game.teams[myTeam].includes(p.id) && p.hand.length > 0 && p.id !== myId);
+    if (teammates.length > 0) {
+      game.currentTurn = teammates[0].id;
+      game.log.unshift(`${me.name}'s time expired! No opponents available. Turn passed to ${teammates[0].name}`);
+      state.lastSuccessfulAsk = null;
+      await save(game);
+    }
+    return;
   }
+  
+  // Check if we successfully asked someone this turn
+  if (state.lastSuccessfulAsk) {
+    // Turn goes to last person we successfully asked
+    const lastAsked = game.players.find(p => p.id === state.lastSuccessfulAsk);
+    if (lastAsked && lastAsked.hand.length > 0) {
+      game.currentTurn = state.lastSuccessfulAsk;
+      game.log.unshift(`${me.name}'s time expired! Turn passed to ${lastAsked.name}`);
+    } else {
+      // Last asked person has no cards, pick random opponent
+      const randomIndex = Math.floor(Math.random() * opponents.length);
+      game.currentTurn = opponents[randomIndex].id;
+      game.log.unshift(`${me.name}'s time expired! Turn passed to ${opponents[randomIndex].name}`);
+    }
+  } else {
+    // Never successfully asked anyone - random opponent
+    const randomIndex = Math.floor(Math.random() * opponents.length);
+    game.currentTurn = opponents[randomIndex].id;
+    game.log.unshift(`${me.name}'s time expired! Turn passed to ${opponents[randomIndex].name}`);
+  }
+  
+  // Clear tracking for next turn
+  state.lastSuccessfulAsk = null;
+  await save(game);
 }
