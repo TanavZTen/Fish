@@ -395,6 +395,11 @@ async function submitCall() {
     game.scores[myTeam]++;
     game.claimedSets.push(set.name);
     game.log.unshift(`${me.name} correctly called ${set.name}! ${myTeam === 'team1' ? 'Team 1' : 'Team 2'} scores!`);
+    
+    // When you call correctly, the turn becomes yours (if you have cards)
+    if (me.hand.length > 0) {
+      game.currentTurn = myId;
+    }
   } else {
     const oppTeam = myTeam === 'team1' ? 'team2' : 'team1';
     game.scores[oppTeam]++;
@@ -409,33 +414,36 @@ async function submitCall() {
     });
   });
   
-  // Check if I have no cards left after calling the set
-  if (me.hand.length === 0) {
-    const teammates = game.players.filter(p => 
-      game.teams[myTeam].includes(p.id) && p.hand.length > 0 && p.id !== myId
+  // Find who has the current turn
+  const currentTurnPlayer = game.players.find(p => p.id === game.currentTurn);
+  const currentTurnTeam = game.teams.team1.includes(game.currentTurn) ? 'team1' : 'team2';
+  
+  // Check if the current turn holder has no cards left (regardless of who called the set)
+  if (currentTurnPlayer && currentTurnPlayer.hand.length === 0) {
+    const currentTurnTeammates = game.players.filter(p => 
+      game.teams[currentTurnTeam].includes(p.id) && p.hand.length > 0 && p.id !== game.currentTurn
     );
     
-    // If I have teammates with cards AND it's my turn (or I just made it my turn by calling correctly)
-    if (teammates.length > 0 && (game.currentTurn === myId || correct)) {
-      // Show pass turn modal
-      state.showCallModal = false;
-      state.callAssignments = {};
-      state.allSetAssignments = {};
-      
-      // If call was incorrect, turn should go to opponent team, not pass to teammate
-      if (!correct) {
-        // Incorrect call - opponent team gets the turn
-        const oppTeam = myTeam === 'team1' ? 'team2' : 'team1';
-        const opponents = game.players.filter(p => game.teams[oppTeam].includes(p.id) && p.hand.length > 0);
-        if (opponents.length > 0) {
-          game.currentTurn = opponents[0].id;
-        }
+    if (currentTurnTeammates.length > 0) {
+      // Current turn player has no cards, they need to pass
+      // If I'M the current turn player, show ME the modal
+      if (game.currentTurn === myId) {
+        state.showCallModal = false;
+        state.callAssignments = {};
+        state.allSetAssignments = {};
         await save(game);
-      } else {
-        // Correct call - I can pass to a teammate
-        await save(game);
+        
+        // Show pass turn modal for ME to choose
         state.showPassTurnModal = true;
         render();
+        return;
+      }
+      // If I'm NOT the current turn player, just close the modal and save
+      else {
+        state.showCallModal = false;
+        state.callAssignments = {};
+        state.allSetAssignments = {};
+        await save(game);
         return;
       }
     }
