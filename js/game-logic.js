@@ -247,20 +247,27 @@ async function startGame() {
     [deck[i], deck[j]] = [deck[j], deck[i]];
   }
   
-  // Deal cards - distribute ALL 54 cards
-  // 4 players: 13 each, 2 players get 14
-  // 6 players: 9 each
-  // 8 players: 6 each, 6 players get 7
-  // 10 players: 5 each, 4 players get 6
-  // 12 players: 4 each, 6 players get 5
-  // 14 players: 3 each, 12 players get 4
-  // 16 players: 3 each, 6 players get 4
+  // Deal cards - distribute ALL 54 cards FAIRLY between teams
+  // Strategy: Alternate giving extra cards between teams to ensure balance
   const cardsPerPlayer = Math.floor(deck.length / game.players.length);
   const remainder = deck.length % game.players.length;
   
+  // Create alternating order: T1, T2, T1, T2, T1, T2...
+  const team1Players = game.players.filter(p => game.teams.team1.includes(p.id));
+  const team2Players = game.players.filter(p => game.teams.team2.includes(p.id));
+  const alternatingPlayers = [];
+  const maxTeamSize = Math.max(team1Players.length, team2Players.length);
+  
+  for (let i = 0; i < maxTeamSize; i++) {
+    if (i < team1Players.length) alternatingPlayers.push(team1Players[i]);
+    if (i < team2Players.length) alternatingPlayers.push(team2Players[i]);
+  }
+  
+  // Deal cards to alternating players
   let cardIndex = 0;
-  game.players.forEach((p, i) => {
+  alternatingPlayers.forEach((p, i) => {
     // First 'remainder' players get one extra card
+    // This way extra cards are distributed fairly between teams
     const numCards = i < remainder ? cardsPerPlayer + 1 : cardsPerPlayer;
     p.hand = deck.slice(cardIndex, cardIndex + numCards);
     cardIndex += numCards;
