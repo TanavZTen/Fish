@@ -43,7 +43,7 @@ function renderHome(app) {
   app.innerHTML = `
     <div class="container">
       <div class="card">
-        <h1>LITERATURE</h1>
+        <h1>FISH</h1>
         <p class="subtitle">9-Set Card Game</p>
         
         <input type="text" placeholder="Your Name" id="name-input" value="${state.name}">
