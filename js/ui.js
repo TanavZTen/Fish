@@ -44,7 +44,7 @@ function renderHome(app) {
     <div class="container">
       <div class="card">
         <h1>FISH</h1>
-        <p class="subtitle">9-Set Card Game</p>
+        <p class="subtitle">9-Set Memory Card Game</p>
         
         <input type="text" placeholder="Your Name" id="name-input" value="${state.name}">
         <button onclick="window.app.createRoom()">Create Room</button>
@@ -272,9 +272,11 @@ function renderGameView(app) {
   const myTeam = state.game.teams.team1.includes(myId) ? 'team1' : 'team2';
   const isMyTurn = state.game.currentTurn === myId;
   const currentPlayer = state.game.players.find(p => p.id === state.game.currentTurn);
+  // Only show opponents who have cards (can't ask someone with 0 cards)
   const opponents = state.game.players.filter(p => 
     p.id !== myId && 
-    state.game.teams[myTeam === 'team1' ? 'team2' : 'team1'].includes(p.id)
+    state.game.teams[myTeam === 'team1' ? 'team2' : 'team1'].includes(p.id) &&
+    p.hand.length > 0  // Only show opponents with cards
   );
   
   const sortedHand = sortHand(me?.hand || []);
@@ -365,21 +367,27 @@ function renderPlayerActions(isMyTurn, opponents, askableCards) {
       <h3 style="margin-bottom: 10px;">Your Actions</h3>
       
       ${isMyTurn ? `
-        <select id="opponent-select" style="margin-bottom: 10px;">
-          <option value="">Select Opponent to Ask</option>
-          ${opponents.map(p => 
-            `<option value="${p.id}" ${state.selectedOpponent === p.id ? 'selected' : ''}>${p.name}</option>`
-          ).join('')}
-        </select>
+        ${opponents.length > 0 ? `
+          <select id="opponent-select" style="margin-bottom: 10px;">
+            <option value="">Select Opponent to Ask</option>
+            ${opponents.map(p => 
+              `<option value="${p.id}" ${state.selectedOpponent === p.id ? 'selected' : ''}>${p.name} (${p.hand.length} cards)</option>`
+            ).join('')}
+          </select>
+        ` : `
+          <p style="color: #f85149; background: #161b22; padding: 12px; border-radius: 6px; margin-bottom: 10px;">
+            ⚠️ No opponents have cards! You should call a set.
+          </p>
+        `}
         
-        <select id="card-select" style="margin-bottom: 10px;">
+        <select id="card-select" style="margin-bottom: 10px;" ${opponents.length === 0 ? 'disabled' : ''}>
           <option value="">Select Card to Ask For</option>
           ${askableCards.sort().map(card => 
             `<option value="${card}" ${state.selectedCard === card ? 'selected' : ''}>${card}</option>`
           ).join('')}
         </select>
         
-        <button onclick="window.app.askForCard()" ${!state.selectedCard || !state.selectedOpponent ? 'disabled' : ''}>
+        <button onclick="window.app.askForCard()" ${!state.selectedCard || !state.selectedOpponent || opponents.length === 0 ? 'disabled' : ''}>
           Ask for Card
         </button>
       ` : '<p style="color: #8b949e; margin-bottom: 10px;">Waiting for turn...</p>'}
