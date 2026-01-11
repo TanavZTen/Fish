@@ -116,25 +116,25 @@ function renderLobby(app) {
         
         <div class="teams-grid">
           <div class="team-section t1">
-            <h3>Team 1 (${state.game.teams.team1.length})</h3>
+            <h3>Team 1 (${state.game.teams.team1.length}/8)</h3>
             ${state.game.players.filter(p => state.game.teams.team1.includes(p.id)).map(p => `
               <div class="team-player ${p.id === myId ? 'you' : ''} ${p.disconnected ? 'disconnected' : ''}">
                 <span>${p.name} ${p.id === myId ? '(You)' : ''} ${p.disconnected ? '(DC)' : ''}</span>
                 ${isHost && p.isBot ? `<button class="btn-small" onclick="window.app.removeBot('${p.id}')">Remove</button>` : ''}
               </div>
             `).join('')}
-            ${isHost ? `<button onclick="window.app.addBot('team1')" style="margin-top: 8px;">+ Add Bot</button>` : ''}
+            ${isHost ? `<button onclick="window.app.addBot('team1')" style="margin-top: 8px;" ${state.game.teams.team1.length >= 8 || state.game.players.length >= 16 ? 'disabled' : ''}>+ Add Bot${state.game.teams.team1.length >= 8 ? ' (Full)' : ''}</button>` : ''}
           </div>
           
           <div class="team-section t2">
-            <h3>Team 2 (${state.game.teams.team2.length})</h3>
+            <h3>Team 2 (${state.game.teams.team2.length}/8)</h3>
             ${state.game.players.filter(p => state.game.teams.team2.includes(p.id)).map(p => `
               <div class="team-player ${p.id === myId ? 'you' : ''} ${p.disconnected ? 'disconnected' : ''}">
                 <span>${p.name} ${p.id === myId ? '(You)' : ''} ${p.disconnected ? '(DC)' : ''}</span>
                 ${isHost && p.isBot ? `<button class="btn-small" onclick="window.app.removeBot('${p.id}')">Remove</button>` : ''}
               </div>
             `).join('')}
-            ${isHost ? `<button onclick="window.app.addBot('team2')" style="margin-top: 8px;">+ Add Bot</button>` : ''}
+            ${isHost ? `<button onclick="window.app.addBot('team2')" style="margin-top: 8px;" ${state.game.teams.team2.length >= 8 || state.game.players.length >= 16 ? 'disabled' : ''}>+ Add Bot${state.game.teams.team2.length >= 8 ? ' (Full)' : ''}</button>` : ''}
           </div>
         </div>
         
@@ -350,10 +350,11 @@ function renderTeamSidebar() {
 
 function renderTeamPlayer(p) {
   const hasCards = p.hand && p.hand.length > 0;
+  const isSpectator = !hasCards;
   return `
-    <div class="team-player ${p.id === myId ? 'you' : ''} ${p.disconnected ? 'disconnected' : ''} ${p.id === myId && !hasCards ? 'spectator-mode' : ''}">
+    <div class="team-player ${p.id === myId ? 'you' : ''} ${p.disconnected ? 'disconnected' : ''} ${isSpectator ? 'spectator-mode' : ''}">
       <span>
-        ${p.name} ${p.id === myId ? '(You)' : ''} ${p.disconnected ? '(DC)' : ''} ${p.id === myId && !hasCards ? '(Spectator)' : ''}
+        ${p.name} ${p.id === myId ? '(You)' : ''} ${p.disconnected ? '(DC)' : ''} ${isSpectator ? '(Spectator)' : ''}
         ${state.game.settings?.showCounts ? ` (${p.hand.length})` : ''}
       </span>
       ${state.game.currentTurn === p.id ? '<span style="color: #4ade80;">👉</span>' : ''}
@@ -403,7 +404,7 @@ function renderSpectatorActions() {
   return `
     <div>
       <button onclick="window.app.openCounterSetModal()" class="btn-secondary">
-        Counter Set (Spectator Only)
+        Counter Set (Risky!)
       </button>
       <p style="color: #8b949e; margin-top: 10px; font-size: 13px;">You have no cards. You can counter-call sets. If correct, your team scores. If wrong, opponent gets it FREE!</p>
     </div>
