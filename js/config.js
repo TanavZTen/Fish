@@ -48,7 +48,8 @@ let state = {
   allSetAssignments: {},
   turnStartTime: null,
   timeRemaining: 0,
-  dropdownOpen: false
+  dropdownOpen: false,
+  lastSuccessfulAsk: null  // Track last opponent we successfully got a card from
 };
 
 // Polling interval
