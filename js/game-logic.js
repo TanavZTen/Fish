@@ -439,6 +439,39 @@ async function submitCall() {
     });
   });
   
+  // IMPORTANT: Check for win condition FIRST before pass turn logic
+  const gameEnded = game.scores.team1 >= 5 || game.scores.team2 >= 5;
+  
+  if (gameEnded) {
+    const winner = game.scores.team1 >= 5 ? 'Team 1' : 'Team 2';
+    
+    state.showCallModal = false;
+    state.callAssignments = {};
+    state.allSetAssignments = {};
+    await save(game);
+    
+    setTimeout(() => {
+      const goToLobby = confirm(`Game Over!\n\n${winner} wins ${game.scores.team1}-${game.scores.team2}!\n\nClick OK to return to lobby, or Cancel to view final state.`);
+      
+      if (goToLobby) {
+        // Reset game back to lobby
+        game.phase = 'lobby';
+        game.scores = { team1: 0, team2: 0 };
+        game.claimedSets = [];
+        game.log = ['Returned to lobby. Ready for new game!'];
+        game.currentTurn = '';
+        
+        // Reset all player hands
+        game.players.forEach(p => p.hand = []);
+        
+        save(game);
+        state.view = 'lobby';
+        render();
+      }
+    }, 500);
+    return;
+  }
+  
   // Find who has the current turn
   const currentTurnPlayer = game.players.find(p => p.id === game.currentTurn);
   const currentTurnTeam = game.teams.team1.includes(game.currentTurn) ? 'team1' : 'team2';
@@ -478,32 +511,6 @@ async function submitCall() {
   state.callAssignments = {};
   state.allSetAssignments = {};
   await save(game);
-  
-  // Check if either team has reached 5 sets (winning condition)
-  if (game.scores.team1 >= 5 || game.scores.team2 >= 5) {
-    const winner = game.scores.team1 >= 5 ? 'Team 1' : 'Team 2';
-    const loser = game.scores.team1 >= 5 ? 'Team 2' : 'Team 1';
-    
-    setTimeout(() => {
-      const goToLobby = confirm(`Game Over!\n\n${winner} wins ${game.scores.team1}-${game.scores.team2}!\n\nClick OK to return to lobby, or Cancel to view final state.`);
-      
-      if (goToLobby) {
-        // Reset game back to lobby
-        game.phase = 'lobby';
-        game.scores = { team1: 0, team2: 0 };
-        game.claimedSets = [];
-        game.log = ['Returned to lobby. Ready for new game!'];
-        game.currentTurn = '';
-        
-        // Reset all player hands
-        game.players.forEach(p => p.hand = []);
-        
-        save(game);
-        state.view = 'lobby';
-        render();
-      }
-    }, 500);
-  }
 }
 
 async function submitCounterSet() {
