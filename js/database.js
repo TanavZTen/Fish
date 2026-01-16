@@ -43,12 +43,35 @@ async function load() {
     if (gameData && gameData.game_data) {
       const oldPhase = state.game?.phase;
       const oldTurn = state.game?.currentTurn;
+      const oldHand = state.game?.players.find(p => p.id === myId)?.hand || [];
       
       // Store current selections before updating
       const oldSelectedCard = state.selectedCard;
       const oldSelectedOpponent = state.selectedOpponent;
       
       state.game = gameData.game_data;
+      
+      // Detect card changes (someone asked you for a card)
+      const newHand = state.game.players.find(p => p.id === myId)?.hand || [];
+      if (oldHand.length > 0 && newHand.length < oldHand.length) {
+        // Find which card(s) we lost
+        const lostCards = oldHand.filter(card => !newHand.includes(card));
+        lostCards.forEach(card => {
+          // Try to find who asked for it from the log
+          const lastLog = state.game.log[0] || '';
+          const match = lastLog.match(/(.+) asked .+ for (.+) - SUCCESS/);
+          const asker = match ? match[1] : 'someone';
+          
+          state.cardHistory.unshift({
+            type: 'loss',
+            card: card,
+            to: asker,
+            timestamp: Date.now()
+          });
+          
+          addNotification(`You lost ${card} to ${asker}!`, 'loss');
+        });
+      }
       
       // Restore selections after update
       state.selectedCard = oldSelectedCard;
@@ -106,8 +129,8 @@ async function load() {
 function startPolling() {
   if (pollInterval) clearInterval(pollInterval);
   
-  // Poll every 45 seconds to avoid interruptions
-  pollInterval = setInterval(load, 5000);
+  // Poll every 2 seconds for fast updates
+  pollInterval = setInterval(load, 2000);
   
   // Immediately load once
   load();
