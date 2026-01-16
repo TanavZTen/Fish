@@ -164,6 +164,7 @@ async function confirmTeam(team) {
     }
     state.view = 'lobby';
     state.isSpectator = false;
+    render(); // Force immediate render to show updated name
     startPolling();
   }
 }
@@ -303,22 +304,42 @@ async function startGame() {
 }
 
 async function askForCard() {
-  if (!state.selectedCard || !state.selectedOpponent) {
-    return alert('Select a card and opponent');
+  // Get askable cards to find the selected one
+  const me = state.game.players.find(p => p.id === myId);
+  const askableCards = getAskableCards(me?.hand || []);
+  
+  if (askableCards.length === 0) {
+    return alert('You have no cards to ask for');
+  }
+  
+  const selectedCard = askableCards[state.selectedCardIndex % askableCards.length];
+  
+  if (!selectedCard || !state.selectedOpponent) {
+    return alert('Select an opponent to ask');
   }
   
   state.shouldRender = false;
   
   const game = state.game;
   const opponent = game.players.find(p => p.id === state.selectedOpponent);
-  const me = game.players.find(p => p.id === myId);
   
-  const hasCard = opponent.hand.includes(state.selectedCard);
+  const hasCard = opponent.hand.includes(selectedCard);
   
   if (hasCard) {
-    opponent.hand = opponent.hand.filter(c => c !== state.selectedCard);
-    me.hand.push(state.selectedCard);
-    game.log.unshift(`${me.name} asked ${opponent.name} for ${state.selectedCard} - SUCCESS!`);
+    opponent.hand = opponent.hand.filter(c => c !== selectedCard);
+    me.hand.push(selectedCard);
+    game.log.unshift(`${me.name} asked ${opponent.name} for ${selectedCard} - SUCCESS!`);
+    
+    // Track card history
+    state.cardHistory.unshift({
+      type: 'gain',
+      card: selectedCard,
+      from: opponent.name,
+      timestamp: Date.now()
+    });
+    
+    // Show big notification
+    addNotification(`You gained ${selectedCard} from ${opponent.name}!`);
     
     // Track who we successfully asked (for timer expiry)
     state.lastSuccessfulAsk = opponent.id;
@@ -346,7 +367,7 @@ async function askForCard() {
     }
   } else {
     game.currentTurn = opponent.id;
-    game.log.unshift(`${me.name} asked ${opponent.name} for ${state.selectedCard} - FAILED`);
+    game.log.unshift(`${me.name} asked ${opponent.name} for ${selectedCard} - FAILED`);
     
     // Clear last successful ask since turn is changing
     state.lastSuccessfulAsk = null;
@@ -358,7 +379,8 @@ async function askForCard() {
     }
   }
   
-  state.selectedCard = '';
+  // Reset card selection index for next turn
+  state.selectedCardIndex = 0;
   state.selectedOpponent = '';
   
   await save(game);
@@ -421,10 +443,8 @@ async function submitCall() {
     game.claimedSets.push(set.name);
     game.log.unshift(`${me.name} correctly called ${set.name}! ${myTeam === 'team1' ? 'Team 1' : 'Team 2'} scores!`);
     
-    // When you call correctly, the turn becomes yours (if you have cards)
-    if (me.hand.length > 0) {
-      game.currentTurn = myId;
-    }
+    // DON'T change turn - calling a set doesn't steal the turn
+    // Turn only changes if current turn holder runs out of cards
   } else {
     const oppTeam = myTeam === 'team1' ? 'team2' : 'team1';
     game.scores[oppTeam]++;
@@ -612,5 +632,42 @@ async function confirmPassTurn() {
   // Restart timer if enabled
   if (game.settings.timeLimit > 0) {
     startTimer();
+  }
+}
+
+// Notification system for card gains/losses
+function addNotification(message, type = 'gain') {
+  const id = Date.now() + Math.random();
+  state.notifications.push({ id, message, type, timestamp: Date.now() });
+  
+  // Auto-remove after 30 seconds
+  setTimeout(() => {
+    state.notifications = state.notifications.filter(n => n.id !== id);
+    if (state.view === 'game') render();
+  }, 30000);
+  
+  if (state.view === 'game') render();
+}
+
+function toggleHistoryModal() {
+  state.showHistoryModal = !state.showHistoryModal;
+  render();
+}
+
+function nextCard() {
+  const me = state.game?.players.find(p => p.id === myId);
+  const askableCards = getAskableCards(me?.hand || []);
+  if (askableCards.length > 0) {
+    state.selectedCardIndex = (state.selectedCardIndex + 1) % askableCards.length;
+    render();
+  }
+}
+
+function previousCard() {
+  const me = state.game?.players.find(p => p.id === myId);
+  const askableCards = getAskableCards(me?.hand || []);
+  if (askableCards.length > 0) {
+    state.selectedCardIndex = (state.selectedCardIndex - 1 + askableCards.length) % askableCards.length;
+    render();
   }
 }
