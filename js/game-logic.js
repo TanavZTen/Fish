@@ -304,12 +304,12 @@ async function startGame() {
 }
 
 async function askForCard() {
-  // Get askable cards to find the selected one
+  // Get filtered askable cards (only from selected set)
   const me = state.game.players.find(p => p.id === myId);
-  const askableCards = getAskableCards(me?.hand || []);
+  const askableCards = getFilteredAskableCards(me?.hand || []);
   
   if (askableCards.length === 0) {
-    return alert('You have no cards to ask for');
+    return alert('You have no cards in this set to ask for. Try a different set.');
   }
   
   const selectedCard = askableCards[state.selectedCardIndex % askableCards.length];
@@ -656,7 +656,7 @@ function toggleHistoryModal() {
 
 function nextCard() {
   const me = state.game?.players.find(p => p.id === myId);
-  const askableCards = getAskableCards(me?.hand || []);
+  const askableCards = getFilteredAskableCards(me?.hand || []);
   if (askableCards.length > 0) {
     state.selectedCardIndex = (state.selectedCardIndex + 1) % askableCards.length;
     render();
@@ -665,9 +665,28 @@ function nextCard() {
 
 function previousCard() {
   const me = state.game?.players.find(p => p.id === myId);
-  const askableCards = getAskableCards(me?.hand || []);
+  const askableCards = getFilteredAskableCards(me?.hand || []);
   if (askableCards.length > 0) {
     state.selectedCardIndex = (state.selectedCardIndex - 1 + askableCards.length) % askableCards.length;
     render();
   }
+}
+
+// Get askable cards filtered by selected set group
+function getFilteredAskableCards(hand) {
+  const askableCards = getAskableCards(hand);
+  const selectedSet = SET_GROUPS[state.selectedSetIndex];
+  
+  // Filter to only cards in the selected set group
+  return askableCards.filter(card => selectedSet.cards.includes(card));
+}
+
+function changeSetGroup(direction) {
+  if (direction === 'next') {
+    state.selectedSetIndex = (state.selectedSetIndex + 1) % SET_GROUPS.length;
+  } else {
+    state.selectedSetIndex = (state.selectedSetIndex - 1 + SET_GROUPS.length) % SET_GROUPS.length;
+  }
+  state.selectedCardIndex = 0; // Reset card index when changing sets
+  render();
 }
