@@ -38,6 +38,7 @@ let state = {
   showCallModal: false,
   showCounterSetModal: false,
   showPassTurnModal: false,
+  showHistoryModal: false,  // For card history
   selectedPassPlayer: '',
   callSetIndex: 0,
   callAssignments: {},
@@ -49,7 +50,31 @@ let state = {
   turnStartTime: null,
   timeRemaining: 0,
   dropdownOpen: false,
-  lastSuccessfulAsk: null  // Track last opponent we successfully got a card from
+  lastSuccessfulAsk: null,  // Track last opponent we successfully got a card from
+  cardHistory: [],  // Track card gains/losses
+  notifications: [],  // Active notifications
+  selectedCardIndex: 0  // For arrow navigation
+};
+
+// Card image mapping
+const CARD_IMAGES = {
+  '2♠': 'images/cards/2_of_spades.png', '3♠': 'images/cards/3_of_spades.png', '4♠': 'images/cards/4_of_spades.png',
+  '5♠': 'images/cards/5_of_spades.png', '6♠': 'images/cards/6_of_spades.png', '7♠': 'images/cards/7_of_spades.png',
+  '8♠': 'images/cards/8_of_spades.png', '9♠': 'images/cards/9_of_spades.png', '10♠': 'images/cards/10_of_spades.png',
+  'J♠': 'images/cards/jack_of_spades2.png', 'Q♠': 'images/cards/queen_of_spades2.png', 'K♠': 'images/cards/king_of_spades2.png', 'A♠': 'images/cards/ace_of_spades2.png',
+  '2♥': 'images/cards/2_of_hearts.png', '3♥': 'images/cards/3_of_hearts.png', '4♥': 'images/cards/4_of_hearts.png',
+  '5♥': 'images/cards/5_of_hearts.png', '6♥': 'images/cards/6_of_hearts.png', '7♥': 'images/cards/7_of_hearts.png',
+  '8♥': 'images/cards/8_of_hearts.png', '9♥': 'images/cards/9_of_hearts.png', '10♥': 'images/cards/10_of_hearts.png',
+  'J♥': 'images/cards/jack_of_hearts2.png', 'Q♥': 'images/cards/queen_of_hearts2.png', 'K♥': 'images/cards/king_of_hearts.png2', 'A♥': 'images/cards/ace_of_hearts.png',
+  '2♦': 'images/cards/2_of_diamonds.png', '3♦': 'images/cards/3_of_diamonds.png', '4♦': 'images/cards/4_of_diamonds.png',
+  '5♦': 'images/cards/5_of_diamonds.png', '6♦': 'images/cards/6_of_diamonds.png', '7♦': 'images/cards/7_of_diamonds.png',
+  '8♦': 'images/cards/8_of_diamonds.png', '9♦': 'images/cards/9_of_diamonds.png', '10♦': 'images/cards/10_of_diamonds.png',
+  'J♦': 'images/cards/jack_of_diamonds2.png', 'Q♦': 'images/cards/queen_of_diamonds2.png', 'K♦': 'images/cards/king_of_diamonds2.png', 'A♦': 'images/cards/ace_of_diamonds.png',
+  '2♣': 'images/cards/2_of_clubs.png', '3♣': 'images/cards/3_of_clubs.png', '4♣': 'images/cards/4_of_clubs.png',
+  '5♣': 'images/cards/5_of_clubs.png', '6♣': 'images/cards/6_of_clubs.png', '7♣': 'images/cards/7_of_clubs.png',
+  '8♣': 'images/cards/8_of_clubs.png', '9♣': 'images/cards/9_of_clubs.png', '10♣': 'images/cards/10_of_clubs.png',
+  'J♣': 'images/cards/jack_of_clubs.png2', 'Q♣': 'images/cards/queen_of_clubs.png2', 'K♣': 'images/cards/king_of_clubs.png2', 'A♣': 'images/cards/ace_of_clubs.png',
+  'RJ': 'images/cards/red_joker.png', 'BJ': 'images/cards/black_joker.png'
 };
 
 // Polling interval
