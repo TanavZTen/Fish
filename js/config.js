@@ -91,19 +91,6 @@ const CARD_IMAGES = {
   'RJ': 'images/cards/red_joker.png', 'BJ': 'images/cards/black_joker.png'
 };
 
-// Set groups for dropdown navigation
-const SET_GROUPS = [
-  { name: 'Spades 2-7', cards: ['2♠', '3♠', '4♠', '5♠', '6♠', '7♠'] },
-  { name: 'Spades 9-A', cards: ['9♠', '10♠', 'J♠', 'Q♠', 'K♠', 'A♠'] },
-  { name: 'Hearts 2-7', cards: ['2♥', '3♥', '4♥', '5♥', '6♥', '7♥'] },
-  { name: 'Hearts 9-A', cards: ['9♥', '10♥', 'J♥', 'Q♥', 'K♥', 'A♥'] },
-  { name: 'Clubs 2-7', cards: ['2♣', '3♣', '4♣', '5♣', '6♣', '7♣'] },
-  { name: 'Clubs 9-A', cards: ['9♣', '10♣', 'J♣', 'Q♣', 'K♣', 'A♣'] },
-  { name: 'Diamonds 2-7', cards: ['2♦', '3♦', '4♦', '5♦', '6♦', '7♦'] },
-  { name: 'Diamonds 9-A', cards: ['9♦', '10♦', 'J♦', 'Q♦', 'K♦', 'A♦'] },
-  { name: 'Eights + Jokers', cards: ['8♠', '8♥', '8♣', '8♦', 'RJ', 'BJ'] }
-];
-
 // Polling interval
 let pollInterval = null;
 let timerInterval = null;
