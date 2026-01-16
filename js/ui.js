@@ -43,8 +43,8 @@ function renderHome(app) {
   app.innerHTML = `
     <div class="container">
       <div class="card">
-        <h1>FISH</h1>
-        <p class="subtitle">9-Set Memory Card Game</p>
+        <h1>LITERATURE</h1>
+        <p class="subtitle">9-Set Card Game</p>
         
         <input type="text" placeholder="Your Name" id="name-input" value="${state.name}">
         <button onclick="window.app.createRoom()">Create Room</button>
@@ -310,11 +310,11 @@ function renderGameView(app) {
             </div>
             
             ${hasCards ? renderPlayerActions(isMyTurn, opponents, askableCards) : renderSpectatorActions()}
-            ${renderActivityLog()}
           </div>
           
           <div class="right-panel">
             ${renderSetsStatus()}
+            ${renderActivityLog()}
           </div>
         </div>
       </div>
@@ -331,7 +331,11 @@ function renderGameView(app) {
 
 function renderCard(card) {
   const imageSrc = CARD_IMAGES[card] || '';
-  return `<img src="${imageSrc}" class="card-image" alt="${card}" title="${card}">`;
+  if (!imageSrc) {
+    // Fallback if card not in mapping
+    return `<div class="game-card" style="background: #21262d; color: #c9d1d9; padding: 10px; border: 2px solid #30363d; border-radius: 8px; min-width: 60px; text-align: center;">${card}</div>`;
+  }
+  return `<img src="${imageSrc}" class="card-image" alt="${card}" title="${card}" onerror="this.style.display='none'; this.insertAdjacentHTML('afterend', '<div class=\\'game-card\\'>${card}</div>');">`;
 }
 
 function renderTeamSidebar() {
@@ -365,6 +369,11 @@ function renderTeamPlayer(p) {
 }
 
 function renderPlayerActions(isMyTurn, opponents, askableCards) {
+  // Get filtered cards based on selected set
+  const me = state.game?.players.find(p => p.id === myId);
+  const filteredCards = getFilteredAskableCards(me?.hand || []);
+  const selectedSet = SET_GROUPS[state.selectedSetIndex];
+  
   return `
     <div>
       <h3 style="margin-bottom: 10px;">Your Actions</h3>
@@ -384,19 +393,34 @@ function renderPlayerActions(isMyTurn, opponents, askableCards) {
         `}
         
         ${askableCards.length > 0 ? `
-          <div class="card-selection-container">
-            <button class="card-arrow-button" onclick="window.app.previousCard()" ${opponents.length === 0 ? 'disabled' : ''}>◀</button>
-            <div style="text-align: center;">
-              <img src="${CARD_IMAGES[askableCards[state.selectedCardIndex % askableCards.length]]}" class="card-image-large" alt="${askableCards[state.selectedCardIndex % askableCards.length]}">
-              <p style="margin-top: 10px; font-weight: 700; color: #c9d1d9;">${askableCards[state.selectedCardIndex % askableCards.length]}</p>
-            </div>
-            <button class="card-arrow-button" onclick="window.app.nextCard()" ${opponents.length === 0 ? 'disabled' : ''}>▶</button>
+          <label style="display: block; margin-bottom: 5px; color: #c9d1d9; font-weight: 700;">Select Set Group:</label>
+          <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 15px;">
+            <button class="card-arrow-button" onclick="window.app.changeSetGroup('prev')" style="padding: 10px 15px;">◀</button>
+            <select id="set-group-select" style="flex: 1;">
+              ${SET_GROUPS.map((group, idx) => 
+                `<option value="${idx}" ${state.selectedSetIndex === idx ? 'selected' : ''}>${group.name}</option>`
+              ).join('')}
+            </select>
+            <button class="card-arrow-button" onclick="window.app.changeSetGroup('next')" style="padding: 10px 15px;">▶</button>
           </div>
+          
+          ${filteredCards.length > 0 ? `
+            <div class="card-selection-container">
+              <button class="card-arrow-button" onclick="window.app.previousCard()" ${opponents.length === 0 ? 'disabled' : ''}>◀</button>
+              <div style="text-align: center;">
+                <img src="${CARD_IMAGES[filteredCards[state.selectedCardIndex % filteredCards.length]]}" class="card-image-large" alt="${filteredCards[state.selectedCardIndex % filteredCards.length]}">
+                <p style="margin-top: 10px; font-weight: 700; color: #c9d1d9;">${filteredCards[state.selectedCardIndex % filteredCards.length]}</p>
+              </div>
+              <button class="card-arrow-button" onclick="window.app.nextCard()" ${opponents.length === 0 ? 'disabled' : ''}>▶</button>
+            </div>
+          ` : `
+            <p style="color: #f85149; padding: 12px; text-align: center; background: #161b22; border-radius: 6px;">No cards from "${selectedSet.name}" in your hand</p>
+          `}
         ` : `
           <p style="color: #8b949e; padding: 12px; text-align: center;">No cards to ask for</p>
         `}
         
-        <button onclick="window.app.askForCard()" ${askableCards.length === 0 || !state.selectedOpponent || opponents.length === 0 ? 'disabled' : ''}>
+        <button onclick="window.app.askForCard()" ${filteredCards.length === 0 || !state.selectedOpponent || opponents.length === 0 ? 'disabled' : ''}>
           Ask for Card
         </button>
       ` : '<p style="color: #8b949e; margin-bottom: 10px;">Waiting for turn...</p>'}
@@ -548,7 +572,7 @@ function renderPassTurnModal() {
 function renderNotifications() {
   if (state.notifications.length === 0) return '';
   
-  return `
+  const topNotifications = `
     <div style="position: fixed; top: 20px; right: 20px; z-index: 10000; display: flex; flex-direction: column; gap: 10px;">
       ${state.notifications.map((notif, index) => `
         <div class="notification ${notif.type === 'loss' ? 'notification-loss' : 'notification-gain'}" 
@@ -558,6 +582,16 @@ function renderNotifications() {
       `).join('')}
     </div>
   `;
+  
+  // ALSO show most recent notification in CENTER of screen
+  const centerNotification = state.notifications[0] ? `
+    <div class="notification-center ${state.notifications[0].type === 'loss' ? 'notification-loss' : 'notification-gain'}"
+         style="animation: fadeIn 0.3s ease-out, fadeOut 0.3s ease-in ${29.7}s;">
+      ${state.notifications[0].message}
+    </div>
+  ` : '';
+  
+  return topNotifications + centerNotification;
 }
 
 function renderHistoryModal() {
@@ -604,6 +638,8 @@ function renderHistoryModal() {
 
 function attachGameHandlers(opponents, askableCards) {
   const oppSelect = document.getElementById('opponent-select');
+  const cardDropdown = document.getElementById('card-select-dropdown');
+  const setGroupSelect = document.getElementById('set-group-select');
   const setSelect = document.getElementById('set-select');
   const passTurnSelect = document.getElementById('pass-turn-select');
   
@@ -634,6 +670,23 @@ function attachGameHandlers(opponents, askableCards) {
       setTimeout(() => {
         state.dropdownOpen = false;
       }, 300);
+    };
+  }
+  
+  // Set group dropdown handler
+  if (setGroupSelect) {
+    setGroupSelect.onchange = (e) => {
+      state.selectedSetIndex = parseInt(e.target.value);
+      state.selectedCardIndex = 0; // Reset card index
+      render();
+    };
+  }
+  
+  // Card dropdown handler
+  if (cardDropdown) {
+    cardDropdown.onchange = (e) => {
+      state.selectedCardIndex = parseInt(e.target.value);
+      render();
     };
   }
   
@@ -802,6 +855,7 @@ window.app = {
   askForCard,
   nextCard,
   previousCard,
+  changeSetGroup,
   openCallModal,
   openCounterSetModal,
   closeCallModal: () => {
