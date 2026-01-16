@@ -234,8 +234,8 @@ function renderSpectatorView(app) {
         
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
           <h2>Room ${state.code}</h2>
-          <button onclick="window.app.manualRefresh()" class="btn-small" style="background: #21262d; color: #c9d1d9; border: 1px solid #30363d;">
-            🔄 Refresh
+          <button onclick="window.app.toggleHistoryModal()" class="btn-small" style="background: #21262d; color: #c9d1d9; border: 1px solid #30363d;">
+            📜 Card History
           </button>
         </div>
         <p style="margin: 10px 0;">Scores - Team 1: ${state.game.scores.team1} | Team 2: ${state.game.scores.team2}</p>
@@ -288,8 +288,8 @@ function renderGameView(app) {
       <div class="card">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
           <h2>Room ${state.code}</h2>
-          <button onclick="window.app.manualRefresh()" class="btn-small" style="background: #21262d; color: #c9d1d9; border: 1px solid #30363d;">
-            🔄 Refresh
+          <button onclick="window.app.toggleHistoryModal()" class="btn-small" style="background: #21262d; color: #c9d1d9; border: 1px solid #30363d;">
+            📜 Card History
           </button>
         </div>
         <p style="margin: 10px 0;">Scores - Team 1: ${state.game.scores.team1} | Team 2: ${state.game.scores.team2}</p>
@@ -320,16 +320,18 @@ function renderGameView(app) {
       </div>
     </div>
     
+    ${renderNotifications()}
     ${(state.showCallModal || state.showCounterSetModal) ? renderCallModal() : ''}
     ${state.showPassTurnModal ? renderPassTurnModal() : ''}
+    ${state.showHistoryModal ? renderHistoryModal() : ''}
   `;
   
   attachGameHandlers(opponents, askableCards);
 }
 
 function renderCard(card) {
-  const isRed = card.includes('♥') || card.includes('♦');
-  return `<div class="game-card ${isRed ? 'red' : 'black'}">${card}</div>`;
+  const imageSrc = CARD_IMAGES[card] || '';
+  return `<img src="${imageSrc}" class="card-image" alt="${card}" title="${card}">`;
 }
 
 function renderTeamSidebar() {
@@ -381,20 +383,30 @@ function renderPlayerActions(isMyTurn, opponents, askableCards) {
           </p>
         `}
         
-        <select id="card-select" style="margin-bottom: 10px;" ${opponents.length === 0 ? 'disabled' : ''}>
-          <option value="">Select Card to Ask For</option>
-          ${askableCards.sort().map(card => 
-            `<option value="${card}" ${state.selectedCard === card ? 'selected' : ''}>${card}</option>`
-          ).join('')}
-        </select>
+        ${askableCards.length > 0 ? `
+          <div class="card-selection-container">
+            <button class="card-arrow-button" onclick="window.app.previousCard()" ${opponents.length === 0 ? 'disabled' : ''}>◀</button>
+            <div style="text-align: center;">
+              <img src="${CARD_IMAGES[askableCards[state.selectedCardIndex % askableCards.length]]}" class="card-image-large" alt="${askableCards[state.selectedCardIndex % askableCards.length]}">
+              <p style="margin-top: 10px; font-weight: 700; color: #c9d1d9;">${askableCards[state.selectedCardIndex % askableCards.length]}</p>
+            </div>
+            <button class="card-arrow-button" onclick="window.app.nextCard()" ${opponents.length === 0 ? 'disabled' : ''}>▶</button>
+          </div>
+        ` : `
+          <p style="color: #8b949e; padding: 12px; text-align: center;">No cards to ask for</p>
+        `}
         
-        <button onclick="window.app.askForCard()" ${!state.selectedCard || !state.selectedOpponent || opponents.length === 0 ? 'disabled' : ''}>
+        <button onclick="window.app.askForCard()" ${askableCards.length === 0 || !state.selectedOpponent || opponents.length === 0 ? 'disabled' : ''}>
           Ask for Card
         </button>
       ` : '<p style="color: #8b949e; margin-bottom: 10px;">Waiting for turn...</p>'}
       
       <button onclick="window.app.openCallModal()" class="btn-secondary" style="margin-top: 8px;">
         Call a Set
+      </button>
+      
+      <button onclick="window.app.openCounterSetModal()" class="btn-secondary" style="margin-top: 8px;">
+        Counter Set (Risky!)
       </button>
     </div>
   `;
@@ -533,9 +545,65 @@ function renderPassTurnModal() {
   `;
 }
 
+function renderNotifications() {
+  if (state.notifications.length === 0) return '';
+  
+  return `
+    <div style="position: fixed; top: 20px; right: 20px; z-index: 10000; display: flex; flex-direction: column; gap: 10px;">
+      ${state.notifications.map((notif, index) => `
+        <div class="notification ${notif.type === 'loss' ? 'notification-loss' : 'notification-gain'}" 
+             style="animation: slideIn 0.3s ease-out, slideOut 0.3s ease-in ${29.7}s;">
+          ${notif.message}
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+function renderHistoryModal() {
+  const formatTime = (timestamp) => {
+    const now = Date.now();
+    const diff = now - timestamp;
+    const seconds = Math.floor(diff / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    
+    if (hours > 0) return `${hours}h ago`;
+    if (minutes > 0) return `${minutes}m ago`;
+    return `${seconds}s ago`;
+  };
+  
+  return `
+    <div class="modal-overlay" onclick="window.app.toggleHistoryModal()">
+      <div class="modal" onclick="event.stopPropagation()" style="max-width: 500px;">
+        <h2 style="margin-bottom: 15px;">📜 Card History</h2>
+        
+        <div style="max-height: 400px; overflow-y: auto; margin-bottom: 15px;">
+          ${state.cardHistory.length === 0 ? `
+            <p style="color: #8b949e; text-align: center; padding: 20px;">No card history yet</p>
+          ` : state.cardHistory.map(entry => `
+            <div style="padding: 10px; margin-bottom: 8px; background: ${entry.type === 'gain' ? '#1a3a1a' : '#3a1a1a'}; border-radius: 6px; border-left: 3px solid ${entry.type === 'gain' ? '#4ade80' : '#f85149'};">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-weight: 700; color: ${entry.type === 'gain' ? '#4ade80' : '#f85149'};">
+                  ${entry.type === 'gain' ? '▲' : '▼'} ${entry.card}
+                </span>
+                <span style="color: #8b949e; font-size: 12px;">${formatTime(entry.timestamp)}</span>
+              </div>
+              <div style="color: #8b949e; font-size: 13px; margin-top: 4px;">
+                ${entry.type === 'gain' ? `from ${entry.from}` : `to ${entry.to}`}
+              </div>
+            </div>
+          `).join('')}
+        </div>
+        
+        <button onclick="window.app.toggleHistoryModal()">Close</button>
+      </div>
+    </div>
+  `;
+}
+
 function attachGameHandlers(opponents, askableCards) {
   const oppSelect = document.getElementById('opponent-select');
-  const cardSelect = document.getElementById('card-select');
   const setSelect = document.getElementById('set-select');
   const passTurnSelect = document.getElementById('pass-turn-select');
   
@@ -569,12 +637,13 @@ function attachGameHandlers(opponents, askableCards) {
     };
   }
   
+  // Card selection now uses arrow buttons instead of dropdown
+  /*
   if (cardSelect) {
     if (state.selectedCard) {
       cardSelect.value = state.selectedCard;
     }
     
-    // Track when dropdown is being used - more reliable than focus/blur
     cardSelect.onmousedown = () => {
       state.dropdownOpen = true;
     };
@@ -585,19 +654,18 @@ function attachGameHandlers(opponents, askableCards) {
     
     cardSelect.onchange = (e) => {
       state.selectedCard = e.target.value;
-      // Keep dropdown flag true for a moment to ensure selection completes
       setTimeout(() => {
         state.dropdownOpen = false;
       }, 500);
     };
     
-    // Also clear on blur as backup
     cardSelect.onblur = () => {
       setTimeout(() => {
         state.dropdownOpen = false;
       }, 300);
     };
   }
+  */
   
   if (passTurnSelect) {
     if (state.selectedPassPlayer) {
@@ -732,6 +800,8 @@ window.app = {
   removeBot,
   startGame,
   askForCard,
+  nextCard,
+  previousCard,
   openCallModal,
   openCounterSetModal,
   closeCallModal: () => {
@@ -747,6 +817,7 @@ window.app = {
   submitCall,
   submitCounterSet,
   confirmPassTurn,
+  toggleHistoryModal,
   manualRefresh: async () => {
     await load();
   }
