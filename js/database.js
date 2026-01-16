@@ -44,12 +44,16 @@ async function load() {
       const oldPhase = state.game?.phase;
       const oldTurn = state.game?.currentTurn;
       const oldHand = state.game?.players.find(p => p.id === myId)?.hand || [];
+      const oldSelectedCardIndex = state.selectedCardIndex; // Preserve card selection
       
       // Store current selections before updating
       const oldSelectedCard = state.selectedCard;
       const oldSelectedOpponent = state.selectedOpponent;
       
       state.game = gameData.game_data;
+      
+      // Restore card selection index to prevent flash/jump
+      state.selectedCardIndex = oldSelectedCardIndex;
       
       // Detect card changes (someone asked you for a card)
       const newHand = state.game.players.find(p => p.id === myId)?.hand || [];
