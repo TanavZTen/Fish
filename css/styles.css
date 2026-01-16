@@ -460,28 +460,51 @@ select option:checked {
   }
 }
 
+@keyframes slideInLeft {
+  from {
+    transform: translateX(-400px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideOutLeft {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(-400px);
+    opacity: 0;
+  }
+}
+
 /* Card Image Styles */
 .card-image {
   width: 80px;
   height: auto;
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-  transition: transform 0.2s ease;
   cursor: pointer;
+  /* Removed transition - causes flicker during polling */
 }
 
 .card-image:hover {
-  transform: translateY(-5px) scale(1.05);
+  /* Removed transform - causes flicker */
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
 }
 
 .card-image-large {
-  width: 140px;
+  width: 180px; /* Increased size */
   height: auto;
   border-radius: 12px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
   border: 3px solid #4ade80;
 }
+
 
 .card-arrow-button {
   background: #21262d;
@@ -514,4 +537,65 @@ select option:checked {
   padding: 20px;
   background: #161b22;
   border-radius: 12px;
+}
+
+@keyframes slideInLeft {
+  from {
+    transform: translateX(-400px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideOutLeft {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(-400px);
+    opacity: 0;
+  }
+}
+
+/* Center notification (in addition to top-right) */
+.notification-center {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 15000;
+  padding: 30px 40px;
+  border-radius: 12px;
+  font-size: 24px;
+  font-weight: 700;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8);
+  min-width: 400px;
+  text-align: center;
+  pointer-events: none;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.8);
+  }
 }
