@@ -314,7 +314,8 @@ function renderGameView(app) {
           
           <div class="right-panel">
             ${renderSetsStatus()}
-            ${renderActivityLog()}
+            ${renderLastAsk()}
+            ${renderRecentActivity()}
           </div>
         </div>
       </div>
@@ -445,28 +446,87 @@ function renderSpectatorActions() {
   `;
 }
 
-function renderActivityLog() {
+function renderLastAsk() {
+  // Show only card ask results (success/fail)
+  const askLogs = state.game.log?.filter(log => 
+    log.includes('asked') && (log.includes('SUCCESS') || log.includes('FAILED'))
+  ).slice(0, 3) || [];
+  
   return `
-    <div>
-      <h3 style="margin-bottom: 10px;">Recent Activity</h3>
-      ${state.game.log?.slice(0, state.game.settings?.historyCount || 2).map(log => 
-        `<div style="font-size: 14px; color: #8b949e; margin-bottom: 4px; padding: 8px; background: #0d1117; border-radius: 6px;">${log}</div>`
-      ).join('') || '<div style="font-size: 14px; color: #8b949e;">No activity yet</div>'}
+    <div style="background: rgba(26, 71, 42, 0.3); border: 1px solid rgba(212, 175, 55, 0.2); border-radius: 12px; padding: 16px; margin-bottom: 16px;">
+      <h3 style="font-size: 11px; font-weight: 700; color: var(--gold); text-transform: uppercase; letter-spacing: 0.2em; margin-bottom: 12px;">📋 Last Ask</h3>
+      <div style="max-height: 120px; overflow-y: auto;">
+        ${askLogs.length > 0 ? askLogs.map(log => {
+          const isSuccess = log.includes('SUCCESS');
+          return `
+            <div style="font-size: 12px; margin-bottom: 6px; padding: 8px; background: ${isSuccess ? 'rgba(74, 222, 128, 0.1)' : 'rgba(248, 81, 73, 0.1)'}; border-left: 2px solid ${isSuccess ? '#4ade80' : '#f85149'}; border-radius: 4px; color: #e6edf3;">
+              ${log}
+            </div>
+          `;
+        }).join('') : '<div style="font-size: 12px; color: #8b949e; text-align: center;">No asks yet</div>'}
+      </div>
     </div>
   `;
 }
 
+function renderRecentActivity() {
+  // Show everything EXCEPT card asks (sets, timer, game events)
+  const activityLogs = state.game.log?.filter(log => 
+    !log.includes('asked') || (!log.includes('SUCCESS') && !log.includes('FAILED'))
+  ).slice(0, 5) || [];
+  
+  return `
+    <div style="background: rgba(13, 27, 26, 0.3); border: 1px solid rgba(212, 175, 55, 0.2); border-radius: 12px; padding: 16px;">
+      <h3 style="font-size: 11px; font-weight: 700; color: var(--gold); text-transform: uppercase; letter-spacing: 0.2em; margin-bottom: 12px;">📰 Recent Activity</h3>
+      <div style="max-height: 150px; overflow-y: auto;">
+        ${activityLogs.length > 0 ? activityLogs.map(log => `
+          <div style="font-size: 12px; color: rgba(230, 237, 243, 0.7); margin-bottom: 6px; padding: 8px; background: rgba(0, 0, 0, 0.3); border-radius: 4px; border-left: 2px solid rgba(212, 175, 55, 0.3);">
+            ${log}
+          </div>
+        `).join('') : '<div style="font-size: 12px; color: #8b949e; text-align: center;">No activity yet</div>'}
+      </div>
+    </div>
+  `;
+}
+
+function renderActivityLog() {
+  // DEPRECATED - Split into renderLastAsk and renderRecentActivity
+  return '';
+}
+
 function renderSetsStatus() {
   return `
-    <div class="sets-status">
-      <h3 style="margin-bottom: 10px;">Sets Status</h3>
-      ${SETS.map((set, i) => `
-        <div class="set-item ${state.game.claimedSets?.includes(set.name) ? 'claimed' : ''}">
-          <strong>${set.name}</strong> 
-          ${state.game.claimedSets?.includes(set.name) ? '<span style="color: #4ade80;">✓ Claimed</span>' : '<span style="color: #8b949e;">Available</span>'}
-          <div style="font-size: 12px; color: #8b949e; margin-top: 4px;">${set.cards.join(', ')}</div>
-        </div>
-      `).join('')}
+    <div style="background: rgba(18, 18, 18, 0.8); border: 2px solid rgba(212, 175, 55, 0.3); border-radius: 12px; padding: 20px; margin-bottom: 16px;">
+      <h3 style="font-size: 12px; font-weight: 700; color: var(--gold); text-transform: uppercase; letter-spacing: 0.2em; margin-bottom: 16px;">🎯 Sets Status & Calling</h3>
+      <div style="display: grid; gap: 8px;">
+        ${SETS.map((set, i) => {
+          const isClaimed = state.game.claimedSets?.includes(set.name);
+          return `
+            <button 
+              onclick="window.app.quickCallSet(${i})" 
+              ${isClaimed ? 'disabled' : ''}
+              style="
+                text-align: left;
+                padding: 10px 12px;
+                background: ${isClaimed ? 'rgba(74, 28, 28, 0.3)' : 'rgba(26, 71, 42, 0.4)'};
+                border: 1px solid ${isClaimed ? 'rgba(139, 148, 158, 0.2)' : 'rgba(212, 175, 55, 0.4)'};
+                border-radius: 8px;
+                cursor: ${isClaimed ? 'not-allowed' : 'pointer'};
+                transition: all 0.2s;
+                ${!isClaimed ? 'hover:background: rgba(26, 71, 42, 0.6); hover:border-color: var(--gold);' : ''}
+              "
+            >
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                <strong style="color: ${isClaimed ? '#8b949e' : 'var(--gold-light)'}; font-size: 13px;">${set.name}</strong>
+                <span style="font-size: 11px; ${isClaimed ? 'color: #f85149;' : 'color: #4ade80;'} font-weight: 600;">
+                  ${isClaimed ? '✗ Claimed' : '✓ Available'}
+                </span>
+              </div>
+              <div style="font-size: 10px; color: #8b949e; font-family: monospace;">${set.cards.join(' ')}</div>
+            </button>
+          `;
+        }).join('')}
+      </div>
     </div>
   `;
 }
@@ -664,6 +724,11 @@ function attachGameHandlers(opponents, askableCards) {
   
   // Set group dropdown handler
   if (setGroupSelect) {
+    // Ensure value is set on load
+    if (state.selectedSetIndex !== undefined) {
+      setGroupSelect.value = state.selectedSetIndex;
+    }
+    
     setGroupSelect.onchange = (e) => {
       state.selectedSetIndex = parseInt(e.target.value);
       state.selectedCardIndex = 0; // Reset card index
@@ -861,6 +926,7 @@ window.app = {
   submitCounterSet,
   confirmPassTurn,
   toggleHistoryModal,
+  quickCallSet,
   manualRefresh: async () => {
     await load();
   }
