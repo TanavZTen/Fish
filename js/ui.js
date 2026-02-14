@@ -43,8 +43,8 @@ function renderHome(app) {
   app.innerHTML = `
     <div class="container">
       <div class="card">
-        <h1>FISH</h1>
-        <p class="subtitle">9-Set Memory Card Game</p>
+        <h1>LITERATURE</h1>
+        <p class="subtitle">9-Set Card Game</p>
         
         <input type="text" placeholder="Your Name" id="name-input" value="${state.name}">
         <button onclick="window.app.createRoom()">Create Room</button>
@@ -393,28 +393,26 @@ function renderPlayerActions(isMyTurn, opponents, askableCards) {
         `}
         
         ${askableCards.length > 0 ? `
-          <label style="display: block; margin-bottom: 5px; color: #c9d1d9; font-weight: 700;">Select Set Group:</label>
-          <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 15px;">
-            <button class="card-arrow-button" onclick="window.app.changeSetGroup('prev')" style="padding: 10px 15px;">◀</button>
-            <select id="set-group-select" style="flex: 1;">
-              ${SET_GROUPS.map((group, idx) => 
-                `<option value="${idx}" ${state.selectedSetIndex === idx ? 'selected' : ''}>${group.name}</option>`
-              ).join('')}
-            </select>
-            <button class="card-arrow-button" onclick="window.app.changeSetGroup('next')" style="padding: 10px 15px;">▶</button>
-          </div>
+          <label style="display: block; margin-bottom: 8px; color: var(--gold); font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.2em;">Select Set Group:</label>
+          <select id="set-group-select" style="width: 100%; margin-bottom: 20px;">
+            ${SET_GROUPS.map((group, idx) => 
+              `<option value="${idx}" ${state.selectedSetIndex === idx ? 'selected' : ''}>${group.name}</option>`
+            ).join('')}
+          </select>
           
           ${filteredCards.length > 0 ? `
             <div class="card-selection-container">
-              <button class="card-arrow-button" onclick="window.app.previousCard()" ${opponents.length === 0 ? 'disabled' : ''}>◀</button>
               <div style="text-align: center;">
                 <img src="${CARD_IMAGES[filteredCards[state.selectedCardIndex % filteredCards.length]]}" class="card-image-large" alt="${filteredCards[state.selectedCardIndex % filteredCards.length]}">
-                <p style="margin-top: 10px; font-weight: 700; color: #c9d1d9;">${filteredCards[state.selectedCardIndex % filteredCards.length]}</p>
+                <p style="margin-top: 12px; font-weight: 700; color: var(--gold-light); font-size: 14px;">${filteredCards[state.selectedCardIndex % filteredCards.length]}</p>
+                <div style="margin-top: 16px; display: flex; gap: 12px; justify-content: center;">
+                  <button class="card-arrow-button" onclick="window.app.previousCard()" ${opponents.length === 0 ? 'disabled' : ''} style="display: inline-block !important;">◀</button>
+                  <button class="card-arrow-button" onclick="window.app.nextCard()" ${opponents.length === 0 ? 'disabled' : ''} style="display: inline-block !important;">▶</button>
+                </div>
               </div>
-              <button class="card-arrow-button" onclick="window.app.nextCard()" ${opponents.length === 0 ? 'disabled' : ''}>▶</button>
             </div>
           ` : `
-            <p style="color: #f85149; padding: 12px; text-align: center; background: #161b22; border-radius: 6px;">No cards from "${selectedSet.name}" in your hand</p>
+            <p style="color: #f85149; padding: 20px; text-align: center; background: rgba(74, 28, 28, 0.3); border-radius: 8px; border: 1px solid rgba(248, 81, 73, 0.3);">No cards from "${selectedSet.name}" in your hand</p>
           `}
         ` : `
           <p style="color: #8b949e; padding: 12px; text-align: center;">No cards to ask for</p>
@@ -572,7 +570,8 @@ function renderPassTurnModal() {
 function renderNotifications() {
   if (state.notifications.length === 0) return '';
   
-  const topNotifications = `
+  // ONLY show at top-right, NO center notification
+  return `
     <div style="position: fixed; top: 20px; right: 20px; z-index: 10000; display: flex; flex-direction: column; gap: 10px;">
       ${state.notifications.map((notif, index) => `
         <div class="notification ${notif.type === 'loss' ? 'notification-loss' : 'notification-gain'}" 
@@ -582,16 +581,6 @@ function renderNotifications() {
       `).join('')}
     </div>
   `;
-  
-  // ALSO show most recent notification in CENTER of screen
-  const centerNotification = state.notifications[0] ? `
-    <div class="notification-center ${state.notifications[0].type === 'loss' ? 'notification-loss' : 'notification-gain'}"
-         style="animation: fadeIn 0.3s ease-out, fadeOut 0.3s ease-in ${29.7}s;">
-      ${state.notifications[0].message}
-    </div>
-  ` : '';
-  
-  return topNotifications + centerNotification;
 }
 
 function renderHistoryModal() {
