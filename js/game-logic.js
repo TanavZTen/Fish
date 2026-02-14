@@ -654,6 +654,14 @@ function toggleHistoryModal() {
   render();
 }
 
+function quickCallSet(setIndex) {
+  // Quick call a set by clicking it in the Sets Status panel
+  state.callSetIndex = setIndex;
+  state.showCallModal = true;
+  state.callAssignments = {};
+  render();
+}
+
 function nextCard() {
   const me = state.game?.players.find(p => p.id === myId);
   const askableCards = getFilteredAskableCards(me?.hand || []);
