@@ -656,10 +656,42 @@ function toggleHistoryModal() {
 
 function quickCallSet(setIndex) {
   // Quick call a set by clicking it in the Sets Status panel
-  state.callSetIndex = setIndex;
-  state.showCallModal = true;
-  state.callAssignments = {};
-  render();
+  const me = state.game?.players.find(p => p.id === myId);
+  const myName = me?.name || 'You';
+  const set = SETS[setIndex];
+  
+  // Check if I have ALL cards in this set
+  const myCards = me?.hand || [];
+  const setCards = set.cards;
+  const haveAllCards = setCards.every(card => myCards.includes(card));
+  
+  if (haveAllCards) {
+    // AUTO-CALL: I have all cards, submit immediately
+    const assignments = {};
+    setCards.forEach(card => {
+      assignments[card] = myName;
+    });
+    
+    state.callSetIndex = setIndex;
+    state.callAssignments = assignments;
+    
+    // Submit the call immediately
+    submitCall();
+  } else {
+    // Open modal with MY cards pre-filled
+    state.callSetIndex = setIndex;
+    state.callAssignments = {};
+    
+    // Auto-fill MY name for cards I have
+    setCards.forEach(card => {
+      if (myCards.includes(card)) {
+        state.callAssignments[card] = myName;
+      }
+    });
+    
+    state.showCallModal = true;
+    render();
+  }
 }
 
 function nextCard() {
