@@ -7,6 +7,12 @@ function formatTime(seconds) {
 }
 
 function render() {
+  // Preserve scroll position
+  const scrollPositions = {};
+  document.querySelectorAll('[data-preserve-scroll]').forEach(el => {
+    scrollPositions[el.dataset.preserveScroll] = el.scrollTop;
+  });
+  
   const app = document.getElementById('app');
   
   if (state.view === 'home') {
@@ -35,6 +41,17 @@ function render() {
     } else {
       renderGameView(app);
     }
+    
+    // Restore scroll positions after DOM update
+    setTimeout(() => {
+      Object.keys(scrollPositions).forEach(key => {
+        const el = document.querySelector(`[data-preserve-scroll="${key}"]`);
+        if (el) {
+          el.scrollTop = scrollPositions[key];
+        }
+      });
+    }, 0);
+    
     return;
   }
 }
@@ -312,10 +329,12 @@ function renderGameView(app) {
             ${hasCards ? renderPlayerActions(isMyTurn, opponents, askableCards) : renderSpectatorActions()}
           </div>
           
-          <div class="right-panel">
+          <div class="right-panel" data-preserve-scroll="right-panel">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+              <div data-preserve-scroll="last-ask">${renderLastAsk()}</div>
+              <div data-preserve-scroll="recent-activity">${renderRecentActivity()}</div>
+            </div>
             ${renderSetsStatus()}
-            ${renderLastAsk()}
-            ${renderRecentActivity()}
           </div>
         </div>
       </div>
@@ -373,6 +392,22 @@ function renderPlayerActions(isMyTurn, opponents, askableCards) {
   // Get filtered cards based on selected set
   const me = state.game?.players.find(p => p.id === myId);
   const filteredCards = getFilteredAskableCards(me?.hand || []);
+  
+  // Filter SET_GROUPS to only show sets where you have cards to ask
+  const availableSets = SET_GROUPS.map((group, idx) => ({
+    ...group,
+    index: idx,
+    hasCards: askableCards.some(card => group.cards.includes(card))
+  })).filter(group => group.hasCards);
+  
+  // Ensure selectedSetIndex points to an available set
+  if (availableSets.length > 0) {
+    const currentSetAvailable = availableSets.some(g => g.index === state.selectedSetIndex);
+    if (!currentSetAvailable) {
+      state.selectedSetIndex = availableSets[0].index;
+    }
+  }
+  
   const selectedSet = SET_GROUPS[state.selectedSetIndex];
   
   return `
@@ -396,8 +431,8 @@ function renderPlayerActions(isMyTurn, opponents, askableCards) {
         ${askableCards.length > 0 ? `
           <label style="display: block; margin-bottom: 8px; color: var(--gold); font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.2em;">Select Set Group:</label>
           <select id="set-group-select" style="width: 100%; margin-bottom: 20px;">
-            ${SET_GROUPS.map((group, idx) => 
-              `<option value="${idx}" ${state.selectedSetIndex === idx ? 'selected' : ''}>${group.name}</option>`
+            ${availableSets.map((group) => 
+              `<option value="${group.index}" ${state.selectedSetIndex === group.index ? 'selected' : ''}>${group.name}</option>`
             ).join('')}
           </select>
           
@@ -423,10 +458,6 @@ function renderPlayerActions(isMyTurn, opponents, askableCards) {
           Ask for Card
         </button>
       ` : '<p style="color: #8b949e; margin-bottom: 10px;">Waiting for turn...</p>'}
-      
-      <button onclick="window.app.openCallModal()" class="btn-secondary" style="margin-top: 8px;">
-        Call a Set
-      </button>
       
       <button onclick="window.app.openCounterSetModal()" class="btn-secondary" style="margin-top: 8px;">
         Counter Set (Risky!)
@@ -697,42 +728,33 @@ function attachGameHandlers(opponents, askableCards) {
       oppSelect.value = state.selectedOpponent;
     }
     
-    // Track when dropdown is being used - more reliable than focus/blur
-    oppSelect.onmousedown = () => {
-      state.dropdownOpen = true;
-    };
-    
-    oppSelect.onclick = () => {
-      state.dropdownOpen = true;
-    };
-    
     oppSelect.onchange = (e) => {
       state.selectedOpponent = e.target.value;
-      // Keep dropdown flag true for a moment to ensure selection completes
-      setTimeout(() => {
-        state.dropdownOpen = false;
-      }, 500);
-    };
-    
-    // Also clear on blur as backup
-    oppSelect.onblur = () => {
-      setTimeout(() => {
-        state.dropdownOpen = false;
-      }, 300);
+      state.dropdownOpen = false;
+      // Don't render immediately to prevent dropdown closing
     };
   }
   
-  // Set group dropdown handler
+  // Set group dropdown handler - PREVENT RESETTING
   if (setGroupSelect) {
-    // Ensure value is set on load
-    if (state.selectedSetIndex !== undefined) {
+    // Ensure value is preserved
+    if (state.selectedSetIndex !== undefined && state.selectedSetIndex !== null) {
       setGroupSelect.value = state.selectedSetIndex;
     }
     
     setGroupSelect.onchange = (e) => {
-      state.selectedSetIndex = parseInt(e.target.value);
-      state.selectedCardIndex = 0; // Reset card index
-      render();
+      const newIndex = parseInt(e.target.value);
+      if (!isNaN(newIndex)) {
+        state.selectedSetIndex = newIndex;
+        state.selectedCardIndex = 0; // Reset card index
+        // Delay render to prevent dropdown from closing immediately
+        setTimeout(() => render(), 100);
+      }
+    };
+    
+    // Prevent dropdown from closing on mousedown
+    setGroupSelect.onmousedown = (e) => {
+      e.stopPropagation();
     };
   }
   
