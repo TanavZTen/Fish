@@ -7,15 +7,20 @@ function formatTime(seconds) {
 }
 
 function render() {
-  // Preserve scroll position
-  const scrollPositions = {};
-  document.querySelectorAll('[data-preserve-scroll]').forEach(el => {
-    scrollPositions[el.dataset.preserveScroll] = el.scrollTop;
-  });
-  
-  const app = document.getElementById('app');
-  
-  if (state.view === 'home') {
+  try {
+    // Preserve scroll position
+    const scrollPositions = {};
+    document.querySelectorAll('[data-preserve-scroll]').forEach(el => {
+      scrollPositions[el.dataset.preserveScroll] = el.scrollTop;
+    });
+    
+    const app = document.getElementById('app');
+    if (!app) {
+      console.error('App element not found');
+      return;
+    }
+    
+    if (state.view === 'home') {
     renderHome(app);
     return;
   }
@@ -36,7 +41,9 @@ function render() {
   }
   
   if (state.view === 'game' && state.game) {
-    if (state.isSpectator) {
+    if (state.game.phase === 'gameOver') {
+      renderGameOver(app);
+    } else if (state.isSpectator) {
       renderSpectatorView(app);
     } else {
       renderGameView(app);
@@ -53,7 +60,104 @@ function render() {
     }, 0);
     
     return;
+  } catch (error) {
+    console.error('Render error:', error);
+    // Don't crash the app
   }
+}
+
+function renderGameOver(app) {
+  const game = state.game;
+  const totalPlayers = game.players.length;
+  const replayVotes = game.replayVotes || {};
+  const votedYes = Object.values(replayVotes).filter(v => v === true).length;
+  const votedNo = Object.values(replayVotes).filter(v => v === false).length;
+  const notVoted = totalPlayers - Object.keys(replayVotes).length;
+  const myVote = replayVotes[myId];
+  
+  app.innerHTML = `
+    <div class="poker-room-bg"></div>
+    <div class="container" style="max-width: 900px; margin: 0 auto; padding: 40px 20px;">
+      <div style="background: linear-gradient(135deg, rgba(18, 18, 18, 0.95), rgba(13, 27, 26, 0.95)); border: 2px solid rgba(212, 175, 55, 0.4); border-radius: 20px; padding: 48px; text-align: center; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);">
+        
+        <div style="font-size: 72px; margin-bottom: 24px;">🏆</div>
+        
+        <h1 style="font-size: 48px; font-weight: 700; color: var(--gold); margin-bottom: 16px; text-transform: uppercase; letter-spacing: 0.1em;">
+          Game Over!
+        </h1>
+        
+        <h2 style="font-size: 32px; font-weight: 600; color: var(--gold-light); margin-bottom: 32px;">
+          ${game.winner} Wins!
+        </h2>
+        
+        <div style="display: flex; justify-content: center; gap: 40px; margin-bottom: 48px; padding: 32px; background: rgba(0, 0, 0, 0.4); border-radius: 12px;">
+          <div>
+            <div style="font-size: 14px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.15em; margin-bottom: 8px;">Team 1</div>
+            <div style="font-size: 48px; font-weight: 700; color: ${game.finalScores.team1 >= 5 ? 'var(--gold)' : '#8b949e'};">${game.finalScores.team1}</div>
+          </div>
+          <div style="font-size: 48px; color: #8b949e;">-</div>
+          <div>
+            <div style="font-size: 14px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.15em; margin-bottom: 8px;">Team 2</div>
+            <div style="font-size: 48px; font-weight: 700; color: ${game.finalScores.team2 >= 5 ? 'var(--gold)' : '#8b949e'};">${game.finalScores.team2}</div>
+          </div>
+        </div>
+        
+        <div style="margin-bottom: 32px;">
+          <h3 style="font-size: 18px; font-weight: 700; color: var(--gold); margin-bottom: 20px; text-transform: uppercase; letter-spacing: 0.15em;">
+            🔄 Replay Vote
+          </h3>
+          
+          <div style="background: rgba(26, 71, 42, 0.3); border: 1px solid rgba(212, 175, 55, 0.3); border-radius: 12px; padding: 24px; margin-bottom: 24px;">
+            <div style="font-size: 14px; color: #c9d1d9; margin-bottom: 16px;">
+              ${votedYes} / ${totalPlayers} players want to replay
+            </div>
+            
+            <div style="display: flex; justify-content: center; gap: 16px; margin-bottom: 16px;">
+              <div style="background: rgba(74, 222, 128, 0.2); padding: 12px 20px; border-radius: 8px; border: 1px solid #4ade80;">
+                <span style="color: #4ade80; font-weight: 700;">✓ Yes: ${votedYes}</span>
+              </div>
+              <div style="background: rgba(248, 81, 73, 0.2); padding: 12px 20px; border-radius: 8px; border: 1px solid #f85149;">
+                <span style="color: #f85149; font-weight: 700;">✗ No: ${votedNo}</span>
+              </div>
+              <div style="background: rgba(139, 148, 158, 0.2); padding: 12px 20px; border-radius: 8px; border: 1px solid #8b949e;">
+                <span style="color: #8b949e; font-weight: 700;">? Not voted: ${notVoted}</span>
+              </div>
+            </div>
+            
+            ${votedYes === totalPlayers ? `
+              <div style="font-size: 16px; color: #4ade80; font-weight: 700; margin-top: 16px;">
+                🎉 All players voted yes! Returning to lobby...
+              </div>
+            ` : ''}
+          </div>
+          
+          ${myVote === undefined ? `
+            <div style="display: flex; justify-content: center; gap: 16px;">
+              <button onclick="window.app.voteReplay(true)" class="btn-gold" style="padding: 16px 48px; font-size: 16px;">
+                ✓ Yes, Replay
+              </button>
+              <button onclick="window.app.voteReplay(false)" class="btn-secondary" style="padding: 16px 48px; font-size: 16px;">
+                ✗ No Thanks
+              </button>
+            </div>
+          ` : `
+            <div style="font-size: 16px; color: ${myVote ? '#4ade80' : '#f85149'}; font-weight: 700;">
+              You voted: ${myVote ? '✓ Yes' : '✗ No'}
+            </div>
+            <button onclick="window.app.voteReplay(${!myVote})" style="margin-top: 12px; padding: 10px 24px; background: rgba(139, 148, 158, 0.2); border: 1px solid #8b949e; color: #c9d1d9; border-radius: 6px; cursor: pointer;">
+              Change Vote
+            </button>
+          `}
+        </div>
+        
+        <div style="padding-top: 24px; border-top: 1px solid rgba(212, 175, 55, 0.2);">
+          <p style="font-size: 13px; color: #8b949e;">
+            All players must vote "Yes" to replay. Otherwise, you can leave to start a new game.
+          </p>
+        </div>
+      </div>
+    </div>
+  `;
 }
 
 function renderHome(app) {
@@ -689,28 +793,44 @@ function renderHistoryModal() {
   
   return `
     <div class="modal-overlay" onclick="window.app.toggleHistoryModal()">
-      <div class="modal" onclick="event.stopPropagation()" style="max-width: 500px;">
-        <h2 style="margin-bottom: 15px;">📜 Card History</h2>
-        
-        <div style="max-height: 400px; overflow-y: auto; margin-bottom: 15px;">
+      <div class="modal" onclick="event.stopPropagation()" style="max-width: 700px; max-height: 85vh; padding: 32px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; padding-bottom: 20px; border-bottom: 2px solid rgba(212, 175, 55, 0.3);">
+          <h2 style="font-size: 22px; font-weight: 700; color: var(--gold); text-transform: uppercase; letter-spacing: 0.2em; margin: 0;">📜 Card History</h2>
+          <button onclick="window.app.toggleHistoryModal()" style="background: none; border: none; color: var(--gold); font-size: 32px; cursor: pointer; padding: 0; line-height: 1; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;">&times;</button>
+        </div>
+        <div style="max-height: 600px; overflow-y: auto; padding-right: 16px;">
           ${state.cardHistory.length === 0 ? `
-            <p style="color: #8b949e; text-align: center; padding: 20px;">No card history yet</p>
+            <div style="text-align: center; padding: 60px 20px; color: #8b949e;">
+              <div style="font-size: 64px; margin-bottom: 16px; opacity: 0.3;">📋</div>
+              <div style="font-size: 16px;">No card transfers yet</div>
+            </div>
           ` : state.cardHistory.map(entry => `
-            <div style="padding: 10px; margin-bottom: 8px; background: ${entry.type === 'gain' ? '#1a3a1a' : '#3a1a1a'}; border-radius: 6px; border-left: 3px solid ${entry.type === 'gain' ? '#4ade80' : '#f85149'};">
-              <div style="display: flex; justify-content: space-between; align-items: center;">
-                <span style="font-weight: 700; color: ${entry.type === 'gain' ? '#4ade80' : '#f85149'};">
-                  ${entry.type === 'gain' ? '▲' : '▼'} ${entry.card}
-                </span>
-                <span style="color: #8b949e; font-size: 12px;">${formatTime(entry.timestamp)}</span>
+            <div style="
+              padding: 24px 28px;
+              margin-bottom: 16px;
+              background: ${entry.type === 'gain' ? 'linear-gradient(135deg, rgba(26, 58, 26, 0.5), rgba(42, 74, 42, 0.5))' : 'linear-gradient(135deg, rgba(58, 26, 26, 0.5), rgba(74, 42, 42, 0.5))'};
+              border-left: 5px solid ${entry.type === 'gain' ? 'var(--gold)' : '#f85149'};
+              border-radius: 10px;
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              transition: transform 0.2s;
+            " onmouseover="this.style.transform='translateX(4px)'" onmouseout="this.style.transform='translateX(0)'">
+              <div style="flex: 1;">
+                <div style="font-size: 24px; font-weight: 700; color: ${entry.type === 'gain' ? '#4ade80' : '#ff6b6b'}; margin-bottom: 8px; display: flex; align-items: center; gap: 12px;">
+                  <span style="font-size: 28px;">${entry.type === 'gain' ? '▲' : '▼'}</span>
+                  <span>${entry.card}</span>
+                </div>
+                <div style="font-size: 15px; color: rgba(230, 237, 243, 0.8); margin-left: 40px;">
+                  ${entry.type === 'gain' ? `from <strong style="color: var(--gold-light);">${entry.from}</strong>` : `to <strong style="color: var(--gold-light);">${entry.to}</strong>`}
+                </div>
               </div>
-              <div style="color: #8b949e; font-size: 13px; margin-top: 4px;">
-                ${entry.type === 'gain' ? `from ${entry.from}` : `to ${entry.to}`}
+              <div style="font-size: 13px; color: rgba(212, 175, 55, 0.7); font-weight: 600; text-align: right; min-width: 80px;">
+                ${formatTime(entry.timestamp)}
               </div>
             </div>
           `).join('')}
         </div>
-        
-        <button onclick="window.app.toggleHistoryModal()">Close</button>
       </div>
     </div>
   `;
@@ -723,6 +843,27 @@ function attachGameHandlers(opponents, askableCards) {
   const setSelect = document.getElementById('set-select');
   const passTurnSelect = document.getElementById('pass-turn-select');
   
+  // CRITICAL: Track ALL dropdown interactions
+  const allSelects = [oppSelect, cardDropdown, setGroupSelect, setSelect, passTurnSelect].filter(Boolean);
+  
+  allSelects.forEach(select => {
+    // Prevent polling when dropdown is open
+    select.addEventListener('focus', () => {
+      state.dropdownOpen = true;
+    });
+    
+    select.addEventListener('blur', () => {
+      // Delay clearing to allow selection to complete
+      setTimeout(() => {
+        state.dropdownOpen = false;
+      }, 500);
+    });
+    
+    select.addEventListener('mousedown', () => {
+      state.dropdownOpen = true;
+    });
+  });
+  
   if (oppSelect) {
     if (state.selectedOpponent) {
       oppSelect.value = state.selectedOpponent;
@@ -730,8 +871,7 @@ function attachGameHandlers(opponents, askableCards) {
     
     oppSelect.onchange = (e) => {
       state.selectedOpponent = e.target.value;
-      state.dropdownOpen = false;
-      // Don't render immediately to prevent dropdown closing
+      // Don't render immediately
     };
   }
   
@@ -747,14 +887,12 @@ function attachGameHandlers(opponents, askableCards) {
       if (!isNaN(newIndex)) {
         state.selectedSetIndex = newIndex;
         state.selectedCardIndex = 0; // Reset card index
-        // Delay render to prevent dropdown from closing immediately
-        setTimeout(() => render(), 100);
+        // Delay render significantly to prevent dropdown from closing
+        setTimeout(() => {
+          state.dropdownOpen = false;
+          render();
+        }, 300);
       }
-    };
-    
-    // Prevent dropdown from closing on mousedown
-    setGroupSelect.onmousedown = (e) => {
-      e.stopPropagation();
     };
   }
   
@@ -809,34 +947,49 @@ function attachGameHandlers(opponents, askableCards) {
   }
   
   if (setSelect) {
+    // Prevent polling during dropdown use
+    setSelect.addEventListener('focus', () => {
+      state.dropdownOpen = true;
+    });
+    
+    setSelect.addEventListener('blur', () => {
+      setTimeout(() => {
+        state.dropdownOpen = false;
+      }, 500);
+    });
+    
     setSelect.onchange = (e) => {
-      const newIndex = Number(e.target.value);
-      const selectedSet = SETS[newIndex];
-      
-      // Check if this set is already claimed
-      if (state.game.claimedSets?.includes(selectedSet.name)) {
-        alert('This set has already been claimed! Choose another.');
-        const unclaimedSets = SETS.filter(s => !state.game.claimedSets?.includes(s.name));
-        if (unclaimedSets.length > 0) {
-          state.callSetIndex = SETS.indexOf(unclaimedSets[0]);
+      try {
+        const newIndex = Number(e.target.value);
+        const selectedSet = SETS[newIndex];
+        
+        // Check if this set is already claimed
+        if (state.game.claimedSets?.includes(selectedSet.name)) {
+          alert('This set has already been claimed! Choose another.');
+          const unclaimedSets = SETS.filter(s => !state.game.claimedSets?.includes(s.name));
+          if (unclaimedSets.length > 0) {
+            state.callSetIndex = SETS.indexOf(unclaimedSets[0]);
+          }
+          render();
+          return;
         }
-        render();
-        return;
+        
+        // Save current assignments before switching
+        const oldSetName = SETS[state.callSetIndex].name;
+        state.allSetAssignments[oldSetName] = {...state.callAssignments};
+        
+        // Switch to new set
+        state.callSetIndex = newIndex;
+        
+        // Restore assignments for this set if they exist
+        const newSetName = SETS[newIndex].name;
+        state.callAssignments = state.allSetAssignments[newSetName] || {};
+        
+        // Instead of full re-render, just update the card assignment dropdowns
+        updateCardAssignmentDropdowns();
+      } catch (error) {
+        console.error('Set select error:', error);
       }
-      
-      // Save current assignments before switching
-      const oldSetName = SETS[state.callSetIndex].name;
-      state.allSetAssignments[oldSetName] = {...state.callAssignments};
-      
-      // Switch to new set
-      state.callSetIndex = newIndex;
-      
-      // Restore assignments for this set if they exist
-      const newSetName = SETS[newIndex].name;
-      state.callAssignments = state.allSetAssignments[newSetName] || {};
-      
-      // Instead of full re-render, just update the card assignment dropdowns
-      updateCardAssignmentDropdowns();
     };
   }
   
@@ -844,6 +997,17 @@ function attachGameHandlers(opponents, askableCards) {
     const assignSelects = document.querySelectorAll('.card-assign-select');
     assignSelects.forEach(sel => {
       const card = sel.getAttribute('data-card');
+      
+      // Prevent polling during dropdown use
+      sel.addEventListener('focus', () => {
+        state.dropdownOpen = true;
+      });
+      
+      sel.addEventListener('blur', () => {
+        setTimeout(() => {
+          state.dropdownOpen = false;
+        }, 500);
+      });
       
       // Restore value if it exists
       if (state.callAssignments[card]) {
@@ -949,6 +1113,7 @@ window.app = {
   confirmPassTurn,
   toggleHistoryModal,
   quickCallSet,
+  voteReplay,
   manualRefresh: async () => {
     await load();
   }
