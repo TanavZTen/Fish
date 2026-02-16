@@ -60,6 +60,7 @@ function render() {
     }, 0);
     
     return;
+  }
   } catch (error) {
     console.error('Render error:', error);
     // Don't crash the app
