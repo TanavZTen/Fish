@@ -1,793 +1,1123 @@
-// Game logic functions
+// UI rendering and event handlers
 
-function getSetForCard(card) {
-  return SETS.find(s => s.cards.includes(card));
+function formatTime(seconds) {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
-function sortHand(hand) {
-  const grouped = {};
-  hand.forEach(card => {
-    const set = getSetForCard(card);
-    if (set) {
-      if (!grouped[set.name]) grouped[set.name] = [];
-      grouped[set.name].push(card);
-    }
-  });
-  
-  const sorted = [];
-  Object.keys(grouped).forEach(setName => {
-    const set = SETS.find(s => s.name === setName);
-    grouped[setName].sort((a, b) => set.cards.indexOf(a) - set.cards.indexOf(b));
-    sorted.push(...grouped[setName]);
-  });
-  
-  return sorted;
-}
-
-function getAskableCards(myHand) {
-  const askable = [];
-  myHand.forEach(card => {
-    const set = getSetForCard(card);
-    if (set) {
-      set.cards.forEach(c => {
-        if (!myHand.includes(c) && !askable.includes(c)) {
-          askable.push(c);
-        }
-      });
-    }
-  });
-  return askable;
-}
-
-function createRoom() {
-  if (!state.name.trim()) return alert('Enter your name');
-  state.code = Math.random().toString(36).substring(2, 8).toUpperCase();
-  state.view = 'teamSelect';
-  render();
-}
-
-async function joinRoom() {
-  if (!state.name.trim() || !state.code.trim()) return alert('Enter name and room code');
-  
-  state.code = state.code.toUpperCase().trim();
-  
+function render() {
   try {
-    const { data: roomData } = await DB
-      .from('games')
-      .select('game_data')
-      .eq('room_code', state.code)
-      .maybeSingle();
-    
-    if (!roomData) return alert('Room not found!');
-    
-    state.game = roomData.game_data;
-    
-    const existingPlayer = state.game.players.find(p => p.id === myId);
-    
-    if (existingPlayer) {
-      // Rejoin as existing player - update name and mark as connected
-      existingPlayer.name = state.name;  // Update name in case it changed
-      existingPlayer.lastSeen = Date.now();
-      existingPlayer.disconnected = false;
-      await save(state.game);
-      state.view = state.game.phase === 'game' ? 'game' : 'lobby';
-      state.isSpectator = false;
-      render();
-      startPolling();
-    } else if (state.game.phase === 'game') {
-      // Game already started, offer spectator mode
-      state.view = 'spectatorPrompt';
-      render();
-    } else {
-      // New player joining lobby
-      state.view = 'teamSelect';
-      render();
-    }
-  } catch (e) {
-    alert('Error: ' + e.message);
-  }
-}
-
-function becomeSpectator() {
-  state.isSpectator = true;
-  state.spectatingPlayerId = state.game.players[0]?.id || null;
-  state.view = 'game';
-  startPolling();
-  render();
-}
-
-async function confirmTeam(team) {
-  state.team = team;
-  
-  if (!state.game) {
-    // Creating new game
-    const game = {
-      hostId: myId,
-      phase: 'lobby',
-      players: [{ id: myId, name: state.name, hand: [] }],
-      teams: { team1: [], team2: [] },
-      currentTurn: '',
-      scores: { team1: 0, team2: 0 },
-      claimedSets: [],
-      log: [],
-      settings: { 
-        showHistory: true,
-        historyCount: 2,
-        timeLimit: 0,
-        showCounts: false
-      }
-    };
-    game.teams[team].push(myId);
-    await save(game);
-    state.view = 'lobby';
-    state.isSpectator = false;
-    startPolling();
-  } else {
-    // Joining existing game
-    const game = state.game;
-    const existingPlayer = game.players.find(p => p.id === myId);
-    
-    // Check if adding this player would exceed limits
-    if (!existingPlayer) {
-      if (game.players.length >= 16) {
-        return alert('Game is full! Maximum 16 players allowed.');
-      }
-      
-      if (game.teams[team].length >= 8) {
-        const teamName = team === 'team1' ? 'Team 1' : 'Team 2';
-        return alert(`${teamName} is full! Maximum 8 players per team.`);
-      }
-      
-      // Add new player with the name they entered
-      game.players.push({ id: myId, name: state.name, hand: [] });
-      game.teams[team].push(myId);
-      await save(game);
-    } else {
-      // Player already exists - update their name and team
-      existingPlayer.name = state.name;
-      
-      // Update team if needed
-      if (!game.teams[team].includes(myId)) {
-        // Check if new team is full
-        if (game.teams[team].length >= 8) {
-          const teamName = team === 'team1' ? 'Team 1' : 'Team 2';
-          return alert(`${teamName} is full! Maximum 8 players per team.`);
-        }
-        
-        // Remove from old team
-        game.teams.team1 = game.teams.team1.filter(id => id !== myId);
-        game.teams.team2 = game.teams.team2.filter(id => id !== myId);
-        // Add to new team
-        game.teams[team].push(myId);
-      }
-      await save(game);
-    }
-    state.view = 'lobby';
-    state.isSpectator = false;
-    render(); // Force immediate render to show updated name
-    startPolling();
-  }
-}
-
-async function addBot(team) {
-  const game = state.game;
-  
-  // Check if game is full
-  if (game.players.length >= 16) {
-    return alert('Cannot add bot. Game is full! Maximum 16 players allowed.');
-  }
-  
-  // Check if team is full
-  if (game.teams[team].length >= 8) {
-    const teamName = team === 'team1' ? 'Team 1' : 'Team 2';
-    return alert(`Cannot add bot. ${teamName} is full! Maximum 8 players per team.`);
-  }
-  
-  let n = 1;
-  while (game.players.some(p => p.name === `Bot ${n}`)) n++;
-  const bot = { id: `bot-${Date.now()}`, name: `Bot ${n}`, hand: [], isBot: true };
-  game.players.push(bot);
-  game.teams[team].push(bot.id);
-  await save(game);
-}
-
-async function removeBot(id) {
-  const game = state.game;
-  game.players = game.players.filter(p => p.id !== id);
-  game.teams.team1 = game.teams.team1.filter(i => i !== id);
-  game.teams.team2 = game.teams.team2.filter(i => i !== id);
-  await save(game);
-}
-
-async function toggleSetting(key) {
-  const game = state.game;
-  if (!game.settings) game.settings = {};
-  game.settings[key] = !game.settings[key];
-  await save(game);
-}
-
-async function changeSetting(key, value) {
-  const game = state.game;
-  if (!game.settings) game.settings = {};
-  game.settings[key] = value;
-  await save(game);
-}
-
-async function startGame() {
-  const game = state.game;
-  
-  // Validate player count (4-16 players)
-  if (game.players.length < 4) {
-    return alert(`Need at least 4 players. Currently have ${game.players.length}.`);
-  }
-  
-  if (game.players.length > 16) {
-    return alert(`Maximum 16 players allowed. Currently have ${game.players.length}.`);
-  }
-  
-  // Validate teams
-  if (game.teams.team1.length === 0 || game.teams.team2.length === 0) {
-    return alert('Both teams need at least one player');
-  }
-  
-  // Validate max 8 players per team
-  if (game.teams.team1.length > 8) {
-    return alert(`Team 1 has ${game.teams.team1.length} players. Maximum 8 players per team.`);
-  }
-  
-  if (game.teams.team2.length > 8) {
-    return alert(`Team 2 has ${game.teams.team2.length} players. Maximum 8 players per team.`);
-  }
-  
-  const deck = [];
-  SETS.forEach(set => deck.push(...set.cards));
-  
-  // Shuffle deck
-  for (let i = deck.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [deck[i], deck[j]] = [deck[j], deck[i]];
-  }
-  
-  // Deal cards - distribute ALL 54 cards FAIRLY between teams
-  // Strategy: Alternate giving extra cards between teams to ensure balance
-  const cardsPerPlayer = Math.floor(deck.length / game.players.length);
-  const remainder = deck.length % game.players.length;
-  
-  // Create alternating order: T1, T2, T1, T2, T1, T2...
-  const team1Players = game.players.filter(p => game.teams.team1.includes(p.id));
-  const team2Players = game.players.filter(p => game.teams.team2.includes(p.id));
-  const alternatingPlayers = [];
-  const maxTeamSize = Math.max(team1Players.length, team2Players.length);
-  
-  for (let i = 0; i < maxTeamSize; i++) {
-    if (i < team1Players.length) alternatingPlayers.push(team1Players[i]);
-    if (i < team2Players.length) alternatingPlayers.push(team2Players[i]);
-  }
-  
-  // Deal cards to alternating players
-  let cardIndex = 0;
-  alternatingPlayers.forEach((p, i) => {
-    // First 'remainder' players get one extra card
-    // This way extra cards are distributed fairly between teams
-    const numCards = i < remainder ? cardsPerPlayer + 1 : cardsPerPlayer;
-    p.hand = deck.slice(cardIndex, cardIndex + numCards);
-    cardIndex += numCards;
-  });
-  
-  game.phase = 'game';
-  
-  // Set starting player
-  if (state.startPlayer === 'random') {
-    const randomIndex = Math.floor(Math.random() * game.players.length);
-    game.currentTurn = game.players[randomIndex].id;
-  } else {
-    game.currentTurn = state.startPlayer;
-  }
-  
-  game.log.unshift('Game started!');
-  
-  // Initialize turn timer
-  if (game.settings.timeLimit > 0) {
-    state.turnStartTime = Date.now();
-    state.timeRemaining = game.settings.timeLimit;
-  }
-  
-  await save(game);
-  state.view = 'game';
-  
-  // Start timer if enabled
-  if (game.settings.timeLimit > 0) {
-    startTimer();
-  }
-  
-  render();
-}
-
-async function askForCard() {
-  // Get filtered askable cards (only from selected set)
-  const me = state.game.players.find(p => p.id === myId);
-  const askableCards = getFilteredAskableCards(me?.hand || []);
-  
-  if (askableCards.length === 0) {
-    return alert('You have no cards in this set to ask for. Try a different set.');
-  }
-  
-  const selectedCard = askableCards[state.selectedCardIndex % askableCards.length];
-  
-  if (!selectedCard || !state.selectedOpponent) {
-    return alert('Select an opponent to ask');
-  }
-  
-  state.shouldRender = false;
-  
-  const game = state.game;
-  const opponent = game.players.find(p => p.id === state.selectedOpponent);
-  
-  const hasCard = opponent.hand.includes(selectedCard);
-  
-  if (hasCard) {
-    opponent.hand = opponent.hand.filter(c => c !== selectedCard);
-    me.hand.push(selectedCard);
-    game.log.unshift(`${me.name} asked ${opponent.name} for ${selectedCard} - SUCCESS!`);
-    
-    // Track card history
-    state.cardHistory.unshift({
-      type: 'gain',
-      card: selectedCard,
-      from: opponent.name,
-      timestamp: Date.now()
+    // Preserve scroll position
+    const scrollPositions = {};
+    document.querySelectorAll('[data-preserve-scroll]').forEach(el => {
+      scrollPositions[el.dataset.preserveScroll] = el.scrollTop;
     });
     
-    // Show big notification
-    addNotification(`You gained ${selectedCard} from ${opponent.name}!`);
-    
-    // Track who we successfully asked (for timer expiry)
-    state.lastSuccessfulAsk = opponent.id;
-    
-    // Reset timer on successful ask since you get to go again
-    if (game.settings.timeLimit > 0) {
-      state.turnStartTime = Date.now();
-      state.timeRemaining = game.settings.timeLimit;
+    const app = document.getElementById('app');
+    if (!app) {
+      console.error('App element not found');
+      return;
     }
     
-    if (me.hand.length === 0) {
-      const myTeam = game.teams.team1.includes(myId) ? 'team1' : 'team2';
-      const teammates = game.players.filter(p => 
-        game.teams[myTeam].includes(p.id) && p.hand.length > 0 && p.id !== myId
-      );
-      if (teammates.length > 0) {
-        game.currentTurn = teammates[0].id;
-        
-        // Reset timer for new turn
-        if (game.settings.timeLimit > 0) {
-          state.turnStartTime = Date.now();
-          state.timeRemaining = game.settings.timeLimit;
-        }
-      }
-    }
-  } else {
-    game.currentTurn = opponent.id;
-    game.log.unshift(`${me.name} asked ${opponent.name} for ${selectedCard} - FAILED`);
-    
-    // Clear last successful ask since turn is changing
-    state.lastSuccessfulAsk = null;
-    
-    // Reset timer for new turn
-    if (game.settings.timeLimit > 0) {
-      state.turnStartTime = Date.now();
-      state.timeRemaining = game.settings.timeLimit;
-    }
-  }
-  
-  // Reset card selection index for next turn
-  state.selectedCardIndex = 0;
-  state.selectedOpponent = '';
-  
-  await save(game);
-  
-  state.shouldRender = true;
-  
-  // Restart timer if enabled
-  if (game.settings.timeLimit > 0) {
-    startTimer();
-  }
-  
-  render();
-}
-
-function openCallModal() {
-  try {
-    const me = state.game.players.find(p => p.id === myId);
-    const myName = me?.name || 'You';
-    const myTeam = state.game.teams.team1.includes(myId) ? 'team1' : 'team2';
-    const teammates = state.game.players.filter(p => state.game.teams[myTeam].includes(p.id));
-    const teamHasCards = teammates.some(p => p.hand.length > 0);
-    
-    if (!teamHasCards) {
-      return alert('Your team has no cards left! Cannot call a set.');
-    }
-    
-    state.showCallModal = true;
-    const unclaimedSets = SETS.filter(s => !state.game.claimedSets?.includes(s.name));
-    state.callSetIndex = unclaimedSets.length > 0 ? SETS.indexOf(unclaimedSets[0]) : 0;
-    
-    // AUTO-FILL: Pre-fill MY cards
-    state.callAssignments = {};
-    const myCards = me?.hand || [];
-    const currentSet = SETS[state.callSetIndex];
-    
-    if (currentSet && currentSet.cards) {
-      currentSet.cards.forEach(card => {
-        if (myCards.includes(card)) {
-          state.callAssignments[card] = myName;
-        }
-      });
-    }
-    
-    render();
-  } catch (error) {
-    console.error('Error opening call modal:', error);
-    alert('Error opening call modal. Please try again.');
-  }
-}
-
-function openCounterSetModal() {
-  state.showCounterSetModal = true;
-  const unclaimedSets = SETS.filter(s => !state.game.claimedSets?.includes(s.name));
-  state.callSetIndex = unclaimedSets.length > 0 ? SETS.indexOf(unclaimedSets[0]) : 0;
-  state.callAssignments = {};
-  render();
-}
-
-async function submitCall() {
-  try {
-    const game = state.game;
-    const set = SETS[state.callSetIndex];
-    const me = game.players.find(p => p.id === myId);
-    const myTeam = game.teams.team1.includes(myId) ? 'team1' : 'team2';
-    
-    if (!set || !set.cards) {
-      throw new Error('Invalid set selected');
-    }
-    
-    if (Object.keys(state.callAssignments).length !== set.cards.length) {
-      return alert('You must assign all cards in the set!');
-    }
-  }
-  
-  let correct = true;
-  set.cards.forEach(card => {
-    const actualHolder = game.players.find(p => p.hand.includes(card));
-    if (!actualHolder || state.callAssignments[card] !== actualHolder.id) {
-      correct = false;
-    }
-  });
-  
-  if (correct) {
-    game.scores[myTeam]++;
-    game.claimedSets.push(set.name);
-    game.log.unshift(`${me.name} correctly called ${set.name}! ${myTeam === 'team1' ? 'Team 1' : 'Team 2'} scores!`);
-    
-    // DON'T change turn - calling a set doesn't steal the turn
-    // Turn only changes if current turn holder runs out of cards
-  } else {
-    const oppTeam = myTeam === 'team1' ? 'team2' : 'team1';
-    game.scores[oppTeam]++;
-    game.claimedSets.push(set.name);
-    game.log.unshift(`${me.name} INCORRECTLY called ${set.name}! ${oppTeam === 'team1' ? 'Team 1' : 'Team 2'} gets the set!`);
-  }
-  
-  // Remove cards from all players
-  set.cards.forEach(card => {
-    game.players.forEach(p => {
-      p.hand = p.hand.filter(c => c !== card);
-    });
-  });
-  
-  // IMPORTANT: Check for win condition FIRST before pass turn logic
-  const gameEnded = game.scores.team1 >= 5 || game.scores.team2 >= 5;
-  
-  if (gameEnded) {
-    const winner = game.scores.team1 >= 5 ? 'Team 1' : 'Team 2';
-    
-    state.showCallModal = false;
-    state.callAssignments = {};
-    state.allSetAssignments = {};
-    
-    // Initialize replay voting if not already done
-    if (!game.replayVotes) {
-      game.replayVotes = {};
-    }
-    
-    game.phase = 'gameOver';
-    game.winner = winner;
-    game.finalScores = { team1: game.scores.team1, team2: game.scores.team2 };
-    
-    await save(game);
-    render();
+    if (state.view === 'home') {
+    renderHome(app);
     return;
   }
   
-  // Find who has the current turn
-  const currentTurnPlayer = game.players.find(p => p.id === game.currentTurn);
-  const currentTurnTeam = game.teams.team1.includes(game.currentTurn) ? 'team1' : 'team2';
-  
-  // Check if the current turn holder has no cards left (regardless of who called the set)
-  if (currentTurnPlayer && currentTurnPlayer.hand.length === 0) {
-    const currentTurnTeammates = game.players.filter(p => 
-      game.teams[currentTurnTeam].includes(p.id) && p.hand.length > 0 && p.id !== game.currentTurn
-    );
-    
-    if (currentTurnTeammates.length > 0) {
-      // Current turn player has no cards, they need to pass
-      // If I'M the current turn player, show ME the modal
-      if (game.currentTurn === myId) {
-        state.showCallModal = false;
-        state.callAssignments = {};
-        state.allSetAssignments = {};
-        await save(game);
-        
-        // Show pass turn modal for ME to choose
-        state.showPassTurnModal = true;
-        render();
-        return;
-      }
-      // If I'm NOT the current turn player, just close the modal and save
-      else {
-        state.showCallModal = false;
-        state.callAssignments = {};
-        state.allSetAssignments = {};
-        await save(game);
-        return;
-      }
-    }
+  if (state.view === 'spectatorPrompt') {
+    renderSpectatorPrompt(app);
+    return;
   }
   
-  state.showCallModal = false;
-  state.callAssignments = {};
-  state.allSetAssignments = {};
-  await save(game);
+  if (state.view === 'teamSelect') {
+    renderTeamSelect(app);
+    return;
+  }
+  
+  if (state.view === 'lobby' && state.game) {
+    renderLobby(app);
+    return;
+  }
+  
+  if (state.view === 'game' && state.game) {
+    if (state.game.phase === 'gameOver') {
+      renderGameOver(app);
+    } else if (state.isSpectator) {
+      renderSpectatorView(app);
+    } else {
+      renderGameView(app);
+    }
+    
+    // Restore scroll positions after DOM update
+    setTimeout(() => {
+      Object.keys(scrollPositions).forEach(key => {
+        const el = document.querySelector(`[data-preserve-scroll="${key}"]`);
+        if (el) {
+          el.scrollTop = scrollPositions[key];
+        }
+      });
+    }, 0);
+    
+    return;
+  } catch (error) {
+    console.error('Render error:', error);
+    // Don't crash the app
+  }
 }
 
-async function submitCounterSet() {
+function renderGameOver(app) {
   const game = state.game;
-  const set = SETS[state.callSetIndex];
-  const me = game.players.find(p => p.id === myId);
-  const myTeam = game.teams.team1.includes(myId) ? 'team1' : 'team2';
+  const totalPlayers = game.players.length;
+  const replayVotes = game.replayVotes || {};
+  const votedYes = Object.values(replayVotes).filter(v => v === true).length;
+  const votedNo = Object.values(replayVotes).filter(v => v === false).length;
+  const notVoted = totalPlayers - Object.keys(replayVotes).length;
+  const myVote = replayVotes[myId];
+  
+  app.innerHTML = `
+    <div class="poker-room-bg"></div>
+    <div class="container" style="max-width: 900px; margin: 0 auto; padding: 40px 20px;">
+      <div style="background: linear-gradient(135deg, rgba(18, 18, 18, 0.95), rgba(13, 27, 26, 0.95)); border: 2px solid rgba(212, 175, 55, 0.4); border-radius: 20px; padding: 48px; text-align: center; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);">
+        
+        <div style="font-size: 72px; margin-bottom: 24px;">🏆</div>
+        
+        <h1 style="font-size: 48px; font-weight: 700; color: var(--gold); margin-bottom: 16px; text-transform: uppercase; letter-spacing: 0.1em;">
+          Game Over!
+        </h1>
+        
+        <h2 style="font-size: 32px; font-weight: 600; color: var(--gold-light); margin-bottom: 32px;">
+          ${game.winner} Wins!
+        </h2>
+        
+        <div style="display: flex; justify-content: center; gap: 40px; margin-bottom: 48px; padding: 32px; background: rgba(0, 0, 0, 0.4); border-radius: 12px;">
+          <div>
+            <div style="font-size: 14px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.15em; margin-bottom: 8px;">Team 1</div>
+            <div style="font-size: 48px; font-weight: 700; color: ${game.finalScores.team1 >= 5 ? 'var(--gold)' : '#8b949e'};">${game.finalScores.team1}</div>
+          </div>
+          <div style="font-size: 48px; color: #8b949e;">-</div>
+          <div>
+            <div style="font-size: 14px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.15em; margin-bottom: 8px;">Team 2</div>
+            <div style="font-size: 48px; font-weight: 700; color: ${game.finalScores.team2 >= 5 ? 'var(--gold)' : '#8b949e'};">${game.finalScores.team2}</div>
+          </div>
+        </div>
+        
+        <div style="margin-bottom: 32px;">
+          <h3 style="font-size: 18px; font-weight: 700; color: var(--gold); margin-bottom: 20px; text-transform: uppercase; letter-spacing: 0.15em;">
+            🔄 Replay Vote
+          </h3>
+          
+          <div style="background: rgba(26, 71, 42, 0.3); border: 1px solid rgba(212, 175, 55, 0.3); border-radius: 12px; padding: 24px; margin-bottom: 24px;">
+            <div style="font-size: 14px; color: #c9d1d9; margin-bottom: 16px;">
+              ${votedYes} / ${totalPlayers} players want to replay
+            </div>
+            
+            <div style="display: flex; justify-content: center; gap: 16px; margin-bottom: 16px;">
+              <div style="background: rgba(74, 222, 128, 0.2); padding: 12px 20px; border-radius: 8px; border: 1px solid #4ade80;">
+                <span style="color: #4ade80; font-weight: 700;">✓ Yes: ${votedYes}</span>
+              </div>
+              <div style="background: rgba(248, 81, 73, 0.2); padding: 12px 20px; border-radius: 8px; border: 1px solid #f85149;">
+                <span style="color: #f85149; font-weight: 700;">✗ No: ${votedNo}</span>
+              </div>
+              <div style="background: rgba(139, 148, 158, 0.2); padding: 12px 20px; border-radius: 8px; border: 1px solid #8b949e;">
+                <span style="color: #8b949e; font-weight: 700;">? Not voted: ${notVoted}</span>
+              </div>
+            </div>
+            
+            ${votedYes === totalPlayers ? `
+              <div style="font-size: 16px; color: #4ade80; font-weight: 700; margin-top: 16px;">
+                🎉 All players voted yes! Returning to lobby...
+              </div>
+            ` : ''}
+          </div>
+          
+          ${myVote === undefined ? `
+            <div style="display: flex; justify-content: center; gap: 16px;">
+              <button onclick="window.app.voteReplay(true)" class="btn-gold" style="padding: 16px 48px; font-size: 16px;">
+                ✓ Yes, Replay
+              </button>
+              <button onclick="window.app.voteReplay(false)" class="btn-secondary" style="padding: 16px 48px; font-size: 16px;">
+                ✗ No Thanks
+              </button>
+            </div>
+          ` : `
+            <div style="font-size: 16px; color: ${myVote ? '#4ade80' : '#f85149'}; font-weight: 700;">
+              You voted: ${myVote ? '✓ Yes' : '✗ No'}
+            </div>
+            <button onclick="window.app.voteReplay(${!myVote})" style="margin-top: 12px; padding: 10px 24px; background: rgba(139, 148, 158, 0.2); border: 1px solid #8b949e; color: #c9d1d9; border-radius: 6px; cursor: pointer;">
+              Change Vote
+            </button>
+          `}
+        </div>
+        
+        <div style="padding-top: 24px; border-top: 1px solid rgba(212, 175, 55, 0.2);">
+          <p style="font-size: 13px; color: #8b949e;">
+            All players must vote "Yes" to replay. Otherwise, you can leave to start a new game.
+          </p>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderHome(app) {
+  app.innerHTML = `
+    <div class="container">
+      <div class="card">
+        <h1>LITERATURE</h1>
+        <p class="subtitle">9-Set Card Game</p>
+        
+        <input type="text" placeholder="Your Name" id="name-input" value="${state.name}">
+        <button onclick="window.app.createRoom()">Create Room</button>
+        
+        <div class="divider">- OR -</div>
+        
+        <input type="text" placeholder="Room Code" id="code-input" value="${state.code}">
+        <button onclick="window.app.joinRoom()" class="btn-secondary">Join Room</button>
+      </div>
+    </div>
+  `;
+  
+  document.getElementById('name-input').oninput = e => state.name = e.target.value;
+  document.getElementById('code-input').oninput = e => state.code = e.target.value.toUpperCase();
+}
+
+function renderSpectatorPrompt(app) {
+  app.innerHTML = `
+    <div class="container">
+      <div class="card">
+        <h2 style="text-align:center; margin-bottom:20px;">Game In Progress</h2>
+        <p style="text-align:center; color: #8b949e; margin-bottom: 20px;">
+          This room has an active game. Would you like to spectate?
+        </p>
+        
+        <button onclick="window.app.becomeSpectator()">Yes, Spectate Game</button>
+        <button onclick="window.app.cancel()" class="btn-secondary">No, Go Back</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderTeamSelect(app) {
+  app.innerHTML = `
+    <div class="container">
+      <div class="card">
+        <h2 style="text-align:center; margin-bottom:20px;">Choose Your Team</h2>
+        
+        <button onclick="window.app.confirmTeam('team1')" class="btn-secondary" style="background: #da3633; color: #fff; padding: 20px; margin-bottom: 10px;">
+          <div style="font-size: 20px;">Team 1</div>
+          <div style="font-size: 12px; margin-top: 4px;">Red Team</div>
+        </button>
+        
+        <button onclick="window.app.confirmTeam('team2')" class="btn-secondary" style="background: #1f6feb; color: #fff; padding: 20px;">
+          <div style="font-size: 20px;">Team 2</div>
+          <div style="font-size: 12px; margin-top: 4px;">Blue Team</div>
+        </button>
+        
+        <button onclick="window.app.cancel()" class="btn-secondary" style="margin-top: 20px;">Cancel</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderLobby(app) {
+  const isHost = state.game.hostId === myId;
+  const myTeam = state.game.teams.team1.includes(myId) ? 'team1' : 'team2';
+  
+  app.innerHTML = `
+    <div class="container">
+      <div class="card">
+        <h1 style="font-size: 36px;">${state.code}</h1>
+        <p class="subtitle">Share this code with friends</p>
+        <p style="text-align: center; color: ${myTeam === 'team1' ? '#da3633' : '#1f6feb'}; font-weight: 700; margin-bottom: 20px;">
+          You're on ${myTeam === 'team1' ? 'Team 1 (Red)' : 'Team 2 (Blue)'}
+        </p>
+        
+        ${isHost ? renderSettings() : ''}
+        
+        <div class="teams-grid">
+          <div class="team-section t1">
+            <h3>Team 1 (${state.game.teams.team1.length}/8)</h3>
+            ${state.game.players.filter(p => state.game.teams.team1.includes(p.id)).map(p => `
+              <div class="team-player ${p.id === myId ? 'you' : ''} ${p.disconnected ? 'disconnected' : ''}">
+                <span>${p.name} ${p.id === myId ? '(You)' : ''} ${p.disconnected ? '(DC)' : ''}</span>
+                ${isHost && p.isBot ? `<button class="btn-small" onclick="window.app.removeBot('${p.id}')">Remove</button>` : ''}
+              </div>
+            `).join('')}
+            ${isHost ? `<button onclick="window.app.addBot('team1')" style="margin-top: 8px;" ${state.game.teams.team1.length >= 8 || state.game.players.length >= 16 ? 'disabled' : ''}>+ Add Bot${state.game.teams.team1.length >= 8 ? ' (Full)' : ''}</button>` : ''}
+          </div>
+          
+          <div class="team-section t2">
+            <h3>Team 2 (${state.game.teams.team2.length}/8)</h3>
+            ${state.game.players.filter(p => state.game.teams.team2.includes(p.id)).map(p => `
+              <div class="team-player ${p.id === myId ? 'you' : ''} ${p.disconnected ? 'disconnected' : ''}">
+                <span>${p.name} ${p.id === myId ? '(You)' : ''} ${p.disconnected ? '(DC)' : ''}</span>
+                ${isHost && p.isBot ? `<button class="btn-small" onclick="window.app.removeBot('${p.id}')">Remove</button>` : ''}
+              </div>
+            `).join('')}
+            ${isHost ? `<button onclick="window.app.addBot('team2')" style="margin-top: 8px;" ${state.game.teams.team2.length >= 8 || state.game.players.length >= 16 ? 'disabled' : ''}>+ Add Bot${state.game.teams.team2.length >= 8 ? ' (Full)' : ''}</button>` : ''}
+          </div>
+        </div>
+        
+        ${isHost ? `
+          <button onclick="window.app.startGame()" ${state.game.players.length < 4 ? 'disabled' : ''}>
+            ${state.game.players.length < 4 ? `Need ${4 - state.game.players.length} more players` : 'Start Game'}
+          </button>
+        ` : '<p style="text-align: center; color: #8b949e; margin-top: 20px;">Waiting for host to start...</p>'}
+      </div>
+    </div>
+  `;
+  
+  if (isHost) {
+    attachSettingsHandlers();
+  }
+}
+
+function renderSettings() {
+  return `
+    <div class="settings">
+      <h3 style="margin-bottom: 15px; font-size: 16px;">Game Settings (Host Only)</h3>
+      
+      <div class="setting-row">
+        <label>Show Ask History</label>
+        <input type="checkbox" id="show-history" ${state.game.settings?.showHistory ? 'checked' : ''}>
+      </div>
+      
+      ${state.game.settings?.showHistory ? `
+      <div class="setting-row">
+        <label>Recent asks to show</label>
+        <select id="history-count">
+          <option value="1" ${state.game.settings?.historyCount === 1 ? 'selected' : ''}>1 card</option>
+          <option value="2" ${state.game.settings?.historyCount === 2 ? 'selected' : ''}>2 cards</option>
+          <option value="3" ${state.game.settings?.historyCount === 3 ? 'selected' : ''}>3 cards</option>
+        </select>
+      </div>
+      ` : ''}
+      
+      <div class="setting-row">
+        <label>Time Limit per Turn</label>
+        <select id="time-limit">
+          <option value="0" ${state.game.settings?.timeLimit === 0 ? 'selected' : ''}>No limit</option>
+          <option value="60" ${state.game.settings?.timeLimit === 60 ? 'selected' : ''}>1 minute</option>
+          <option value="120" ${state.game.settings?.timeLimit === 120 ? 'selected' : ''}>2 minutes</option>
+        </select>
+      </div>
+      
+      <div class="setting-row">
+        <label>Show Card Counts</label>
+        <input type="checkbox" id="show-counts" ${state.game.settings?.showCounts ? 'checked' : ''}>
+      </div>
+      
+      <div class="setting-row">
+        <label>Starting Player</label>
+        <select id="start-player">
+          <option value="random" ${state.startPlayer === 'random' ? 'selected' : ''}>Random Player</option>
+          ${state.game.players.map(p => 
+            `<option value="${p.id}" ${state.startPlayer === p.id ? 'selected' : ''}>${p.name}</option>`
+          ).join('')}
+        </select>
+      </div>
+    </div>
+  `;
+}
+
+function attachSettingsHandlers() {
+  const histCheck = document.getElementById('show-history');
+  const countsCheck = document.getElementById('show-counts');
+  const histCountSel = document.getElementById('history-count');
+  const timeLimitSel = document.getElementById('time-limit');
+  const startPlayerSel = document.getElementById('start-player');
+  
+  if (histCheck) histCheck.onchange = () => toggleSetting('showHistory');
+  if (countsCheck) countsCheck.onchange = () => toggleSetting('showCounts');
+  if (histCountSel) histCountSel.onchange = (e) => changeSetting('historyCount', Number(e.target.value));
+  if (timeLimitSel) timeLimitSel.onchange = (e) => changeSetting('timeLimit', Number(e.target.value));
+  if (startPlayerSel) startPlayerSel.onchange = (e) => { state.startPlayer = e.target.value; };
+}
+
+function renderSpectatorView(app) {
+  const currentPlayer = state.game.players.find(p => p.id === state.game.currentTurn);
+  const viewingPlayer = state.game.players.find(p => p.id === state.spectatingPlayerId) || state.game.players[0];
+  const sortedHand = sortHand(viewingPlayer?.hand || []);
+  
+  app.innerHTML = `
+    <div class="container">
+      <div class="card">
+        <div class="spectator-controls">
+          <h3 style="margin-bottom: 10px;">👁️ SPECTATOR MODE</h3>
+          <label style="display: block; margin-bottom: 5px; font-weight: 700;">Viewing:</label>
+          <select id="spectator-select" style="background: #fff; color: #000;">
+            ${state.game.players.map(p => 
+              `<option value="${p.id}" ${state.spectatingPlayerId === p.id ? 'selected' : ''}>${p.name} ${state.game.currentTurn === p.id ? '👉' : ''}</option>`
+            ).join('')}
+          </select>
+        </div>
+        
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+          <h2>Room ${state.code}</h2>
+          <button onclick="window.app.toggleHistoryModal()" class="btn-small" style="background: #21262d; color: #c9d1d9; border: 1px solid #30363d;">
+            📜 Card History
+          </button>
+        </div>
+        <p style="margin: 10px 0;">Scores - Team 1: ${state.game.scores.team1} | Team 2: ${state.game.scores.team2}</p>
+        <p style="margin: 10px 0; font-weight: 700; color: #888;">
+          ⏳ ${currentPlayer?.name}'s Turn
+        </p>
+        
+        ${renderTeamSidebar()}
+        
+        <div style="margin-top: 20px;">
+          <h3 style="margin-bottom: 10px;">${viewingPlayer.name}'s Hand (${viewingPlayer.hand.length} cards)</h3>
+          <div class="game-hand">
+            ${sortedHand.map(card => renderCard(card)).join('')}
+          </div>
+        </div>
+        
+        ${renderActivityLog()}
+        ${renderSetsStatus()}
+      </div>
+    </div>
+  `;
+  
+  const specSelect = document.getElementById('spectator-select');
+  if (specSelect) {
+    specSelect.onchange = (e) => {
+      state.spectatingPlayerId = e.target.value;
+      render();
+    };
+  }
+}
+
+function renderGameView(app) {
+  const me = state.game.players.find(p => p.id === myId);
+  const myTeam = state.game.teams.team1.includes(myId) ? 'team1' : 'team2';
+  const isMyTurn = state.game.currentTurn === myId;
+  const currentPlayer = state.game.players.find(p => p.id === state.game.currentTurn);
+  // Only show opponents who have cards (can't ask someone with 0 cards)
+  const opponents = state.game.players.filter(p => 
+    p.id !== myId && 
+    state.game.teams[myTeam === 'team1' ? 'team2' : 'team1'].includes(p.id) &&
+    p.hand.length > 0  // Only show opponents with cards
+  );
+  
+  const sortedHand = sortHand(me?.hand || []);
+  const askableCards = getAskableCards(me?.hand || []);
+  const hasCards = me && me.hand.length > 0;
+  
+  app.innerHTML = `
+    <div class="container">
+      <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+          <h2>Room ${state.code}</h2>
+          <button onclick="window.app.toggleHistoryModal()" class="btn-small" style="background: #21262d; color: #c9d1d9; border: 1px solid #30363d;">
+            📜 Card History
+          </button>
+        </div>
+        <p style="margin: 10px 0;">Scores - Team 1: ${state.game.scores.team1} | Team 2: ${state.game.scores.team2}</p>
+        <p style="margin: 10px 0; font-weight: 700; color: ${isMyTurn ? '#4ade80' : '#888'};">
+          ${isMyTurn ? '🟢 YOUR TURN' : `⏳ ${currentPlayer?.name}'s Turn`}
+          ${state.game.settings?.timeLimit > 0 ? `<span style="margin-left: 10px; color: ${state.timeRemaining <= 10 ? '#f85149' : '#8b949e'};">⏱️ ${formatTime(Math.max(0, state.timeRemaining))}</span>` : ''}
+        </p>
+        
+        ${renderTeamSidebar()}
+        
+        <div class="game-layout">
+          <div class="left-panel">
+            <div>
+              <h3 style="margin-bottom: 10px;">Your Hand (${me?.hand?.length || 0} cards)</h3>
+              <div class="game-hand">
+                ${sortedHand.map(card => renderCard(card)).join('') || '<p style="color: #8b949e;">No cards - You are now a spectator</p>'}
+              </div>
+            </div>
+            
+            ${hasCards ? renderPlayerActions(isMyTurn, opponents, askableCards) : renderSpectatorActions()}
+          </div>
+          
+          <div class="right-panel" data-preserve-scroll="right-panel">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+              <div data-preserve-scroll="last-ask">${renderLastAsk()}</div>
+              <div data-preserve-scroll="recent-activity">${renderRecentActivity()}</div>
+            </div>
+            ${renderSetsStatus()}
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    ${renderNotifications()}
+    ${(state.showCallModal || state.showCounterSetModal) ? renderCallModal() : ''}
+    ${state.showPassTurnModal ? renderPassTurnModal() : ''}
+    ${state.showHistoryModal ? renderHistoryModal() : ''}
+  `;
+  
+  attachGameHandlers(opponents, askableCards);
+}
+
+function renderCard(card) {
+  const imageSrc = CARD_IMAGES[card] || '';
+  if (!imageSrc) {
+    // Fallback if card not in mapping
+    return `<div class="game-card" style="background: #21262d; color: #c9d1d9; padding: 10px; border: 2px solid #30363d; border-radius: 8px; min-width: 60px; text-align: center;">${card}</div>`;
+  }
+  return `<img src="${imageSrc}" class="card-image" alt="${card}" title="${card}" onerror="this.style.display='none'; this.insertAdjacentHTML('afterend', '<div class=\\'game-card\\'>${card}</div>');">`;
+}
+
+function renderTeamSidebar() {
+  return `
+    <div class="game-sidebar">
+      <div>
+        <h3 style="color: #da3633; margin-bottom: 10px;">Team 1</h3>
+        ${state.game.players.filter(p => state.game.teams.team1.includes(p.id)).map(p => renderTeamPlayer(p)).join('')}
+      </div>
+      
+      <div>
+        <h3 style="color: #1f6feb; margin-bottom: 10px;">Team 2</h3>
+        ${state.game.players.filter(p => state.game.teams.team2.includes(p.id)).map(p => renderTeamPlayer(p)).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function renderTeamPlayer(p) {
+  const hasCards = p.hand && p.hand.length > 0;
+  const isSpectator = !hasCards;
+  return `
+    <div class="team-player ${p.id === myId ? 'you' : ''} ${p.disconnected ? 'disconnected' : ''} ${isSpectator ? 'spectator-mode' : ''}">
+      <span>
+        ${p.name} ${p.id === myId ? '(You)' : ''} ${p.disconnected ? '(DC)' : ''} ${isSpectator ? '(Spectator)' : ''}
+        ${state.game.settings?.showCounts ? ` (${p.hand.length})` : ''}
+      </span>
+      ${state.game.currentTurn === p.id ? '<span style="color: #4ade80;">👉</span>' : ''}
+    </div>
+  `;
+}
+
+function renderPlayerActions(isMyTurn, opponents, askableCards) {
+  // Get filtered cards based on selected set
+  const me = state.game?.players.find(p => p.id === myId);
+  const filteredCards = getFilteredAskableCards(me?.hand || []);
+  
+  // Filter SET_GROUPS to only show sets where you have cards to ask
+  const availableSets = SET_GROUPS.map((group, idx) => ({
+    ...group,
+    index: idx,
+    hasCards: askableCards.some(card => group.cards.includes(card))
+  })).filter(group => group.hasCards);
+  
+  // Ensure selectedSetIndex points to an available set
+  if (availableSets.length > 0) {
+    const currentSetAvailable = availableSets.some(g => g.index === state.selectedSetIndex);
+    if (!currentSetAvailable) {
+      state.selectedSetIndex = availableSets[0].index;
+    }
+  }
+  
+  const selectedSet = SET_GROUPS[state.selectedSetIndex];
+  
+  return `
+    <div>
+      <h3 style="margin-bottom: 10px;">Your Actions</h3>
+      
+      ${isMyTurn ? `
+        ${opponents.length > 0 ? `
+          <select id="opponent-select" style="margin-bottom: 10px;">
+            <option value="">Select Opponent to Ask</option>
+            ${opponents.map(p => 
+              `<option value="${p.id}" ${state.selectedOpponent === p.id ? 'selected' : ''}>${p.name} (${p.hand.length} cards)</option>`
+            ).join('')}
+          </select>
+        ` : `
+          <p style="color: #f85149; background: #161b22; padding: 12px; border-radius: 6px; margin-bottom: 10px;">
+            ⚠️ No opponents have cards! You should call a set.
+          </p>
+        `}
+        
+        ${askableCards.length > 0 ? `
+          <label style="display: block; margin-bottom: 8px; color: var(--gold); font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.2em;">Select Set Group:</label>
+          <select id="set-group-select" style="width: 100%; margin-bottom: 20px;">
+            ${availableSets.map((group) => 
+              `<option value="${group.index}" ${state.selectedSetIndex === group.index ? 'selected' : ''}>${group.name}</option>`
+            ).join('')}
+          </select>
+          
+          ${filteredCards.length > 0 ? `
+            <div class="card-selection-container">
+              <div style="text-align: center;">
+                <img src="${CARD_IMAGES[filteredCards[state.selectedCardIndex % filteredCards.length]]}" class="card-image-large" alt="${filteredCards[state.selectedCardIndex % filteredCards.length]}">
+                <p style="margin-top: 12px; font-weight: 700; color: var(--gold-light); font-size: 14px;">${filteredCards[state.selectedCardIndex % filteredCards.length]}</p>
+                <div style="margin-top: 16px; display: flex; gap: 12px; justify-content: center;">
+                  <button class="card-arrow-button" onclick="window.app.previousCard()" ${opponents.length === 0 ? 'disabled' : ''} style="display: inline-block !important;">◀</button>
+                  <button class="card-arrow-button" onclick="window.app.nextCard()" ${opponents.length === 0 ? 'disabled' : ''} style="display: inline-block !important;">▶</button>
+                </div>
+              </div>
+            </div>
+          ` : `
+            <p style="color: #f85149; padding: 20px; text-align: center; background: rgba(74, 28, 28, 0.3); border-radius: 8px; border: 1px solid rgba(248, 81, 73, 0.3);">No cards from "${selectedSet.name}" in your hand</p>
+          `}
+        ` : `
+          <p style="color: #8b949e; padding: 12px; text-align: center;">No cards to ask for</p>
+        `}
+        
+        <button onclick="window.app.askForCard()" ${filteredCards.length === 0 || !state.selectedOpponent || opponents.length === 0 ? 'disabled' : ''}>
+          Ask for Card
+        </button>
+      ` : '<p style="color: #8b949e; margin-bottom: 10px;">Waiting for turn...</p>'}
+      
+      <button onclick="window.app.openCounterSetModal()" class="btn-secondary" style="margin-top: 8px;">
+        Counter Set (Risky!)
+      </button>
+    </div>
+  `;
+}
+
+function renderSpectatorActions() {
+  return `
+    <div>
+      <button onclick="window.app.openCounterSetModal()" class="btn-secondary">
+        Counter Set (Risky!)
+      </button>
+      <p style="color: #8b949e; margin-top: 10px; font-size: 13px;">You have no cards. You can counter-call sets. If correct, your team scores. If wrong, opponent gets it FREE!</p>
+    </div>
+  `;
+}
+
+function renderLastAsk() {
+  // Show only card ask results (success/fail)
+  const askLogs = state.game.log?.filter(log => 
+    log.includes('asked') && (log.includes('SUCCESS') || log.includes('FAILED'))
+  ).slice(0, 3) || [];
+  
+  return `
+    <div style="background: rgba(26, 71, 42, 0.3); border: 1px solid rgba(212, 175, 55, 0.2); border-radius: 12px; padding: 16px; margin-bottom: 16px;">
+      <h3 style="font-size: 11px; font-weight: 700; color: var(--gold); text-transform: uppercase; letter-spacing: 0.2em; margin-bottom: 12px;">📋 Last Ask</h3>
+      <div style="max-height: 120px; overflow-y: auto;">
+        ${askLogs.length > 0 ? askLogs.map(log => {
+          const isSuccess = log.includes('SUCCESS');
+          return `
+            <div style="font-size: 12px; margin-bottom: 6px; padding: 8px; background: ${isSuccess ? 'rgba(74, 222, 128, 0.1)' : 'rgba(248, 81, 73, 0.1)'}; border-left: 2px solid ${isSuccess ? '#4ade80' : '#f85149'}; border-radius: 4px; color: #e6edf3;">
+              ${log}
+            </div>
+          `;
+        }).join('') : '<div style="font-size: 12px; color: #8b949e; text-align: center;">No asks yet</div>'}
+      </div>
+    </div>
+  `;
+}
+
+function renderRecentActivity() {
+  // Show everything EXCEPT card asks (sets, timer, game events)
+  const activityLogs = state.game.log?.filter(log => 
+    !log.includes('asked') || (!log.includes('SUCCESS') && !log.includes('FAILED'))
+  ).slice(0, 5) || [];
+  
+  return `
+    <div style="background: rgba(13, 27, 26, 0.3); border: 1px solid rgba(212, 175, 55, 0.2); border-radius: 12px; padding: 16px;">
+      <h3 style="font-size: 11px; font-weight: 700; color: var(--gold); text-transform: uppercase; letter-spacing: 0.2em; margin-bottom: 12px;">📰 Recent Activity</h3>
+      <div style="max-height: 150px; overflow-y: auto;">
+        ${activityLogs.length > 0 ? activityLogs.map(log => `
+          <div style="font-size: 12px; color: rgba(230, 237, 243, 0.7); margin-bottom: 6px; padding: 8px; background: rgba(0, 0, 0, 0.3); border-radius: 4px; border-left: 2px solid rgba(212, 175, 55, 0.3);">
+            ${log}
+          </div>
+        `).join('') : '<div style="font-size: 12px; color: #8b949e; text-align: center;">No activity yet</div>'}
+      </div>
+    </div>
+  `;
+}
+
+function renderActivityLog() {
+  // DEPRECATED - Split into renderLastAsk and renderRecentActivity
+  return '';
+}
+
+function renderSetsStatus() {
+  return `
+    <div style="background: rgba(18, 18, 18, 0.8); border: 2px solid rgba(212, 175, 55, 0.3); border-radius: 12px; padding: 20px; margin-bottom: 16px;">
+      <h3 style="font-size: 12px; font-weight: 700; color: var(--gold); text-transform: uppercase; letter-spacing: 0.2em; margin-bottom: 16px;">🎯 Sets Status & Calling</h3>
+      <div style="display: grid; gap: 8px;">
+        ${SETS.map((set, i) => {
+          const isClaimed = state.game.claimedSets?.includes(set.name);
+          return `
+            <button 
+              onclick="window.app.quickCallSet(${i})" 
+              ${isClaimed ? 'disabled' : ''}
+              style="
+                text-align: left;
+                padding: 10px 12px;
+                background: ${isClaimed ? 'rgba(74, 28, 28, 0.3)' : 'rgba(26, 71, 42, 0.4)'};
+                border: 1px solid ${isClaimed ? 'rgba(139, 148, 158, 0.2)' : 'rgba(212, 175, 55, 0.4)'};
+                border-radius: 8px;
+                cursor: ${isClaimed ? 'not-allowed' : 'pointer'};
+                transition: all 0.2s;
+                ${!isClaimed ? 'hover:background: rgba(26, 71, 42, 0.6); hover:border-color: var(--gold);' : ''}
+              "
+            >
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                <strong style="color: ${isClaimed ? '#8b949e' : 'var(--gold-light)'}; font-size: 13px;">${set.name}</strong>
+                <span style="font-size: 11px; ${isClaimed ? 'color: #f85149;' : 'color: #4ade80;'} font-weight: 600;">
+                  ${isClaimed ? '✗ Claimed' : '✓ Available'}
+                </span>
+              </div>
+              <div style="font-size: 10px; color: #8b949e; font-family: monospace;">${set.cards.join(' ')}</div>
+            </button>
+          `;
+        }).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function renderCallModal() {
+  const me = state.game.players.find(p => p.id === myId);
+  const myTeam = state.game.teams.team1.includes(myId) ? 'team1' : 'team2';
   const oppTeam = myTeam === 'team1' ? 'team2' : 'team1';
   
-  if (Object.keys(state.callAssignments).length !== set.cards.length) {
-    return alert('You must assign all cards in the set!');
+  // CRITICAL FIX: For counter set, show ONLY opposing team
+  // For regular call, show ONLY your team
+  const playersToShow = state.showCounterSetModal 
+    ? state.game.players.filter(p => state.game.teams[oppTeam].includes(p.id))
+    : state.game.players.filter(p => state.game.teams[myTeam].includes(p.id));
+  
+  // Only show unclaimed sets
+  const unclaimedSets = SETS.filter(s => !state.game.claimedSets?.includes(s.name));
+  
+  // Make sure current callSetIndex is valid (not claimed)
+  const currentSet = SETS[state.callSetIndex];
+  if (state.game.claimedSets?.includes(currentSet.name) && unclaimedSets.length > 0) {
+    state.callSetIndex = SETS.indexOf(unclaimedSets[0]);
   }
   
-  let correct = true;
-  set.cards.forEach(card => {
-    const actualHolder = game.players.find(p => p.hand.includes(card));
-    if (!actualHolder || state.callAssignments[card] !== actualHolder.id) {
-      correct = false;
-    }
-  });
+  return `
+    <div class="modal" onclick="if(event.target === this) window.app.${state.showCounterSetModal ? 'closeCounterSetModal' : 'closeCallModal'}()">
+      <div class="modal-content" onclick="event.stopPropagation()">
+        <h2 style="margin-bottom: 20px;">${state.showCounterSetModal ? 'Counter Set (Risky!)' : 'Call a Set'}</h2>
+        ${state.showCounterSetModal ? '<p style="color: #f85149; margin-bottom: 15px; font-size: 14px;">⚠️ Counter set shows ONLY opposing team players. If you\'re wrong, they get this set for FREE!</p>' : ''}
+        
+        <div style="margin-bottom: 25px;">
+          <label style="display: block; margin-bottom: 10px; color: #8b949e; font-weight: 600;">Select Set:</label>
+          <select id="set-select" style="width: 100%;">
+            ${unclaimedSets.map((set) => {
+              const actualIndex = SETS.indexOf(set);
+              return `<option value="${actualIndex}" ${actualIndex === state.callSetIndex ? 'selected' : ''}>${set.name}</option>`;
+            }).join('')}
+          </select>
+          ${unclaimedSets.length === 0 ? '<p style="color: #f85149; margin-top: 10px;">All sets have been claimed!</p>' : ''}
+        </div>
+        
+        <div class="card-assignments-container" style="margin-bottom: 25px;">
+          <h3 style="margin-bottom: 15px; font-size: 16px; color: #c9d1d9;">Assign each card to ${state.showCounterSetModal ? 'an OPPOSING player' : 'a teammate'}:</h3>
+          ${SETS[state.callSetIndex].cards.map(card => {
+            const iHaveIt = me?.hand?.includes(card);
+            return `
+              <div class="card-assignment-row">
+                <label style="display: block; margin-bottom: 8px; font-weight: 700; font-size: 15px; color: #ffd700;">${card}</label>
+                <select class="card-assign-select" data-card="${card}">
+                  <option value="">-- Select who has ${card} --</option>
+                  ${playersToShow.map(p => 
+                    `<option value="${p.id}" ${state.callAssignments[card] === p.id ? 'selected' : ''}>${p.name}${p.id === myId ? ' (You)' : ''}${iHaveIt && p.id === myId ? ' ✓' : ''}</option>`
+                  ).join('')}
+                </select>
+              </div>
+            `;
+          }).join('')}
+        </div>
+        
+        <div style="display: flex; gap: 10px; margin-top: 30px;">
+          <button onclick="window.app.${state.showCounterSetModal ? 'submitCounterSet' : 'submitCall'}()" style="flex: 1; padding: 14px;">
+            Submit ${state.showCounterSetModal ? 'Counter Set' : 'Call'}
+          </button>
+          <button onclick="window.app.${state.showCounterSetModal ? 'closeCounterSetModal' : 'closeCallModal'}()" class="btn-secondary" style="flex: 1; padding: 14px;">
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderPassTurnModal() {
+  const me = state.game.players.find(p => p.id === myId);
+  const myTeam = state.game.teams.team1.includes(myId) ? 'team1' : 'team2';
+  const teammates = state.game.players.filter(p => 
+    state.game.teams[myTeam].includes(p.id) && p.hand.length > 0 && p.id !== myId
+  );
   
-  if (correct) {
-    game.scores[myTeam]++;
-    game.claimedSets.push(set.name);
-    game.log.unshift(`${me.name} COUNTER SET correct on ${set.name}! ${myTeam === 'team1' ? 'Team 1' : 'Team 2'} scores!`);
-  } else {
-    game.scores[oppTeam]++;
-    game.claimedSets.push(set.name);
-    game.log.unshift(`${me.name} COUNTER SET wrong on ${set.name}! ${oppTeam === 'team1' ? 'Team 1' : 'Team 2'} gets it FREE!`);
-  }
+  return `
+    <div class="modal">
+      <div class="modal-content">
+        <h2 style="margin-bottom: 20px;">Pass Turn to Teammate</h2>
+        <p style="margin-bottom: 20px; color: #8b949e;">You have no cards left. Select a teammate with cards to pass the turn to:</p>
+        
+        <select id="pass-turn-select" style="margin-bottom: 20px;">
+          <option value="">-- Select Teammate --</option>
+          ${teammates.map(p => 
+            `<option value="${p.id}" ${state.selectedPassPlayer === p.id ? 'selected' : ''}>${p.name} (${p.hand.length} cards)</option>`
+          ).join('')}
+        </select>
+        
+        <button onclick="window.app.confirmPassTurn()" ${!state.selectedPassPlayer ? 'disabled' : ''}>
+          Confirm
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+function renderNotifications() {
+  if (state.notifications.length === 0) return '';
   
-  set.cards.forEach(card => {
-    game.players.forEach(p => {
-      p.hand = p.hand.filter(c => c !== card);
+  // ONLY show at top-right, NO center notification
+  return `
+    <div style="position: fixed; top: 20px; right: 20px; z-index: 10000; display: flex; flex-direction: column; gap: 10px;">
+      ${state.notifications.map((notif, index) => `
+        <div class="notification ${notif.type === 'loss' ? 'notification-loss' : 'notification-gain'}" 
+             style="animation: slideIn 0.3s ease-out, slideOut 0.3s ease-in ${29.7}s;">
+          ${notif.message}
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+function renderHistoryModal() {
+  const formatTime = (timestamp) => {
+    const now = Date.now();
+    const diff = now - timestamp;
+    const seconds = Math.floor(diff / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    
+    if (hours > 0) return `${hours}h ago`;
+    if (minutes > 0) return `${minutes}m ago`;
+    return `${seconds}s ago`;
+  };
+  
+  return `
+    <div class="modal-overlay" onclick="window.app.toggleHistoryModal()">
+      <div class="modal" onclick="event.stopPropagation()" style="max-width: 700px; max-height: 85vh; padding: 32px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; padding-bottom: 20px; border-bottom: 2px solid rgba(212, 175, 55, 0.3);">
+          <h2 style="font-size: 22px; font-weight: 700; color: var(--gold); text-transform: uppercase; letter-spacing: 0.2em; margin: 0;">📜 Card History</h2>
+          <button onclick="window.app.toggleHistoryModal()" style="background: none; border: none; color: var(--gold); font-size: 32px; cursor: pointer; padding: 0; line-height: 1; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;">&times;</button>
+        </div>
+        <div style="max-height: 600px; overflow-y: auto; padding-right: 16px;">
+          ${state.cardHistory.length === 0 ? `
+            <div style="text-align: center; padding: 60px 20px; color: #8b949e;">
+              <div style="font-size: 64px; margin-bottom: 16px; opacity: 0.3;">📋</div>
+              <div style="font-size: 16px;">No card transfers yet</div>
+            </div>
+          ` : state.cardHistory.map(entry => `
+            <div style="
+              padding: 24px 28px;
+              margin-bottom: 16px;
+              background: ${entry.type === 'gain' ? 'linear-gradient(135deg, rgba(26, 58, 26, 0.5), rgba(42, 74, 42, 0.5))' : 'linear-gradient(135deg, rgba(58, 26, 26, 0.5), rgba(74, 42, 42, 0.5))'};
+              border-left: 5px solid ${entry.type === 'gain' ? 'var(--gold)' : '#f85149'};
+              border-radius: 10px;
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              transition: transform 0.2s;
+            " onmouseover="this.style.transform='translateX(4px)'" onmouseout="this.style.transform='translateX(0)'">
+              <div style="flex: 1;">
+                <div style="font-size: 24px; font-weight: 700; color: ${entry.type === 'gain' ? '#4ade80' : '#ff6b6b'}; margin-bottom: 8px; display: flex; align-items: center; gap: 12px;">
+                  <span style="font-size: 28px;">${entry.type === 'gain' ? '▲' : '▼'}</span>
+                  <span>${entry.card}</span>
+                </div>
+                <div style="font-size: 15px; color: rgba(230, 237, 243, 0.8); margin-left: 40px;">
+                  ${entry.type === 'gain' ? `from <strong style="color: var(--gold-light);">${entry.from}</strong>` : `to <strong style="color: var(--gold-light);">${entry.to}</strong>`}
+                </div>
+              </div>
+              <div style="font-size: 13px; color: rgba(212, 175, 55, 0.7); font-weight: 600; text-align: right; min-width: 80px;">
+                ${formatTime(entry.timestamp)}
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function attachGameHandlers(opponents, askableCards) {
+  const oppSelect = document.getElementById('opponent-select');
+  const cardDropdown = document.getElementById('card-select-dropdown');
+  const setGroupSelect = document.getElementById('set-group-select');
+  const setSelect = document.getElementById('set-select');
+  const passTurnSelect = document.getElementById('pass-turn-select');
+  
+  // CRITICAL: Track ALL dropdown interactions
+  const allSelects = [oppSelect, cardDropdown, setGroupSelect, setSelect, passTurnSelect].filter(Boolean);
+  
+  allSelects.forEach(select => {
+    // Prevent polling when dropdown is open
+    select.addEventListener('focus', () => {
+      state.dropdownOpen = true;
+    });
+    
+    select.addEventListener('blur', () => {
+      // Delay clearing to allow selection to complete
+      setTimeout(() => {
+        state.dropdownOpen = false;
+      }, 500);
+    });
+    
+    select.addEventListener('mousedown', () => {
+      state.dropdownOpen = true;
     });
   });
   
-  state.showCounterSetModal = false;
-  state.callAssignments = {};
-  await save(game);
-  
-  // Check if either team has reached 5 sets (winning condition)
-  if (game.scores.team1 >= 5 || game.scores.team2 >= 5) {
-    const winner = game.scores.team1 >= 5 ? 'Team 1' : 'Team 2';
-    
-    // Initialize replay voting
-    if (!game.replayVotes) {
-      game.replayVotes = {};
+  if (oppSelect) {
+    if (state.selectedOpponent) {
+      oppSelect.value = state.selectedOpponent;
     }
     
-    game.phase = 'gameOver';
-    game.winner = winner;
-    game.finalScores = { team1: game.scores.team1, team2: game.scores.team2 };
-    
-    await save(game);
-    render();
-  }
-}
-
-function cancel() {
-  state.view = 'home';
-  state.code = '';
-  state.game = null;
-  state.isSpectator = false;
-  if (pollInterval) clearInterval(pollInterval);
-  render();
-}
-
-async function confirmPassTurn() {
-  if (!state.selectedPassPlayer) return;
-  
-  const game = state.game;
-  game.currentTurn = state.selectedPassPlayer;
-  
-  const passer = game.players.find(p => p.id === myId);
-  const receiver = game.players.find(p => p.id === state.selectedPassPlayer);
-  game.log.unshift(`${passer.name} passed turn to ${receiver.name}`);
-  
-  // Reset timer for new turn
-  if (game.settings.timeLimit > 0) {
-    state.turnStartTime = Date.now();
-    state.timeRemaining = game.settings.timeLimit;
+    oppSelect.onchange = (e) => {
+      state.selectedOpponent = e.target.value;
+      // Don't render immediately
+    };
   }
   
-  state.showPassTurnModal = false;
-  state.selectedPassPlayer = '';
-  state.lastSuccessfulAsk = null;  // Clear for new turn
-  
-  await save(game);
-  
-  // Restart timer if enabled
-  if (game.settings.timeLimit > 0) {
-    startTimer();
-  }
-}
-
-// Notification system for card gains/losses
-function addNotification(message, type = 'gain') {
-  const id = Date.now() + Math.random();
-  state.notifications.push({ id, message, type, timestamp: Date.now() });
-  
-  // Auto-remove after 30 seconds
-  setTimeout(() => {
-    state.notifications = state.notifications.filter(n => n.id !== id);
-    if (state.view === 'game') render();
-  }, 30000);
-  
-  if (state.view === 'game') render();
-}
-
-function toggleHistoryModal() {
-  state.showHistoryModal = !state.showHistoryModal;
-  render();
-}
-
-function quickCallSet(setIndex) {
-  try {
-    // Quick call a set by clicking it in the Sets Status panel
-    const me = state.game?.players.find(p => p.id === myId);
-    const myName = me?.name || 'You';
-    const set = SETS[setIndex];
-    
-    if (!set) {
-      throw new Error('Invalid set index');
+  // Set group dropdown handler - PREVENT RESETTING
+  if (setGroupSelect) {
+    // Ensure value is preserved
+    if (state.selectedSetIndex !== undefined && state.selectedSetIndex !== null) {
+      setGroupSelect.value = state.selectedSetIndex;
     }
     
-    // Check if I have ALL cards in this set
-    const myCards = me?.hand || [];
-    const setCards = set.cards;
-    const haveAllCards = setCards.every(card => myCards.includes(card));
+    setGroupSelect.onchange = (e) => {
+      const newIndex = parseInt(e.target.value);
+      if (!isNaN(newIndex)) {
+        state.selectedSetIndex = newIndex;
+        state.selectedCardIndex = 0; // Reset card index
+        // Delay render significantly to prevent dropdown from closing
+        setTimeout(() => {
+          state.dropdownOpen = false;
+          render();
+        }, 300);
+      }
+    };
+  }
+  
+  // Card dropdown handler
+  if (cardDropdown) {
+    cardDropdown.onchange = (e) => {
+      state.selectedCardIndex = parseInt(e.target.value);
+      render();
+    };
+  }
+  
+  // Card selection now uses arrow buttons instead of dropdown
+  /*
+  if (cardSelect) {
+    if (state.selectedCard) {
+      cardSelect.value = state.selectedCard;
+    }
     
-    if (haveAllCards) {
-      // AUTO-CALL: I have all cards, submit immediately
-      const assignments = {};
-      setCards.forEach(card => {
-        assignments[card] = myName;
-      });
-      
-      state.callSetIndex = setIndex;
-      state.callAssignments = assignments;
-      
-      // Submit the call immediately
-      submitCall();
-    } else {
-      // Open modal with MY cards pre-filled
-      state.callSetIndex = setIndex;
-      state.callAssignments = {};
-      
-      // Auto-fill MY name for cards I have
-      setCards.forEach(card => {
-        if (myCards.includes(card)) {
-          state.callAssignments[card] = myName;
+    cardSelect.onmousedown = () => {
+      state.dropdownOpen = true;
+    };
+    
+    cardSelect.onclick = () => {
+      state.dropdownOpen = true;
+    };
+    
+    cardSelect.onchange = (e) => {
+      state.selectedCard = e.target.value;
+      setTimeout(() => {
+        state.dropdownOpen = false;
+      }, 500);
+    };
+    
+    cardSelect.onblur = () => {
+      setTimeout(() => {
+        state.dropdownOpen = false;
+      }, 300);
+    };
+  }
+  */
+  
+  if (passTurnSelect) {
+    if (state.selectedPassPlayer) {
+      passTurnSelect.value = state.selectedPassPlayer;
+    }
+    
+    passTurnSelect.onchange = (e) => {
+      state.selectedPassPlayer = e.target.value;
+      // Re-render to enable/disable button
+      render();
+    };
+  }
+  
+  if (setSelect) {
+    // Prevent polling during dropdown use
+    setSelect.addEventListener('focus', () => {
+      state.dropdownOpen = true;
+    });
+    
+    setSelect.addEventListener('blur', () => {
+      setTimeout(() => {
+        state.dropdownOpen = false;
+      }, 500);
+    });
+    
+    setSelect.onchange = (e) => {
+      try {
+        const newIndex = Number(e.target.value);
+        const selectedSet = SETS[newIndex];
+        
+        // Check if this set is already claimed
+        if (state.game.claimedSets?.includes(selectedSet.name)) {
+          alert('This set has already been claimed! Choose another.');
+          const unclaimedSets = SETS.filter(s => !state.game.claimedSets?.includes(s.name));
+          if (unclaimedSets.length > 0) {
+            state.callSetIndex = SETS.indexOf(unclaimedSets[0]);
+          }
+          render();
+          return;
         }
+        
+        // Save current assignments before switching
+        const oldSetName = SETS[state.callSetIndex].name;
+        state.allSetAssignments[oldSetName] = {...state.callAssignments};
+        
+        // Switch to new set
+        state.callSetIndex = newIndex;
+        
+        // Restore assignments for this set if they exist
+        const newSetName = SETS[newIndex].name;
+        state.callAssignments = state.allSetAssignments[newSetName] || {};
+        
+        // Instead of full re-render, just update the card assignment dropdowns
+        updateCardAssignmentDropdowns();
+      } catch (error) {
+        console.error('Set select error:', error);
+      }
+    };
+  }
+  
+  if (state.showCallModal || state.showCounterSetModal) {
+    const assignSelects = document.querySelectorAll('.card-assign-select');
+    assignSelects.forEach(sel => {
+      const card = sel.getAttribute('data-card');
+      
+      // Prevent polling during dropdown use
+      sel.addEventListener('focus', () => {
+        state.dropdownOpen = true;
       });
       
-      state.showCallModal = true;
-      render();
-    }
-  } catch (error) {
-    console.error('Error in quickCallSet:', error);
-    alert('Error calling set. Please try again.');
-  }
-}
-
-async function voteReplay(wantReplay) {
-  try {
-    const game = state.game;
-    if (!game || game.phase !== 'gameOver') return;
-    
-    if (!game.replayVotes) {
-      game.replayVotes = {};
-    }
-    
-    game.replayVotes[myId] = wantReplay;
-    
-    const totalPlayers = game.players.length;
-    const votedYes = Object.values(game.replayVotes).filter(v => v === true).length;
-    const votedTotal = Object.keys(game.replayVotes).length;
-    
-    // Check if all players voted yes
-    if (votedYes === totalPlayers && votedTotal === totalPlayers) {
-      // Everyone wants to replay - go to lobby
-      game.phase = 'lobby';
-      game.scores = { team1: 0, team2: 0 };
-      game.claimedSets = [];
-      game.log = ['New game! All players voted to replay.'];
-      game.currentTurn = '';
-      game.replayVotes = {};
-      game.winner = null;
-      game.finalScores = null;
+      sel.addEventListener('blur', () => {
+        setTimeout(() => {
+          state.dropdownOpen = false;
+        }, 500);
+      });
       
-      // Reset all player hands
-      game.players.forEach(p => p.hand = []);
+      // Restore value if it exists
+      if (state.callAssignments[card]) {
+        sel.value = state.callAssignments[card];
+      }
       
-      await save(game);
-      state.view = 'lobby';
-      render();
-    } else {
-      // Save votes and update display
-      await save(game);
-      render();
-    }
-  } catch (error) {
-    console.error('Error voting for replay:', error);
-    alert('Error submitting vote. Please try again.');
+      sel.onchange = (e) => {
+        state.callAssignments[card] = e.target.value;
+        // Also save to allSetAssignments
+        const currentSetName = SETS[state.callSetIndex].name;
+        if (!state.allSetAssignments[currentSetName]) {
+          state.allSetAssignments[currentSetName] = {};
+        }
+        state.allSetAssignments[currentSetName][card] = e.target.value;
+        // Don't re-render, just update state
+      };
+    });
   }
 }
 
-function nextCard() {
-  const me = state.game?.players.find(p => p.id === myId);
-  const askableCards = getFilteredAskableCards(me?.hand || []);
-  if (askableCards.length > 0) {
-    state.selectedCardIndex = (state.selectedCardIndex + 1) % askableCards.length;
-    render();
-  }
-}
-
-function previousCard() {
-  const me = state.game?.players.find(p => p.id === myId);
-  const askableCards = getFilteredAskableCards(me?.hand || []);
-  if (askableCards.length > 0) {
-    state.selectedCardIndex = (state.selectedCardIndex - 1 + askableCards.length) % askableCards.length;
-    render();
-  }
-}
-
-// Get askable cards filtered by selected set group
-function getFilteredAskableCards(hand) {
-  const askableCards = getAskableCards(hand);
-  const selectedSet = SET_GROUPS[state.selectedSetIndex];
+function updateCardAssignmentDropdowns() {
+  // Get current modal info
+  const me = state.game.players.find(p => p.id === myId);
+  const myTeam = state.game.teams.team1.includes(myId) ? 'team1' : 'team2';
+  const oppTeam = myTeam === 'team1' ? 'team2' : 'team1';
+  const playersToShow = state.showCounterSetModal 
+    ? state.game.players.filter(p => state.game.teams[oppTeam].includes(p.id))
+    : state.game.players.filter(p => state.game.teams[myTeam].includes(p.id));
   
-  // Filter to only cards in the selected set group
-  return askableCards.filter(card => selectedSet.cards.includes(card));
+  // Get the container
+  const container = document.querySelector('.card-assignments-container');
+  if (!container) return;
+  
+  // Rebuild just the card assignment rows
+  const set = SETS[state.callSetIndex];
+  container.innerHTML = `
+    <h3 style="margin-bottom: 15px; font-size: 16px; color: #c9d1d9;">Assign each card to ${state.showCounterSetModal ? 'an OPPOSING player' : 'a teammate'}:</h3>
+    ${set.cards.map(card => {
+      const iHaveIt = me?.hand?.includes(card);
+      return `
+        <div class="card-assignment-row">
+          <label style="display: block; margin-bottom: 8px; font-weight: 700; font-size: 15px; color: #ffd700;">${card}</label>
+          <select class="card-assign-select" data-card="${card}">
+            <option value="">-- Select who has ${card} --</option>
+            ${playersToShow.map(p => 
+              `<option value="${p.id}" ${state.callAssignments[card] === p.id ? 'selected' : ''}>${p.name}${p.id === myId ? ' (You)' : ''}${iHaveIt && p.id === myId ? ' ✓' : ''}</option>`
+            ).join('')}
+          </select>
+        </div>
+      `;
+    }).join('')}
+  `;
+  
+  // Re-attach event listeners to new dropdowns
+  const assignSelects = container.querySelectorAll('.card-assign-select');
+  assignSelects.forEach(sel => {
+    const card = sel.getAttribute('data-card');
+    
+    if (state.callAssignments[card]) {
+      sel.value = state.callAssignments[card];
+    }
+    
+    sel.onchange = (e) => {
+      state.callAssignments[card] = e.target.value;
+      const currentSetName = SETS[state.callSetIndex].name;
+      if (!state.allSetAssignments[currentSetName]) {
+        state.allSetAssignments[currentSetName] = {};
+      }
+      state.allSetAssignments[currentSetName][card] = e.target.value;
+      // Don't re-render, just update state
+    };
+  });
 }
 
-function changeSetGroup(direction) {
-  if (direction === 'next') {
-    state.selectedSetIndex = (state.selectedSetIndex + 1) % SET_GROUPS.length;
-  } else {
-    state.selectedSetIndex = (state.selectedSetIndex - 1 + SET_GROUPS.length) % SET_GROUPS.length;
+// Export functions to window.app
+window.app = {
+  createRoom,
+  joinRoom,
+  becomeSpectator,
+  confirmTeam,
+  cancel,
+  addBot,
+  removeBot,
+  startGame,
+  askForCard,
+  nextCard,
+  previousCard,
+  changeSetGroup,
+  openCallModal,
+  openCounterSetModal,
+  closeCallModal: () => {
+    state.showCallModal = false;
+    state.callAssignments = {};
+    render();
+  },
+  closeCounterSetModal: () => {
+    state.showCounterSetModal = false;
+    state.callAssignments = {};
+    render();
+  },
+  submitCall,
+  submitCounterSet,
+  confirmPassTurn,
+  toggleHistoryModal,
+  quickCallSet,
+  voteReplay,
+  manualRefresh: async () => {
+    await load();
   }
-  state.selectedCardIndex = 0; // Reset card index when changing sets
-  render();
-}
+};
+
+// Initialize app
+render();
