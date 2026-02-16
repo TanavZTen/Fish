@@ -28,17 +28,31 @@ async function save(game) {
 async function load() {
   if (!state.code) return;
   
-  // Don't poll/render while modal or dropdown is open - prevents interruptions
-  if (state.showCallModal || state.showCounterSetModal || state.showPassTurnModal || state.dropdownOpen) {
-    return;
+  // CRITICAL: Check if ANY select element is focused
+  const activeElement = document.activeElement;
+  const isSelectFocused = activeElement && activeElement.tagName === 'SELECT';
+  const isDropdownOpen = isSelectFocused || activeElement?.hasAttribute('data-dropdown');
+  
+  // Don't poll/render while modal, dropdown is open, OR any select is focused
+  if (state.showCallModal || 
+      state.showCounterSetModal || 
+      state.showPassTurnModal || 
+      state.dropdownOpen || 
+      isDropdownOpen) {
+    return; // SKIP THIS POLLING CYCLE COMPLETELY
   }
   
   try {
-    const { data: gameData } = await DB
+    const { data: gameData, error } = await DB
       .from('games')
       .select('game_data')
       .eq('room_code', state.code)
       .maybeSingle();
+    
+    if (error) {
+      console.error('Database load error:', error);
+      return;
+    }
     
     if (gameData && gameData.game_data) {
       const oldPhase = state.game?.phase;
@@ -67,8 +81,12 @@ async function load() {
         lostCards.forEach(card => {
           // Try to find who asked for it from the log
           const lastLog = state.game.log[0] || '';
-          const match = lastLog.match(/(.+) asked .+ for (.+) - SUCCESS/);
-          const asker = match ? match[1] : 'someone';
+          const match = lastLog.match(/(.+?) asked .+ for (.+?) - SUCCESS/);
+          
+          let asker = 'someone';
+          if (match && match[1]) {
+            asker = match[1].trim();
+          }
           
           state.cardHistory.unshift({
             type: 'loss',
@@ -77,7 +95,8 @@ async function load() {
             timestamp: Date.now()
           });
           
-          addNotification(`You lost ${card} to ${asker}!`, 'loss');
+          // SPECIFIC PERSON in notification
+          addNotification(`${asker} took ${card} from you!`, 'loss');
         });
       }
       
