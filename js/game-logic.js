@@ -398,7 +398,6 @@ async function askForCard() {
 function openCallModal() {
   try {
     const me = state.game.players.find(p => p.id === myId);
-    const myName = me?.name || 'You';
     const myTeam = state.game.teams.team1.includes(myId) ? 'team1' : 'team2';
     const teammates = state.game.players.filter(p => state.game.teams[myTeam].includes(p.id));
     const teamHasCards = teammates.some(p => p.hand.length > 0);
@@ -411,7 +410,7 @@ function openCallModal() {
     const unclaimedSets = SETS.filter(s => !state.game.claimedSets?.includes(s.name));
     state.callSetIndex = unclaimedSets.length > 0 ? SETS.indexOf(unclaimedSets[0]) : 0;
     
-    // AUTO-FILL: Pre-fill MY cards
+    // AUTO-FILL: Pre-fill MY cards with MY ID (not name!)
     state.callAssignments = {};
     const myCards = me?.hand || [];
     const currentSet = SETS[state.callSetIndex];
@@ -419,7 +418,7 @@ function openCallModal() {
     if (currentSet && currentSet.cards) {
       currentSet.cards.forEach(card => {
         if (myCards.includes(card)) {
-          state.callAssignments[card] = myName;
+          state.callAssignments[card] = myId; // USE ID, NOT NAME!
         }
       });
     }
@@ -462,90 +461,90 @@ async function submitCall() {
       }
     });
   
-  if (correct) {
-    game.scores[myTeam]++;
-    game.claimedSets.push(set.name);
-    game.log.unshift(`${me.name} correctly called ${set.name}! ${myTeam === 'team1' ? 'Team 1' : 'Team 2'} scores!`);
+    if (correct) {
+      game.scores[myTeam]++;
+      game.claimedSets.push(set.name);
+      game.log.unshift(`${me.name} correctly called ${set.name}! ${myTeam === 'team1' ? 'Team 1' : 'Team 2'} scores!`);
     
-    // DON'T change turn - calling a set doesn't steal the turn
-    // Turn only changes if current turn holder runs out of cards
-  } else {
-    const oppTeam = myTeam === 'team1' ? 'team2' : 'team1';
-    game.scores[oppTeam]++;
-    game.claimedSets.push(set.name);
-    game.log.unshift(`${me.name} INCORRECTLY called ${set.name}! ${oppTeam === 'team1' ? 'Team 1' : 'Team 2'} gets the set!`);
-  }
+      // DON'T change turn - calling a set doesn't steal the turn
+      // Turn only changes if current turn holder runs out of cards
+    } else {
+      const oppTeam = myTeam === 'team1' ? 'team2' : 'team1';
+      game.scores[oppTeam]++;
+      game.claimedSets.push(set.name);
+      game.log.unshift(`${me.name} INCORRECTLY called ${set.name}! ${oppTeam === 'team1' ? 'Team 1' : 'Team 2'} gets the set!`);
+    }
   
-  // Remove cards from all players
-  set.cards.forEach(card => {
-    game.players.forEach(p => {
-      p.hand = p.hand.filter(c => c !== card);
+    // Remove cards from all players
+    set.cards.forEach(card => {
+      game.players.forEach(p => {
+        p.hand = p.hand.filter(c => c !== card);
+      });
     });
-  });
   
-  // IMPORTANT: Check for win condition FIRST before pass turn logic
-  const gameEnded = game.scores.team1 >= 5 || game.scores.team2 >= 5;
+    // IMPORTANT: Check for win condition FIRST before pass turn logic
+    const gameEnded = game.scores.team1 >= 5 || game.scores.team2 >= 5;
   
-  if (gameEnded) {
-    const winner = game.scores.team1 >= 5 ? 'Team 1' : 'Team 2';
+    if (gameEnded) {
+      const winner = game.scores.team1 >= 5 ? 'Team 1' : 'Team 2';
     
+      state.showCallModal = false;
+      state.callAssignments = {};
+      state.allSetAssignments = {};
+    
+      // Initialize replay voting if not already done
+      if (!game.replayVotes) {
+        game.replayVotes = {};
+      }
+    
+      game.phase = 'gameOver';
+      game.winner = winner;
+      game.finalScores = { team1: game.scores.team1, team2: game.scores.team2 };
+    
+      await save(game);
+      render();
+      return;
+    }
+  
+    // Find who has the current turn
+    const currentTurnPlayer = game.players.find(p => p.id === game.currentTurn);
+    const currentTurnTeam = game.teams.team1.includes(game.currentTurn) ? 'team1' : 'team2';
+  
+    // Check if the current turn holder has no cards left (regardless of who called the set)
+    if (currentTurnPlayer && currentTurnPlayer.hand.length === 0) {
+      const currentTurnTeammates = game.players.filter(p => 
+        game.teams[currentTurnTeam].includes(p.id) && p.hand.length > 0 && p.id !== game.currentTurn
+      );
+    
+      if (currentTurnTeammates.length > 0) {
+        // Current turn player has no cards, they need to pass
+        // If I'M the current turn player, show ME the modal
+        if (game.currentTurn === myId) {
+          state.showCallModal = false;
+          state.callAssignments = {};
+          state.allSetAssignments = {};
+          await save(game);
+        
+          // Show pass turn modal for ME to choose
+          state.showPassTurnModal = true;
+          render();
+          return;
+        }
+        // If I'm NOT the current turn player, just close the modal and save
+        else {
+          state.showCallModal = false;
+          state.callAssignments = {};
+          state.allSetAssignments = {};
+          await save(game);
+          return;
+        }
+      }
+    }
+  
     state.showCallModal = false;
     state.callAssignments = {};
     state.allSetAssignments = {};
-    
-    // Initialize replay voting if not already done
-    if (!game.replayVotes) {
-      game.replayVotes = {};
-    }
-    
-    game.phase = 'gameOver';
-    game.winner = winner;
-    game.finalScores = { team1: game.scores.team1, team2: game.scores.team2 };
-    
     await save(game);
-    render();
-    return;
-  }
-  
-  // Find who has the current turn
-  const currentTurnPlayer = game.players.find(p => p.id === game.currentTurn);
-  const currentTurnTeam = game.teams.team1.includes(game.currentTurn) ? 'team1' : 'team2';
-  
-  // Check if the current turn holder has no cards left (regardless of who called the set)
-  if (currentTurnPlayer && currentTurnPlayer.hand.length === 0) {
-    const currentTurnTeammates = game.players.filter(p => 
-      game.teams[currentTurnTeam].includes(p.id) && p.hand.length > 0 && p.id !== game.currentTurn
-    );
-    
-    if (currentTurnTeammates.length > 0) {
-      // Current turn player has no cards, they need to pass
-      // If I'M the current turn player, show ME the modal
-      if (game.currentTurn === myId) {
-        state.showCallModal = false;
-        state.callAssignments = {};
-        state.allSetAssignments = {};
-        await save(game);
-        
-        // Show pass turn modal for ME to choose
-        state.showPassTurnModal = true;
-        render();
-        return;
-      }
-      // If I'm NOT the current turn player, just close the modal and save
-      else {
-        state.showCallModal = false;
-        state.callAssignments = {};
-        state.allSetAssignments = {};
-        await save(game);
-        return;
-      }
-    }
-  }
-  
-  state.showCallModal = false;
-  state.callAssignments = {};
-  state.allSetAssignments = {};
-  await save(game);
   } catch (error) {
     console.error('Error in submitCall:', error);
     alert('Error calling set. Please try again.');
@@ -669,7 +668,6 @@ function quickCallSet(setIndex) {
   try {
     // Quick call a set by clicking it in the Sets Status panel
     const me = state.game?.players.find(p => p.id === myId);
-    const myName = me?.name || 'You';
     const set = SETS[setIndex];
     
     if (!set) {
@@ -685,7 +683,7 @@ function quickCallSet(setIndex) {
       // AUTO-CALL: I have all cards, submit immediately
       const assignments = {};
       setCards.forEach(card => {
-        assignments[card] = myName;
+        assignments[card] = myId; // USE ID, NOT NAME!
       });
       
       state.callSetIndex = setIndex;
@@ -698,10 +696,10 @@ function quickCallSet(setIndex) {
       state.callSetIndex = setIndex;
       state.callAssignments = {};
       
-      // Auto-fill MY name for cards I have
+      // Auto-fill MY ID for cards I have
       setCards.forEach(card => {
         if (myCards.includes(card)) {
-          state.callAssignments[card] = myName;
+          state.callAssignments[card] = myId; // USE ID, NOT NAME!
         }
       });
       
