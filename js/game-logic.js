@@ -453,15 +453,14 @@ async function submitCall() {
     if (Object.keys(state.callAssignments).length !== set.cards.length) {
       return alert('You must assign all cards in the set!');
     }
-  }
   
-  let correct = true;
-  set.cards.forEach(card => {
-    const actualHolder = game.players.find(p => p.hand.includes(card));
-    if (!actualHolder || state.callAssignments[card] !== actualHolder.id) {
-      correct = false;
-    }
-  });
+    let correct = true;
+    set.cards.forEach(card => {
+      const actualHolder = game.players.find(p => p.hand.includes(card));
+      if (!actualHolder || state.callAssignments[card] !== actualHolder.id) {
+        correct = false;
+      }
+    });
   
   if (correct) {
     game.scores[myTeam]++;
@@ -547,6 +546,10 @@ async function submitCall() {
   state.callAssignments = {};
   state.allSetAssignments = {};
   await save(game);
+  } catch (error) {
+    console.error('Error in submitCall:', error);
+    alert('Error calling set. Please try again.');
+  }
 }
 
 async function submitCounterSet() {
