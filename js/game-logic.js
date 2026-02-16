@@ -396,20 +396,39 @@ async function askForCard() {
 }
 
 function openCallModal() {
-  const me = state.game.players.find(p => p.id === myId);
-  const myTeam = state.game.teams.team1.includes(myId) ? 'team1' : 'team2';
-  const teammates = state.game.players.filter(p => state.game.teams[myTeam].includes(p.id));
-  const teamHasCards = teammates.some(p => p.hand.length > 0);
-  
-  if (!teamHasCards) {
-    return alert('Your team has no cards left! Cannot call a set.');
+  try {
+    const me = state.game.players.find(p => p.id === myId);
+    const myName = me?.name || 'You';
+    const myTeam = state.game.teams.team1.includes(myId) ? 'team1' : 'team2';
+    const teammates = state.game.players.filter(p => state.game.teams[myTeam].includes(p.id));
+    const teamHasCards = teammates.some(p => p.hand.length > 0);
+    
+    if (!teamHasCards) {
+      return alert('Your team has no cards left! Cannot call a set.');
+    }
+    
+    state.showCallModal = true;
+    const unclaimedSets = SETS.filter(s => !state.game.claimedSets?.includes(s.name));
+    state.callSetIndex = unclaimedSets.length > 0 ? SETS.indexOf(unclaimedSets[0]) : 0;
+    
+    // AUTO-FILL: Pre-fill MY cards
+    state.callAssignments = {};
+    const myCards = me?.hand || [];
+    const currentSet = SETS[state.callSetIndex];
+    
+    if (currentSet && currentSet.cards) {
+      currentSet.cards.forEach(card => {
+        if (myCards.includes(card)) {
+          state.callAssignments[card] = myName;
+        }
+      });
+    }
+    
+    render();
+  } catch (error) {
+    console.error('Error opening call modal:', error);
+    alert('Error opening call modal. Please try again.');
   }
-  
-  state.showCallModal = true;
-  const unclaimedSets = SETS.filter(s => !state.game.claimedSets?.includes(s.name));
-  state.callSetIndex = unclaimedSets.length > 0 ? SETS.indexOf(unclaimedSets[0]) : 0;
-  state.callAssignments = {};
-  render();
 }
 
 function openCounterSetModal() {
@@ -421,13 +440,19 @@ function openCounterSetModal() {
 }
 
 async function submitCall() {
-  const game = state.game;
-  const set = SETS[state.callSetIndex];
-  const me = game.players.find(p => p.id === myId);
-  const myTeam = game.teams.team1.includes(myId) ? 'team1' : 'team2';
-  
-  if (Object.keys(state.callAssignments).length !== set.cards.length) {
-    return alert('You must assign all cards in the set!');
+  try {
+    const game = state.game;
+    const set = SETS[state.callSetIndex];
+    const me = game.players.find(p => p.id === myId);
+    const myTeam = game.teams.team1.includes(myId) ? 'team1' : 'team2';
+    
+    if (!set || !set.cards) {
+      throw new Error('Invalid set selected');
+    }
+    
+    if (Object.keys(state.callAssignments).length !== set.cards.length) {
+      return alert('You must assign all cards in the set!');
+    }
   }
   
   let correct = true;
@@ -468,27 +493,18 @@ async function submitCall() {
     state.showCallModal = false;
     state.callAssignments = {};
     state.allSetAssignments = {};
-    await save(game);
     
-    setTimeout(() => {
-      const goToLobby = confirm(`Game Over!\n\n${winner} wins ${game.scores.team1}-${game.scores.team2}!\n\nClick OK to return to lobby, or Cancel to view final state.`);
-      
-      if (goToLobby) {
-        // Reset game back to lobby
-        game.phase = 'lobby';
-        game.scores = { team1: 0, team2: 0 };
-        game.claimedSets = [];
-        game.log = ['Returned to lobby. Ready for new game!'];
-        game.currentTurn = '';
-        
-        // Reset all player hands
-        game.players.forEach(p => p.hand = []);
-        
-        save(game);
-        state.view = 'lobby';
-        render();
-      }
-    }, 500);
+    // Initialize replay voting if not already done
+    if (!game.replayVotes) {
+      game.replayVotes = {};
+    }
+    
+    game.phase = 'gameOver';
+    game.winner = winner;
+    game.finalScores = { team1: game.scores.team1, team2: game.scores.team2 };
+    
+    await save(game);
+    render();
     return;
   }
   
@@ -576,25 +592,17 @@ async function submitCounterSet() {
   if (game.scores.team1 >= 5 || game.scores.team2 >= 5) {
     const winner = game.scores.team1 >= 5 ? 'Team 1' : 'Team 2';
     
-    setTimeout(() => {
-      const goToLobby = confirm(`Game Over!\n\n${winner} wins ${game.scores.team1}-${game.scores.team2}!\n\nClick OK to return to lobby, or Cancel to view final state.`);
-      
-      if (goToLobby) {
-        // Reset game back to lobby
-        game.phase = 'lobby';
-        game.scores = { team1: 0, team2: 0 };
-        game.claimedSets = [];
-        game.log = ['Returned to lobby. Ready for new game!'];
-        game.currentTurn = '';
-        
-        // Reset all player hands
-        game.players.forEach(p => p.hand = []);
-        
-        save(game);
-        state.view = 'lobby';
-        render();
-      }
-    }, 500);
+    // Initialize replay voting
+    if (!game.replayVotes) {
+      game.replayVotes = {};
+    }
+    
+    game.phase = 'gameOver';
+    game.winner = winner;
+    game.finalScores = { team1: game.scores.team1, team2: game.scores.team2 };
+    
+    await save(game);
+    render();
   }
 }
 
@@ -655,42 +663,95 @@ function toggleHistoryModal() {
 }
 
 function quickCallSet(setIndex) {
-  // Quick call a set by clicking it in the Sets Status panel
-  const me = state.game?.players.find(p => p.id === myId);
-  const myName = me?.name || 'You';
-  const set = SETS[setIndex];
-  
-  // Check if I have ALL cards in this set
-  const myCards = me?.hand || [];
-  const setCards = set.cards;
-  const haveAllCards = setCards.every(card => myCards.includes(card));
-  
-  if (haveAllCards) {
-    // AUTO-CALL: I have all cards, submit immediately
-    const assignments = {};
-    setCards.forEach(card => {
-      assignments[card] = myName;
-    });
+  try {
+    // Quick call a set by clicking it in the Sets Status panel
+    const me = state.game?.players.find(p => p.id === myId);
+    const myName = me?.name || 'You';
+    const set = SETS[setIndex];
     
-    state.callSetIndex = setIndex;
-    state.callAssignments = assignments;
+    if (!set) {
+      throw new Error('Invalid set index');
+    }
     
-    // Submit the call immediately
-    submitCall();
-  } else {
-    // Open modal with MY cards pre-filled
-    state.callSetIndex = setIndex;
-    state.callAssignments = {};
+    // Check if I have ALL cards in this set
+    const myCards = me?.hand || [];
+    const setCards = set.cards;
+    const haveAllCards = setCards.every(card => myCards.includes(card));
     
-    // Auto-fill MY name for cards I have
-    setCards.forEach(card => {
-      if (myCards.includes(card)) {
-        state.callAssignments[card] = myName;
-      }
-    });
+    if (haveAllCards) {
+      // AUTO-CALL: I have all cards, submit immediately
+      const assignments = {};
+      setCards.forEach(card => {
+        assignments[card] = myName;
+      });
+      
+      state.callSetIndex = setIndex;
+      state.callAssignments = assignments;
+      
+      // Submit the call immediately
+      submitCall();
+    } else {
+      // Open modal with MY cards pre-filled
+      state.callSetIndex = setIndex;
+      state.callAssignments = {};
+      
+      // Auto-fill MY name for cards I have
+      setCards.forEach(card => {
+        if (myCards.includes(card)) {
+          state.callAssignments[card] = myName;
+        }
+      });
+      
+      state.showCallModal = true;
+      render();
+    }
+  } catch (error) {
+    console.error('Error in quickCallSet:', error);
+    alert('Error calling set. Please try again.');
+  }
+}
+
+async function voteReplay(wantReplay) {
+  try {
+    const game = state.game;
+    if (!game || game.phase !== 'gameOver') return;
     
-    state.showCallModal = true;
-    render();
+    if (!game.replayVotes) {
+      game.replayVotes = {};
+    }
+    
+    game.replayVotes[myId] = wantReplay;
+    
+    const totalPlayers = game.players.length;
+    const votedYes = Object.values(game.replayVotes).filter(v => v === true).length;
+    const votedTotal = Object.keys(game.replayVotes).length;
+    
+    // Check if all players voted yes
+    if (votedYes === totalPlayers && votedTotal === totalPlayers) {
+      // Everyone wants to replay - go to lobby
+      game.phase = 'lobby';
+      game.scores = { team1: 0, team2: 0 };
+      game.claimedSets = [];
+      game.log = ['New game! All players voted to replay.'];
+      game.currentTurn = '';
+      game.replayVotes = {};
+      game.winner = null;
+      game.finalScores = null;
+      
+      // Reset all player hands
+      game.players.forEach(p => p.hand = []);
+      
+      await save(game);
+      state.view = 'lobby';
+      render();
+    } else {
+      // Save votes and update display
+      await save(game);
+      render();
+    }
+  } catch (error) {
+    console.error('Error voting for replay:', error);
+    alert('Error submitting vote. Please try again.');
   }
 }
 
