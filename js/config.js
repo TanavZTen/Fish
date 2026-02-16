@@ -55,7 +55,8 @@ let state = {
   cardHistory: [],  // Track card gains/losses
   notifications: [],  // Active notifications
   selectedCardIndex: 0,  // For arrow navigation
-  selectedSetIndex: 0  // For set dropdown navigation (which set group to show)
+  selectedSetIndex: 0,  // For set dropdown navigation (which set group to show)
+  replayVotes: {}  // Track who wants to replay: {playerId: boolean}
 };
 
 // Define the 9 set groups for dropdown
