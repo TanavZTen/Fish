@@ -81,12 +81,17 @@ async function load() {
         lostCards.forEach(card => {
           // Try to find who asked for it from the log
           const lastLog = state.game.log[0] || '';
+          console.log('Last log entry:', lastLog);
+          
+          // Match patterns like "Shadow asked You for 5♠ - SUCCESS!"
           const match = lastLog.match(/(.+?) asked .+ for (.+?) - SUCCESS/);
           
           let asker = 'someone';
           if (match && match[1]) {
             asker = match[1].trim();
           }
+          
+          console.log('Card lost:', card, 'taken by:', asker);
           
           state.cardHistory.unshift({
             type: 'loss',
