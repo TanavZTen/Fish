@@ -522,11 +522,15 @@ function renderTeamSidebar() {
         <h3 class="sidebar-team-label team1-label">Team 1</h3>
         ${state.game.players.filter(p => state.game.teams.team1.includes(p.id)).map(p => renderTeamPlayer(p, lastAsk)).join('')}
       </div>
+
+      <div style="display: flex; justify-content: center; padding: 10px 0;">
+        <button onclick="window.app.toggleHistoryModal()" class="btn-history">📜 Card History</button>
+      </div>
+
       <div>
         <h3 class="sidebar-team-label team2-label">Team 2</h3>
         ${state.game.players.filter(p => state.game.teams.team2.includes(p.id)).map(p => renderTeamPlayer(p, lastAsk)).join('')}
       </div>
-      <button onclick="window.app.toggleHistoryModal()" class="btn-history" style="width: 100%; margin-top: 10px;">📜 Card History</button>
     </div>
   `;
 }
@@ -901,10 +905,10 @@ function renderNotifications() {
   if (state.notifications.length === 0) return '';
 
   return `
-    <div style="position: fixed; top: 24px; left: 50%; transform: translateX(-50%); z-index: 10000; display: flex; flex-direction: column; align-items: center; gap: 12px; pointer-events: none;">
+    <div style="position: fixed; top: 20px; right: 20px; z-index: 10000; display: flex; flex-direction: column; gap: 10px;">
       ${state.notifications.map((notif) => `
         <div class="notification ${notif.type === 'loss' ? 'notification-loss' : 'notification-gain'}"
-             style="pointer-events: all; display: flex; align-items: center; gap: 16px;">
+             style="display: flex; align-items: center; gap: 12px;">
           <span style="flex:1;">${notif.message}</span>
           <button onclick="window.app.dismissNotification(${notif.id})" style="
             background: rgba(255,255,255,0.12);
@@ -912,10 +916,11 @@ function renderNotifications() {
             color: inherit;
             border-radius: 6px;
             cursor: pointer;
-            font-size: 18px;
+            font-size: 16px;
             line-height: 1;
             padding: 2px 8px;
             flex-shrink: 0;
+            margin: 0;
           ">&times;</button>
         </div>
       `).join('')}
@@ -924,18 +929,26 @@ function renderNotifications() {
 }
 
 function renderHistoryModal() {
-  const formatTime = (timestamp) => {
-    const now = Date.now();
-    const diff = now - timestamp;
-    const seconds = Math.floor(diff / 1000);
-    const minutes = Math.floor(seconds / 60);
-    const hours = Math.floor(minutes / 60);
-    
-    if (hours > 0) return `${hours}h ago`;
-    if (minutes > 0) return `${minutes}m ago`;
-    return `${seconds}s ago`;
-  };
-  
+  const myName = state.game.players.find(p => p.id === myId)?.name || '';
+
+  // Only show cards YOU personally gained or lost
+  const entries = [];
+  for (const entry of (state.game.log || [])) {
+    const m = entry.match(/^(.+?) asked (.+?) for (.+?) - SUCCESS!/);
+    if (!m) continue;
+    const [, asker, target, card] = m;
+    if (asker === myName) {
+      entries.push({ type: 'gain', card, label: `from ${target}` });
+    } else if (target === myName) {
+      entries.push({ type: 'loss', card, label: `taken by ${asker}` });
+    }
+  }
+
+  const rowColor  = { gain: 'rgba(26,58,26,0.5)', loss: 'rgba(58,26,26,0.5)' };
+  const rowBorder = { gain: 'var(--gold)',         loss: '#f85149'            };
+  const rowIcon   = { gain: '▲',                  loss: '▼'                  };
+  const rowColor2 = { gain: '#4ade80',             loss: '#ff6b6b'            };
+
   return `
     <div class="modal-overlay" onclick="window.app.toggleHistoryModal()">
       <div class="modal" onclick="event.stopPropagation()" style="max-width: 700px; max-height: 85vh; padding: 32px;">
@@ -944,34 +957,27 @@ function renderHistoryModal() {
           <button onclick="window.app.toggleHistoryModal()" style="background: none; border: none; color: var(--gold); font-size: 32px; cursor: pointer; padding: 0; line-height: 1; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;">&times;</button>
         </div>
         <div style="max-height: 600px; overflow-y: auto; padding-right: 16px;">
-          ${state.cardHistory.length === 0 ? `
+          ${entries.length === 0 ? `
             <div style="text-align: center; padding: 60px 20px; color: #8b949e;">
               <div style="font-size: 64px; margin-bottom: 16px; opacity: 0.3;">📋</div>
               <div style="font-size: 16px;">No card transfers yet</div>
             </div>
-          ` : state.cardHistory.map(entry => `
+          ` : entries.map(e => `
             <div style="
-              padding: 24px 28px;
-              margin-bottom: 16px;
-              background: ${entry.type === 'gain' ? 'linear-gradient(135deg, rgba(26, 58, 26, 0.5), rgba(42, 74, 42, 0.5))' : 'linear-gradient(135deg, rgba(58, 26, 26, 0.5), rgba(74, 42, 42, 0.5))'};
-              border-left: 5px solid ${entry.type === 'gain' ? 'var(--gold)' : '#f85149'};
+              padding: 16px 20px;
+              margin-bottom: 10px;
+              background: ${rowColor[e.type]};
+              border-left: 5px solid ${rowBorder[e.type]};
               border-radius: 10px;
               display: flex;
-              justify-content: space-between;
               align-items: center;
+              gap: 14px;
               transition: transform 0.2s;
             " onmouseover="this.style.transform='translateX(4px)'" onmouseout="this.style.transform='translateX(0)'">
-              <div style="flex: 1;">
-                <div style="font-size: 24px; font-weight: 700; color: ${entry.type === 'gain' ? '#4ade80' : '#ff6b6b'}; margin-bottom: 8px; display: flex; align-items: center; gap: 12px;">
-                  <span style="font-size: 28px;">${entry.type === 'gain' ? '▲' : '▼'}</span>
-                  <span>${entry.card}</span>
-                </div>
-                <div style="font-size: 15px; color: rgba(230, 237, 243, 0.8); margin-left: 40px;">
-                  ${entry.type === 'gain' ? `from <strong style="color: var(--gold-light);">${entry.from}</strong>` : `to <strong style="color: var(--gold-light);">${entry.to}</strong>`}
-                </div>
-              </div>
-              <div style="font-size: 13px; color: rgba(212, 175, 55, 0.7); font-weight: 600; text-align: right; min-width: 80px;">
-                ${formatTime(entry.timestamp)}
+              <span style="font-size: 22px; color: ${rowColor2[e.type]};">${rowIcon[e.type]}</span>
+              <div style="flex:1;">
+                <div style="font-size: 16px; font-weight: 700; color: ${rowColor2[e.type]};">${e.card}</div>
+                <div style="font-size: 13px; color: rgba(230,237,243,0.7); margin-top: 2px;">${e.label.replace(e.card, '')}</div>
               </div>
             </div>
           `).join('')}
