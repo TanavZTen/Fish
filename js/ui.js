@@ -476,20 +476,20 @@ function renderScoreboard(isMyTurn, currentPlayer) {
         <div class="score-block ${t1Leading ? 'leading' : ''} team1-block">
           <div class="score-team-name" style="color:#e05555;">TEAM 1</div>
           <div class="score-digits ${t1Leading ? 'score-leading' : ''}">${s1}</div>
-          <div class="score-sub">${9 - s1} left</div>
+          <div class="score-sub">${Math.max(0, 5 - s1)} to win</div>
         </div>
 
         <div class="score-vs-col">
           <div class="score-vs-text">VS</div>
           <div class="score-status ${tied ? 'tied' : t1Leading ? 'team1-up' : 'team2-up'}">
-            ${tied && s1 === 0 ? 'FIRST TO 5 SETS' : tied ? 'TIED' : t1Leading ? 'TEAM 1 LEADS' : 'TEAM 2 LEADS'}
+            ${tied && s1 === 0 ? 'FIRST TO 5 SETS WINS' : tied ? 'TIED' : t1Leading ? 'TEAM 1 LEADS' : 'TEAM 2 LEADS'}
           </div>
         </div>
 
         <div class="score-block ${t2Leading ? 'leading' : ''} team2-block">
           <div class="score-team-name" style="color:#5588e0;">TEAM 2</div>
           <div class="score-digits ${t2Leading ? 'score-leading' : ''}">${s2}</div>
-          <div class="score-sub">${9 - s2} left</div>
+          <div class="score-sub">${Math.max(0, 5 - s2)} to win</div>
         </div>
       </div>
 
