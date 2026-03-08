@@ -756,12 +756,26 @@ async function voteReplay(wantReplay) {
   }
 }
 
+function selectCard(idx) {
+  state.selectedCardIndex = idx;
+  // Update just the visual selection without re-rendering the whole page
+  document.querySelectorAll('.card-select-item').forEach((el, i) => {
+    el.classList.toggle('selected', i === idx);
+  });
+  // Update the label below the grid
+  const label = document.querySelector('.card-selected-label');
+  if (label) {
+    const me = state.game?.players.find(p => p.id === myId);
+    const filteredCards = getFilteredAskableCards(me?.hand || []);
+    if (filteredCards[idx]) label.textContent = filteredCards[idx];
+  }
+}
+
 function nextCard() {
   const me = state.game?.players.find(p => p.id === myId);
   const askableCards = getFilteredAskableCards(me?.hand || []);
   if (askableCards.length > 0) {
-    state.selectedCardIndex = (state.selectedCardIndex + 1) % askableCards.length;
-    render();
+    selectCard((state.selectedCardIndex + 1) % askableCards.length);
   }
 }
 
@@ -769,8 +783,7 @@ function previousCard() {
   const me = state.game?.players.find(p => p.id === myId);
   const askableCards = getFilteredAskableCards(me?.hand || []);
   if (askableCards.length > 0) {
-    state.selectedCardIndex = (state.selectedCardIndex - 1 + askableCards.length) % askableCards.length;
-    render();
+    selectCard((state.selectedCardIndex - 1 + askableCards.length) % askableCards.length);
   }
 }
 

@@ -8,62 +8,44 @@ function formatTime(seconds) {
 
 function render() {
   try {
-    // Preserve scroll position
-    const scrollPositions = {};
-    document.querySelectorAll('[data-preserve-scroll]').forEach(el => {
-      scrollPositions[el.dataset.preserveScroll] = el.scrollTop;
-    });
-    
     const app = document.getElementById('app');
     if (!app) {
       console.error('App element not found');
       return;
     }
-    
+
     if (state.view === 'home') {
-    renderHome(app);
-    return;
-  }
-  
-  if (state.view === 'spectatorPrompt') {
-    renderSpectatorPrompt(app);
-    return;
-  }
-  
-  if (state.view === 'teamSelect') {
-    renderTeamSelect(app);
-    return;
-  }
-  
-  if (state.view === 'lobby' && state.game) {
-    renderLobby(app);
-    return;
-  }
-  
-  if (state.view === 'game' && state.game) {
-    if (state.game.phase === 'gameOver') {
-      renderGameOver(app);
-    } else if (state.isSpectator) {
-      renderSpectatorView(app);
-    } else {
-      renderGameView(app);
+      renderHome(app);
+      return;
     }
-    
-    // Restore scroll positions after DOM update
-    setTimeout(() => {
-      Object.keys(scrollPositions).forEach(key => {
-        const el = document.querySelector(`[data-preserve-scroll="${key}"]`);
-        if (el) {
-          el.scrollTop = scrollPositions[key];
-        }
-      });
-    }, 0);
-    
-    return;
-  }
+
+    if (state.view === 'spectatorPrompt') {
+      renderSpectatorPrompt(app);
+      return;
+    }
+
+    if (state.view === 'teamSelect') {
+      renderTeamSelect(app);
+      return;
+    }
+
+    if (state.view === 'lobby' && state.game) {
+      renderLobby(app);
+      return;
+    }
+
+    if (state.view === 'game' && state.game) {
+      if (state.game.phase === 'gameOver') {
+        renderGameOver(app);
+      } else if (state.isSpectator) {
+        renderSpectatorView(app);
+      } else {
+        renderGameView(app);
+      }
+      return;
+    }
   } catch (error) {
     console.error('Render error:', error);
-    // Don't crash the app
   }
 }
 
@@ -421,7 +403,12 @@ function renderGameView(app) {
         </p>
         
         ${renderTeamSidebar()}
-        
+
+        <div class="activity-strip">
+          ${renderLastAsk()}
+          ${renderRecentActivity()}
+        </div>
+
         <div class="game-layout">
           <div class="left-panel">
             <div>
@@ -434,11 +421,7 @@ function renderGameView(app) {
             ${hasCards ? renderPlayerActions(isMyTurn, opponents, askableCards) : renderSpectatorActions()}
           </div>
           
-          <div class="right-panel" data-preserve-scroll="right-panel">
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
-              <div data-preserve-scroll="last-ask">${renderLastAsk()}</div>
-              <div data-preserve-scroll="recent-activity">${renderRecentActivity()}</div>
-            </div>
+          <div class="right-panel">
             ${renderSetsStatus()}
           </div>
         </div>
@@ -542,16 +525,17 @@ function renderPlayerActions(isMyTurn, opponents, askableCards) {
           </select>
           
           ${filteredCards.length > 0 ? `
-            <div class="card-selection-container">
-              <div style="text-align: center;">
-                <img src="${CARD_IMAGES[filteredCards[state.selectedCardIndex % filteredCards.length]]}" class="card-image-large" alt="${filteredCards[state.selectedCardIndex % filteredCards.length]}">
-                <p style="margin-top: 12px; font-weight: 700; color: var(--gold-light); font-size: 14px;">${filteredCards[state.selectedCardIndex % filteredCards.length]}</p>
-                <div style="margin-top: 16px; display: flex; gap: 12px; justify-content: center;">
-                  <button class="card-arrow-button" onclick="window.app.previousCard()" ${opponents.length === 0 ? 'disabled' : ''} style="display: inline-block !important;">◀</button>
-                  <button class="card-arrow-button" onclick="window.app.nextCard()" ${opponents.length === 0 ? 'disabled' : ''} style="display: inline-block !important;">▶</button>
-                </div>
-              </div>
+            <div class="card-select-grid">
+              ${filteredCards.map((card, idx) => {
+                const isSelected = idx === (state.selectedCardIndex % filteredCards.length);
+                return `
+                  <div class="card-select-item ${isSelected ? 'selected' : ''}" onclick="window.app.selectCard(${idx})" title="${card}">
+                    <img src="${CARD_IMAGES[card]}" alt="${card}">
+                  </div>
+                `;
+              }).join('')}
             </div>
+            <p style="text-align:center;font-size:13px;color:var(--gold-light);margin:-4px 0 10px;">Selected: <strong>${filteredCards[state.selectedCardIndex % filteredCards.length]}</strong></p>
           ` : `
             <p style="color: #f85149; padding: 20px; text-align: center; background: rgba(74, 28, 28, 0.3); border-radius: 8px; border: 1px solid rgba(248, 81, 73, 0.3);">No cards from "${selectedSet.name}" in your hand</p>
           `}
@@ -583,44 +567,38 @@ function renderSpectatorActions() {
 }
 
 function renderLastAsk() {
-  // Show only card ask results (success/fail)
-  const askLogs = state.game.log?.filter(log => 
+  const askLogs = state.game.log?.filter(log =>
     log.includes('asked') && (log.includes('SUCCESS') || log.includes('FAILED'))
   ).slice(0, 3) || [];
-  
+
   return `
-    <div style="background: rgba(26, 71, 42, 0.3); border: 1px solid rgba(212, 175, 55, 0.2); border-radius: 12px; padding: 16px; margin-bottom: 16px;">
-      <h3 style="font-size: 11px; font-weight: 700; color: var(--gold); text-transform: uppercase; letter-spacing: 0.2em; margin-bottom: 12px;">📋 Last Ask</h3>
-      <div style="max-height: 120px; overflow-y: auto;">
-        ${askLogs.length > 0 ? askLogs.map(log => {
-          const isSuccess = log.includes('SUCCESS');
-          return `
-            <div style="font-size: 12px; margin-bottom: 6px; padding: 8px; background: ${isSuccess ? 'rgba(74, 222, 128, 0.1)' : 'rgba(248, 81, 73, 0.1)'}; border-left: 2px solid ${isSuccess ? '#4ade80' : '#f85149'}; border-radius: 4px; color: #e6edf3;">
-              ${log}
-            </div>
-          `;
-        }).join('') : '<div style="font-size: 12px; color: #8b949e; text-align: center;">No asks yet</div>'}
-      </div>
+    <div style="background: rgba(26, 71, 42, 0.3); border: 1px solid rgba(212, 175, 55, 0.2); border-radius: 10px; padding: 12px;">
+      <h3 style="font-size: 10px; font-weight: 700; color: var(--gold); text-transform: uppercase; letter-spacing: 0.2em; margin-bottom: 8px;">📋 Last Ask</h3>
+      ${askLogs.length > 0 ? askLogs.map(log => {
+        const isSuccess = log.includes('SUCCESS');
+        return `
+          <div style="font-size: 11px; margin-bottom: 4px; padding: 6px 8px; background: ${isSuccess ? 'rgba(74,222,128,0.08)' : 'rgba(248,81,73,0.08)'}; border-left: 2px solid ${isSuccess ? '#4ade80' : '#f85149'}; border-radius: 4px; color: #e6edf3; line-height: 1.4;">
+            ${log}
+          </div>
+        `;
+      }).join('') : '<div style="font-size: 11px; color: #8b949e;">No asks yet</div>'}
     </div>
   `;
 }
 
 function renderRecentActivity() {
-  // Show everything EXCEPT card asks (sets, timer, game events)
-  const activityLogs = state.game.log?.filter(log => 
+  const activityLogs = state.game.log?.filter(log =>
     !log.includes('asked') || (!log.includes('SUCCESS') && !log.includes('FAILED'))
-  ).slice(0, 5) || [];
-  
+  ).slice(0, 4) || [];
+
   return `
-    <div style="background: rgba(13, 27, 26, 0.3); border: 1px solid rgba(212, 175, 55, 0.2); border-radius: 12px; padding: 16px;">
-      <h3 style="font-size: 11px; font-weight: 700; color: var(--gold); text-transform: uppercase; letter-spacing: 0.2em; margin-bottom: 12px;">📰 Recent Activity</h3>
-      <div style="max-height: 150px; overflow-y: auto;">
-        ${activityLogs.length > 0 ? activityLogs.map(log => `
-          <div style="font-size: 12px; color: rgba(230, 237, 243, 0.7); margin-bottom: 6px; padding: 8px; background: rgba(0, 0, 0, 0.3); border-radius: 4px; border-left: 2px solid rgba(212, 175, 55, 0.3);">
-            ${log}
-          </div>
-        `).join('') : '<div style="font-size: 12px; color: #8b949e; text-align: center;">No activity yet</div>'}
-      </div>
+    <div style="background: rgba(13, 27, 26, 0.3); border: 1px solid rgba(212, 175, 55, 0.2); border-radius: 10px; padding: 12px;">
+      <h3 style="font-size: 10px; font-weight: 700; color: var(--gold); text-transform: uppercase; letter-spacing: 0.2em; margin-bottom: 8px;">📰 Recent Activity</h3>
+      ${activityLogs.length > 0 ? activityLogs.map(log => `
+        <div style="font-size: 11px; color: rgba(230,237,243,0.7); margin-bottom: 4px; padding: 6px 8px; background: rgba(0,0,0,0.25); border-radius: 4px; border-left: 2px solid rgba(212,175,55,0.25); line-height: 1.4;">
+          ${log}
+        </div>
+      `).join('') : '<div style="font-size: 11px; color: #8b949e;">No activity yet</div>'}
     </div>
   `;
 }
@@ -632,33 +610,33 @@ function renderActivityLog() {
 
 function renderSetsStatus() {
   return `
-    <div style="background: rgba(18, 18, 18, 0.8); border: 2px solid rgba(212, 175, 55, 0.3); border-radius: 12px; padding: 20px; margin-bottom: 16px;">
-      <h3 style="font-size: 12px; font-weight: 700; color: var(--gold); text-transform: uppercase; letter-spacing: 0.2em; margin-bottom: 16px;">🎯 Sets Status & Calling</h3>
-      <div style="display: grid; gap: 8px;">
+    <div style="background: rgba(18, 18, 18, 0.8); border: 2px solid rgba(212, 175, 55, 0.3); border-radius: 12px; padding: 16px;">
+      <h3 style="font-size: 12px; font-weight: 700; color: var(--gold); text-transform: uppercase; letter-spacing: 0.2em; margin-bottom: 12px;">🎯 Sets Status & Calling</h3>
+      <div style="display: grid; gap: 6px; max-height: calc(100vh - 280px); overflow-y: auto; padding-right: 4px;">
         ${SETS.map((set, i) => {
           const isClaimed = state.game.claimedSets?.includes(set.name);
           return `
-            <button 
-              onclick="window.app.quickCallSet(${i})" 
+            <button
+              onclick="window.app.quickCallSet(${i})"
               ${isClaimed ? 'disabled' : ''}
               style="
                 text-align: left;
-                padding: 10px 12px;
-                background: ${isClaimed ? 'rgba(74, 28, 28, 0.3)' : 'rgba(26, 71, 42, 0.4)'};
-                border: 1px solid ${isClaimed ? 'rgba(139, 148, 158, 0.2)' : 'rgba(212, 175, 55, 0.4)'};
-                border-radius: 8px;
+                padding: 8px 10px;
+                background: ${isClaimed ? 'rgba(74, 28, 28, 0.2)' : 'rgba(26, 71, 42, 0.4)'};
+                border: 1px solid ${isClaimed ? 'rgba(139, 148, 158, 0.15)' : 'rgba(212, 175, 55, 0.35)'};
+                border-radius: 7px;
                 cursor: ${isClaimed ? 'not-allowed' : 'pointer'};
-                transition: all 0.2s;
-                ${!isClaimed ? 'hover:background: rgba(26, 71, 42, 0.6); hover:border-color: var(--gold);' : ''}
+                width: 100%;
+                margin: 0;
               "
             >
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                <strong style="color: ${isClaimed ? '#8b949e' : 'var(--gold-light)'}; font-size: 13px;">${set.name}</strong>
-                <span style="font-size: 11px; ${isClaimed ? 'color: #f85149;' : 'color: #4ade80;'} font-weight: 600;">
-                  ${isClaimed ? '✗ Claimed' : '✓ Available'}
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
+                <strong style="color: ${isClaimed ? '#8b949e' : 'var(--gold-light)'}; font-size: 12px;">${set.name}</strong>
+                <span style="font-size: 10px; ${isClaimed ? 'color: #f85149;' : 'color: #4ade80;'} font-weight: 600;">
+                  ${isClaimed ? '✗ Claimed' : '✓ Call'}
                 </span>
               </div>
-              <div style="font-size: 10px; color: #8b949e; font-family: monospace;">${set.cards.join(' ')}</div>
+              <div style="font-size: 9px; color: #8b949e; font-family: monospace;">${set.cards.join(' · ')}</div>
             </button>
           `;
         }).join('')}
@@ -687,46 +665,51 @@ function renderCallModal() {
     state.callSetIndex = SETS.indexOf(unclaimedSets[0]);
   }
   
+  const closeAction = state.showCounterSetModal ? 'closeCounterSetModal' : 'closeCallModal';
+  const submitAction = state.showCounterSetModal ? 'submitCounterSet' : 'submitCall';
   return `
-    <div class="modal" onclick="if(event.target === this) window.app.${state.showCounterSetModal ? 'closeCounterSetModal' : 'closeCallModal'}()">
-      <div class="modal-content" onclick="event.stopPropagation()">
-        <h2 style="margin-bottom: 20px;">${state.showCounterSetModal ? 'Counter Set (Risky!)' : 'Call a Set'}</h2>
-        ${state.showCounterSetModal ? '<p style="color: #f85149; margin-bottom: 15px; font-size: 14px;">⚠️ Counter set shows ONLY opposing team players. If you\'re wrong, they get this set for FREE!</p>' : ''}
-        
-        <div style="margin-bottom: 25px;">
-          <label style="display: block; margin-bottom: 10px; color: #8b949e; font-weight: 600;">Select Set:</label>
-          <select id="set-select" style="width: 100%;">
+    <div class="modal-overlay" onclick="if(event.target===this) window.app.${closeAction}()">
+      <div class="modal" onclick="event.stopPropagation()">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+          <h2 style="margin:0; font-size:20px; color:var(--gold);">${state.showCounterSetModal ? 'Counter Set (Risky!)' : 'Call a Set'}</h2>
+          <button onclick="window.app.${closeAction}()" style="background:none;border:none;color:var(--gold);font-size:28px;cursor:pointer;padding:0;line-height:1;width:36px;height:36px;display:flex;align-items:center;justify-content:center;">&times;</button>
+        </div>
+        ${state.showCounterSetModal ? '<p style="color:#f85149;margin-bottom:14px;font-size:13px;padding:10px;background:rgba(248,81,73,0.1);border-radius:6px;border-left:3px solid #f85149;">⚠️ Counter set uses OPPOSING team players. Wrong guess = they get the set FREE!</p>' : ''}
+
+        <div style="margin-bottom:18px;">
+          <label style="display:block;margin-bottom:8px;color:#8b949e;font-weight:600;font-size:13px;">Select Set:</label>
+          <select id="set-select" style="width:100%;">
             ${unclaimedSets.map((set) => {
               const actualIndex = SETS.indexOf(set);
               return `<option value="${actualIndex}" ${actualIndex === state.callSetIndex ? 'selected' : ''}>${set.name}</option>`;
             }).join('')}
           </select>
-          ${unclaimedSets.length === 0 ? '<p style="color: #f85149; margin-top: 10px;">All sets have been claimed!</p>' : ''}
+          ${unclaimedSets.length === 0 ? '<p style="color:#f85149;margin-top:8px;font-size:13px;">All sets have been claimed!</p>' : ''}
         </div>
-        
-        <div class="card-assignments-container" style="margin-bottom: 25px;">
-          <h3 style="margin-bottom: 15px; font-size: 16px; color: #c9d1d9;">Assign each card to ${state.showCounterSetModal ? 'an OPPOSING player' : 'a teammate'}:</h3>
+
+        <div class="card-assignments-container">
+          <h3 style="margin-bottom:12px;font-size:14px;color:#c9d1d9;">Assign each card to ${state.showCounterSetModal ? 'an OPPOSING player' : 'a teammate'}:</h3>
           ${SETS[state.callSetIndex].cards.map(card => {
             const iHaveIt = me?.hand?.includes(card);
             return `
               <div class="card-assignment-row">
-                <label style="display: block; margin-bottom: 8px; font-weight: 700; font-size: 15px; color: #ffd700;">${card}</label>
+                <label style="font-size:13px;color:#ffd700;">${card}${iHaveIt ? ' <span style="color:#4ade80;font-size:11px;">(you have it)</span>' : ''}</label>
                 <select class="card-assign-select" data-card="${card}">
-                  <option value="">-- Select who has ${card} --</option>
-                  ${playersToShow.map(p => 
-                    `<option value="${p.id}" ${state.callAssignments[card] === p.id ? 'selected' : ''}>${p.name}${p.id === myId ? ' (You)' : ''}${iHaveIt && p.id === myId ? ' ✓' : ''}</option>`
+                  <option value="">-- Who has ${card}? --</option>
+                  ${playersToShow.map(p =>
+                    `<option value="${p.id}" ${state.callAssignments[card] === p.id ? 'selected' : ''}>${p.name}${p.id === myId ? ' (You)' : ''}</option>`
                   ).join('')}
                 </select>
               </div>
             `;
           }).join('')}
         </div>
-        
-        <div style="display: flex; gap: 10px; margin-top: 30px;">
-          <button onclick="window.app.${state.showCounterSetModal ? 'submitCounterSet' : 'submitCall'}()" style="flex: 1; padding: 14px;">
+
+        <div style="display:flex;gap:10px;margin-top:24px;">
+          <button onclick="window.app.${submitAction}()" style="flex:1;padding:13px;">
             Submit ${state.showCounterSetModal ? 'Counter Set' : 'Call'}
           </button>
-          <button onclick="window.app.${state.showCounterSetModal ? 'closeCounterSetModal' : 'closeCallModal'}()" class="btn-secondary" style="flex: 1; padding: 14px;">
+          <button onclick="window.app.${closeAction}()" class="btn-secondary" style="flex:1;padding:13px;">
             Cancel
           </button>
         </div>
@@ -743,20 +726,20 @@ function renderPassTurnModal() {
   );
   
   return `
-    <div class="modal">
-      <div class="modal-content">
-        <h2 style="margin-bottom: 20px;">Pass Turn to Teammate</h2>
-        <p style="margin-bottom: 20px; color: #8b949e;">You have no cards left. Select a teammate with cards to pass the turn to:</p>
-        
-        <select id="pass-turn-select" style="margin-bottom: 20px;">
+    <div class="modal-overlay">
+      <div class="modal" onclick="event.stopPropagation()">
+        <h2 style="margin-bottom:16px;font-size:20px;color:var(--gold);">Pass Turn to Teammate</h2>
+        <p style="margin-bottom:16px;color:#8b949e;font-size:14px;">You have no cards left. Select a teammate with cards to pass the turn to:</p>
+
+        <select id="pass-turn-select" style="margin-bottom:20px;">
           <option value="">-- Select Teammate --</option>
-          ${teammates.map(p => 
+          ${teammates.map(p =>
             `<option value="${p.id}" ${state.selectedPassPlayer === p.id ? 'selected' : ''}>${p.name} (${p.hand.length} cards)</option>`
           ).join('')}
         </select>
-        
-        <button onclick="window.app.confirmPassTurn()" ${!state.selectedPassPlayer ? 'disabled' : ''}>
-          Confirm
+
+        <button onclick="window.app.confirmPassTurn()" ${!state.selectedPassPlayer ? 'disabled' : ''} style="padding:13px;">
+          Confirm Pass Turn
         </button>
       </div>
     </div>
@@ -1094,6 +1077,7 @@ window.app = {
   removeBot,
   startGame,
   askForCard,
+  selectCard,
   nextCard,
   previousCard,
   changeSetGroup,
