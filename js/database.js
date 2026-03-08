@@ -3,21 +3,12 @@
 async function save(game) {
   if (!state.code) return;
   try {
-    const { data: existingData } = await DB
-      .from('games')
-      .select('id')
-      .eq('room_code', state.code)
-      .maybeSingle();
-    
-    if (existingData) {
-      await DB.from('games')
-        .update({ game_data: game, updated_at: new Date().toISOString() })
-        .eq('room_code', state.code);
-    } else {
-      await DB.from('games')
-        .insert({ room_code: state.code, game_data: game, updated_at: new Date().toISOString() });
-    }
-    
+    await DB.from('games')
+      .upsert(
+        { room_code: state.code, game_data: game, updated_at: new Date().toISOString() },
+        { onConflict: 'room_code' }
+      );
+
     state.game = game;
     if (state.shouldRender) render();
   } catch (e) {

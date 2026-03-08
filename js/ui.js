@@ -401,6 +401,10 @@ function renderGameView(app) {
           ${renderRecentActivity()}
         </div>
 
+        <div style="display: flex; justify-content: center; margin: 12px 0 20px;">
+          <button onclick="window.app.toggleHistoryModal()" class="btn-history">📜 Card History</button>
+        </div>
+
         <div class="game-layout">
           <div class="left-panel">
             <div>
@@ -522,11 +526,6 @@ function renderTeamSidebar() {
         <h3 class="sidebar-team-label team1-label">Team 1</h3>
         ${state.game.players.filter(p => state.game.teams.team1.includes(p.id)).map(p => renderTeamPlayer(p, lastAsk)).join('')}
       </div>
-
-      <div style="display: flex; justify-content: center; padding: 10px 0;">
-        <button onclick="window.app.toggleHistoryModal()" class="btn-history">📜 Card History</button>
-      </div>
-
       <div>
         <h3 class="sidebar-team-label team2-label">Team 2</h3>
         ${state.game.players.filter(p => state.game.teams.team2.includes(p.id)).map(p => renderTeamPlayer(p, lastAsk)).join('')}

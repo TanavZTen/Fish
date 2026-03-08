@@ -306,8 +306,9 @@ async function startGame() {
 async function askForCard() {
   if (state.isAsking) return; // Prevent double-click during save
 
-  const me = state.game.players.find(p => p.id === myId);
-  const askableCards = getFilteredAskableCards(me?.hand || []);
+  const askableCards = getFilteredAskableCards(
+    state.game.players.find(p => p.id === myId)?.hand || []
+  );
 
   if (askableCards.length === 0) {
     return alert('You have no cards in this set to ask for. Try a different set.');
@@ -325,12 +326,16 @@ async function askForCard() {
   // Show loading state on button immediately
   const askBtn = document.querySelector('button[data-ask-btn]');
   if (askBtn) { askBtn.disabled = true; askBtn.textContent = 'Asking…'; }
-  
-  const game = state.game;
+
+  // Deep copy so state.game isn't mutated until save() completes.
+  // IMPORTANT: get me/opponent from the deep copy, not from state.game,
+  // otherwise mutations bleed into state.game before the DB write finishes.
+  const game = JSON.parse(JSON.stringify(state.game));
+  const me = game.players.find(p => p.id === myId);
   const opponent = game.players.find(p => p.id === state.selectedOpponent);
-  
+
   const hasCard = opponent.hand.includes(selectedCard);
-  
+
   if (hasCard) {
     opponent.hand = opponent.hand.filter(c => c !== selectedCard);
     me.hand.push(selectedCard);
