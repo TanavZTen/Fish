@@ -58,16 +58,37 @@ async function load() {
       const oldPhase = state.game?.phase;
       const oldTurn = state.game?.currentTurn;
       const oldHand = state.game?.players.find(p => p.id === myId)?.hand || [];
-      const oldSelectedCardIndex = state.selectedCardIndex; // Preserve card selection
-      
-      // Store current selections before updating
+      const oldSelectedCardIndex = state.selectedCardIndex;
       const oldSelectedCard = state.selectedCard;
       const oldSelectedOpponent = state.selectedOpponent;
-      
+
       state.game = gameData.game_data;
-      
+
       // Restore card selection index to prevent flash/jump
       state.selectedCardIndex = oldSelectedCardIndex;
+
+      // ── Reconnect: clear own disconnected flag once per session ────────────
+      if (!state.hasMarkedConnected) {
+        const me = state.game.players.find(p => p.id === myId);
+        if (me?.disconnected) {
+          state.hasMarkedConnected = true;
+          me.disconnected = false;
+          me.lastSeen = Date.now();
+          // Save asynchronously without awaiting to avoid blocking render
+          DB.from('games')
+            .update({ game_data: state.game, updated_at: new Date().toISOString() })
+            .eq('room_code', state.code)
+            .then(() => {})
+            .catch(e => console.error('Reconnect save failed:', e));
+        } else if (me) {
+          state.hasMarkedConnected = true; // Already connected, no need to save
+        }
+      }
+
+      // ── Turn stall detection (local, no DB writes) ──────────────────────────
+      if (state.game.currentTurn !== state.turnPlayerSince?.playerId) {
+        state.turnPlayerSince = { playerId: state.game.currentTurn, since: Date.now() };
+      }
       
       // Detect card changes (someone asked you for a card)
       const newHand = state.game.players.find(p => p.id === myId)?.hand || [];
@@ -160,13 +181,70 @@ async function load() {
 
 function startPolling() {
   if (pollInterval) clearInterval(pollInterval);
-  
+  state.hasMarkedConnected = false; // Reset so we re-announce on each session start
+
   // Poll every 2 seconds for fast updates
   pollInterval = setInterval(load, 2000);
-  
+
   // Immediately load once
   load();
 }
+
+// ── Disconnect / Reconnect handling ──────────────────────────────────────────
+
+// Use a keepalive fetch so the request survives page-close
+function beaconDisconnect() {
+  if (!state.code || !state.game) return;
+  const game = JSON.parse(JSON.stringify(state.game));
+  const me = game.players.find(p => p.id === myId);
+  if (!me) return;
+  me.disconnected = true;
+  me.lastSeen = Date.now();
+  fetch(`${SUPABASE_URL}/rest/v1/games?room_code=eq.${encodeURIComponent(state.code)}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      'apikey': SUPABASE_KEY,
+      'Authorization': `Bearer ${SUPABASE_KEY}`,
+      'Prefer': 'return=minimal'
+    },
+    body: JSON.stringify({ game_data: game }),
+    keepalive: true
+  });
+}
+
+// Mark ourselves reconnected on the first successful poll after returning
+async function markReconnected() {
+  if (!state.code || !state.game) return;
+  try {
+    const { data } = await DB.from('games').select('game_data').eq('room_code', state.code).maybeSingle();
+    if (!data?.game_data) return;
+    const game = data.game_data;
+    const me = game.players.find(p => p.id === myId);
+    if (me && me.disconnected) {
+      me.disconnected = false;
+      me.lastSeen = Date.now();
+      await DB.from('games').update({ game_data: game, updated_at: new Date().toISOString() }).eq('room_code', state.code);
+      state.game = game;
+    }
+  } catch (e) {
+    console.error('Reconnect mark failed:', e);
+  }
+}
+
+// Page is being closed / refreshed — fire-and-forget disconnect
+window.addEventListener('pagehide', beaconDisconnect);
+
+// Tab switched away → mark disconnected; tab back → mark connected
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    beaconDisconnect();
+  } else if (state.code && state.game) {
+    // Immediately try to clear own disconnected flag
+    state.hasMarkedConnected = false;
+    markReconnected();
+  }
+});
 
 function startTimer() {
   if (timerInterval) clearInterval(timerInterval);

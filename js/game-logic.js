@@ -664,6 +664,11 @@ function toggleHistoryModal() {
   render();
 }
 
+function dismissBanner(playerId) {
+  state.bannerDismissedFor = playerId;
+  render();
+}
+
 function quickCallSet(setIndex) {
   try {
     // Quick call a set by clicking it in the Sets Status panel
@@ -802,6 +807,77 @@ function changeSetGroup(direction) {
   } else {
     state.selectedSetIndex = (state.selectedSetIndex - 1 + SET_GROUPS.length) % SET_GROUPS.length;
   }
-  state.selectedCardIndex = 0; // Reset card index when changing sets
+  state.selectedCardIndex = 0;
   render();
+}
+
+// ── Disconnect helpers ───────────────────────────────────────────────────────
+
+// Pick a sensible next player when passing from a disconnected/stuck player
+function pickNextPlayer(game, skipPlayerId) {
+  const skipTeam = game.teams.team1.includes(skipPlayerId) ? 'team1' : 'team2';
+  const oppTeam = skipTeam === 'team1' ? 'team2' : 'team1';
+
+  // Prefer opponents with cards (fair game flow: turn goes to other team after a miss)
+  const opponents = game.players.filter(p =>
+    game.teams[oppTeam].includes(p.id) && p.hand.length > 0 && !p.disconnected
+  );
+  if (opponents.length > 0) return opponents[0];
+
+  // Fall back to teammates with cards
+  const teammates = game.players.filter(p =>
+    game.teams[skipTeam].includes(p.id) && p.hand.length > 0 && !p.disconnected && p.id !== skipPlayerId
+  );
+  return teammates[0] || null;
+}
+
+async function skipStuckTurn() {
+  const game = state.game;
+  const stuck = game.players.find(p => p.id === game.currentTurn);
+  if (!stuck) return;
+
+  const next = pickNextPlayer(game, stuck.id);
+  if (!next) {
+    return alert('No other players available to receive the turn.');
+  }
+
+  game.currentTurn = next.id;
+  game.log.unshift(`${stuck.name} was skipped (disconnected / AFK). Turn passed to ${next.name}.`);
+  state.turnPlayerSince = { playerId: next.id, since: Date.now() };
+  await save(game);
+}
+
+async function kickPlayer(playerId) {
+  if (state.game.hostId !== myId) return;
+
+  const game = state.game;
+  const player = game.players.find(p => p.id === playerId);
+  if (!player) return;
+  if (!confirm(`Remove ${player.name} from the game? Their cards will be given to teammates.`)) return;
+
+  const team = game.teams.team1.includes(playerId) ? 'team1' : 'team2';
+  const teammates = game.players.filter(p =>
+    game.teams[team].includes(p.id) && p.id !== playerId && p.hand.length > 0
+  );
+
+  // Distribute cards round-robin to active teammates
+  if (player.hand.length > 0 && teammates.length > 0) {
+    player.hand.forEach((card, i) => {
+      teammates[i % teammates.length].hand.push(card);
+    });
+  }
+  player.hand = [];
+  player.disconnected = true;
+
+  // If it was their turn, pass it on
+  if (game.currentTurn === playerId) {
+    const next = pickNextPlayer(game, playerId);
+    if (next) {
+      game.currentTurn = next.id;
+      state.turnPlayerSince = { playerId: next.id, since: Date.now() };
+    }
+  }
+
+  game.log.unshift(`${player.name} was removed by the host. Their cards were redistributed.`);
+  await save(game);
 }

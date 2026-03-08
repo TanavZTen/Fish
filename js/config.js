@@ -1,9 +1,7 @@
 // Supabase configuration
-// VERSION: 2.0 - Fixed duplicate SET_GROUPS declaration
-const DB = window.supabase.createClient(
-  'https://vngdiukjrfmzwlbefmjf.supabase.co',
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZuZ2RpdWtqcmZtendsYmVmbWpmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc0Njk5MDUsImV4cCI6MjA4MzA0NTkwNX0.XBr7aEzSPj-Iw0HYf27T8yXo1nbZ01MhBVa-VIdNZG4'
-);
+const SUPABASE_URL = 'https://vngdiukjrfmzwlbefmjf.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZuZ2RpdWtqcmZtendsYmVmbWpmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc0Njk5MDUsImV4cCI6MjA4MzA0NTkwNX0.XBr7aEzSPj-Iw0HYf27T8yXo1nbZ01MhBVa-VIdNZG4';
+const DB = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // Card sets definition - 54 cards total
 // Each suit: 2-A (13 cards) × 4 suits = 52 cards + 2 Jokers = 54 cards
@@ -56,7 +54,10 @@ let state = {
   notifications: [],  // Active notifications
   selectedCardIndex: 0,  // For arrow navigation
   selectedSetIndex: 0,  // For set dropdown navigation (which set group to show)
-  replayVotes: {}  // Track who wants to replay: {playerId: boolean}
+  replayVotes: {},  // Track who wants to replay: {playerId: boolean}
+  turnPlayerSince: null,  // { playerId, since } — local stall detection
+  hasMarkedConnected: false,  // Ensure we only auto-clear disconnected once per session
+  bannerDismissedFor: null    // Player ID whose AFK/DC banner was manually closed
 };
 
 // Define the 9 set groups for dropdown

@@ -390,18 +390,10 @@ function renderGameView(app) {
   app.innerHTML = `
     <div class="container">
       <div class="card">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-          <h2>Room ${state.code}</h2>
-          <button onclick="window.app.toggleHistoryModal()" class="btn-small" style="background: #21262d; color: #c9d1d9; border: 1px solid #30363d;">
-            📜 Card History
-          </button>
-        </div>
-        <p style="margin: 10px 0;">Scores - Team 1: ${state.game.scores.team1} | Team 2: ${state.game.scores.team2}</p>
-        <p style="margin: 10px 0; font-weight: 700; color: ${isMyTurn ? '#4ade80' : '#888'};">
-          ${isMyTurn ? '🟢 YOUR TURN' : `⏳ ${currentPlayer?.name}'s Turn`}
-          ${state.game.settings?.timeLimit > 0 ? `<span style="margin-left: 10px; color: ${state.timeRemaining <= 10 ? '#f85149' : '#8b949e'};">⏱️ ${formatTime(Math.max(0, state.timeRemaining))}</span>` : ''}
-        </p>
-        
+        ${renderScoreboard(isMyTurn, currentPlayer)}
+
+        ${renderDisconnectBanner()}
+
         ${renderTeamSidebar()}
 
         <div class="activity-strip">
@@ -446,32 +438,205 @@ function renderCard(card) {
   return `<img src="${imageSrc}" class="card-image" alt="${card}" title="${card}" onerror="this.style.display='none'; this.insertAdjacentHTML('afterend', '<div class=\\'game-card\\'>${card}</div>');">`;
 }
 
+// Parse the most recent ask log entry into structured data
+function parseLastAsk() {
+  const log = state.game.log || [];
+  for (const entry of log) {
+    const m = entry.match(/^(.+?) asked (.+?) for (.+?) - (SUCCESS|FAILED)!/);
+    if (m) return { asker: m[1], target: m[2], card: m[3], success: m[4] === 'SUCCESS' };
+  }
+  return null;
+}
+
+function renderScoreboard(isMyTurn, currentPlayer) {
+  const s1 = state.game.scores.team1;
+  const s2 = state.game.scores.team2;
+  const t1Leading = s1 > s2;
+  const t2Leading = s2 > s1;
+  const tied = s1 === s2;
+  const lastAsk = parseLastAsk();
+  const timer = state.game.settings?.timeLimit > 0
+    ? `<span class="turn-timer ${state.timeRemaining <= 10 ? 'critical' : ''}">⏱ ${formatTime(Math.max(0, state.timeRemaining))}</span>`
+    : '';
+
+  return `
+    <div class="scoreboard-wrap">
+
+      <!-- Room header row -->
+      <div class="scoreboard-topbar">
+        <span class="room-code-label">ROOM <strong>${state.code}</strong></span>
+      </div>
+
+      <!-- Scores -->
+      <div class="scoreboard-scores">
+        <div class="score-block ${t1Leading ? 'leading' : ''} team1-block">
+          <div class="score-team-name" style="color:#e05555;">TEAM 1</div>
+          <div class="score-digits ${t1Leading ? 'score-leading' : ''}">${s1}</div>
+          <div class="score-sub">${9 - s1} left</div>
+        </div>
+
+        <div class="score-vs-col">
+          <div class="score-vs-text">VS</div>
+          <div class="score-status ${tied ? 'tied' : t1Leading ? 'team1-up' : 'team2-up'}">
+            ${tied && s1 === 0 ? 'FIRST TO 5 WINS' : tied ? 'TIED' : t1Leading ? 'TEAM 1 LEADS' : 'TEAM 2 LEADS'}
+          </div>
+        </div>
+
+        <div class="score-block ${t2Leading ? 'leading' : ''} team2-block">
+          <div class="score-team-name" style="color:#5588e0;">TEAM 2</div>
+          <div class="score-digits ${t2Leading ? 'score-leading' : ''}">${s2}</div>
+          <div class="score-sub">${9 - s2} left</div>
+        </div>
+      </div>
+
+      <!-- Turn banner -->
+      <div class="turn-banner ${isMyTurn ? 'my-turn' : 'other-turn'}">
+        ${isMyTurn
+          ? `<span class="turn-dot my-turn-dot"></span><span class="turn-text">YOUR TURN</span>${timer}`
+          : `<span class="turn-dot other-turn-dot"></span><span class="turn-text">${currentPlayer?.name || '?'}'s Turn</span>${timer}`
+        }
+      </div>
+
+      <!-- Last action strip (who asked whom) -->
+      ${lastAsk ? `
+        <div class="last-action-strip ${lastAsk.success ? 'action-success' : 'action-fail'}">
+          <span class="action-asker">${lastAsk.asker}</span>
+          <span class="action-arrow">asked</span>
+          <span class="action-target">${lastAsk.target}</span>
+          <span class="action-card">for <strong>${lastAsk.card}</strong></span>
+          <span class="action-result ${lastAsk.success ? 'result-got' : 'result-miss'}">
+            ${lastAsk.success ? '✓ GOT IT' : '✗ MISS'}
+          </span>
+        </div>
+      ` : ''}
+
+    </div>
+  `;
+}
+
 function renderTeamSidebar() {
+  const lastAsk = parseLastAsk();
   return `
     <div class="game-sidebar">
       <div>
-        <h3 style="color: #da3633; margin-bottom: 10px;">Team 1</h3>
-        ${state.game.players.filter(p => state.game.teams.team1.includes(p.id)).map(p => renderTeamPlayer(p)).join('')}
+        <h3 class="sidebar-team-label team1-label">Team 1</h3>
+        ${state.game.players.filter(p => state.game.teams.team1.includes(p.id)).map(p => renderTeamPlayer(p, lastAsk)).join('')}
       </div>
-      
       <div>
-        <h3 style="color: #1f6feb; margin-bottom: 10px;">Team 2</h3>
-        ${state.game.players.filter(p => state.game.teams.team2.includes(p.id)).map(p => renderTeamPlayer(p)).join('')}
+        <h3 class="sidebar-team-label team2-label">Team 2</h3>
+        ${state.game.players.filter(p => state.game.teams.team2.includes(p.id)).map(p => renderTeamPlayer(p, lastAsk)).join('')}
+      </div>
+      <button onclick="window.app.toggleHistoryModal()" class="btn-history" style="width: 100%; margin-top: 10px;">📜 Card History</button>
+    </div>
+  `;
+}
+
+function renderTeamPlayer(p, lastAsk) {
+  const hasCards = p.hand && p.hand.length > 0;
+  const isHost = state.game.hostId === myId;
+  const isCurrentTurn = state.game.currentTurn === p.id;
+  const isAsker = lastAsk && lastAsk.asker === p.name;
+  const isTarget = lastAsk && lastAsk.target === p.name;
+  const isMe = p.id === myId;
+
+  // Pick the row's highlight class
+  let rowClass = 'player-row';
+  if (p.disconnected) rowClass += ' player-dc';
+  else if (isCurrentTurn) rowClass += ' player-active';
+  else if (!hasCards) rowClass += ' player-out';
+  if (isMe) rowClass += ' player-me';
+
+  // Status badge (only one at a time, priority order)
+  let badge = '';
+  if (p.disconnected) {
+    badge = '<span class="pbadge badge-dc">DC</span>';
+  } else if (isCurrentTurn) {
+    badge = `<span class="pbadge badge-turn">${isMe ? 'YOUR TURN' : 'ASKING'}</span>`;
+  } else if (isAsker && lastAsk) {
+    badge = `<span class="pbadge ${lastAsk.success ? 'badge-got' : 'badge-miss'}">${lastAsk.success ? 'GOT IT' : 'MISSED'}</span>`;
+  } else if (isTarget && lastAsk) {
+    badge = `<span class="pbadge ${lastAsk.success ? 'badge-gave' : 'badge-blocked'}">${lastAsk.success ? 'GAVE CARD' : 'BLOCKED'}</span>`;
+  } else if (!hasCards) {
+    badge = '<span class="pbadge badge-out">OUT</span>';
+  }
+
+  return `
+    <div class="${rowClass}">
+      <div class="player-name-row">
+        <span class="player-name">${p.name}${isMe ? ' <span class="you-label">(You)</span>' : ''}</span>
+        ${state.game.settings?.showCounts && hasCards ? `<span class="player-card-count">${p.hand.length}</span>` : ''}
+      </div>
+      <div class="player-badge-row">
+        ${badge}
+        ${isHost && p.disconnected && !isMe ? `<button onclick="window.app.kickPlayer('${p.id}')" class="kick-btn">Kick</button>` : ''}
       </div>
     </div>
   `;
 }
 
-function renderTeamPlayer(p) {
-  const hasCards = p.hand && p.hand.length > 0;
-  const isSpectator = !hasCards;
+function renderDisconnectBanner() {
+  const currentPlayer = state.game.players.find(p => p.id === state.game.currentTurn);
+  if (!currentPlayer) return '';
+
+  const turnSince = state.turnPlayerSince?.since || Date.now();
+  const stallSeconds = Math.floor((Date.now() - turnSince) / 1000);
+  const isStuck = stallSeconds >= 90;
+  const isDisconnected = currentPlayer.disconnected;
+
+  if (!isDisconnected && !isStuck) return '';
+
+  // Reset dismiss if the player changed
+  if (state.bannerDismissedFor !== currentPlayer.id) {
+    state.bannerDismissedFor = null;
+  }
+  if (state.bannerDismissedFor === currentPlayer.id) return '';
+
+  const isMe = currentPlayer.id === myId;
+  const reason = isDisconnected ? 'disconnected' : 'AFK (no action for ' + stallSeconds + 's)';
+
   return `
-    <div class="team-player ${p.id === myId ? 'you' : ''} ${p.disconnected ? 'disconnected' : ''} ${isSpectator ? 'spectator-mode' : ''}">
-      <span>
-        ${p.name} ${p.id === myId ? '(You)' : ''} ${p.disconnected ? '(DC)' : ''} ${isSpectator ? '(Spectator)' : ''}
-        ${state.game.settings?.showCounts ? ` (${p.hand.length})` : ''}
-      </span>
-      ${state.game.currentTurn === p.id ? '<span style="color: #4ade80;">👉</span>' : ''}
+    <div style="
+      background: rgba(248, 81, 73, 0.12);
+      border: 1px solid rgba(248, 81, 73, 0.5);
+      border-radius: 10px;
+      padding: 12px 16px;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    ">
+      <div style="font-size: 13px; color: #ff8080; flex: 1;">
+        ⚠️ <strong>${isMe ? 'You appear' : currentPlayer.name + ' appears'}</strong> ${reason}.
+        ${!isMe ? 'The game is waiting.' : 'Refresh the page if you see this by mistake.'}
+      </div>
+      <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
+        ${!isMe ? `
+          <button onclick="window.app.skipStuckTurn()" style="
+            padding: 6px 16px;
+            background: rgba(248, 81, 73, 0.25);
+            border: 1px solid #f85149;
+            color: #ff8080;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 700;
+            white-space: nowrap;
+            margin: 0;
+          ">Skip Turn</button>
+        ` : ''}
+        <button onclick="window.app.dismissBanner('${currentPlayer.id}')" style="
+          background: rgba(255,255,255,0.06);
+          border: 1px solid rgba(255,255,255,0.15);
+          color: rgba(255,255,255,0.5);
+          border-radius: 6px;
+          cursor: pointer;
+          font-size: 16px;
+          line-height: 1;
+          padding: 4px 8px;
+          margin: 0;
+        " title="Dismiss">&times;</button>
+      </div>
     </div>
   `;
 }
@@ -1097,8 +1262,11 @@ window.app = {
   submitCounterSet,
   confirmPassTurn,
   toggleHistoryModal,
+  dismissBanner,
   quickCallSet,
   voteReplay,
+  skipStuckTurn,
+  kickPlayer,
   manualRefresh: async () => {
     await load();
   }
