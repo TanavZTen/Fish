@@ -876,6 +876,28 @@ async function skipStuckTurn() {
   await save(game);
 }
 
+async function removeLobbyPlayer(playerId) {
+  if (state.game.hostId !== myId) return;
+  const game = state.game;
+  const player = game.players.find(p => p.id === playerId);
+  if (!player) return;
+  game.players = game.players.filter(p => p.id !== playerId);
+  game.teams.team1 = game.teams.team1.filter(id => id !== playerId);
+  game.teams.team2 = game.teams.team2.filter(id => id !== playerId);
+  await save(game);
+}
+
+async function switchTeam(playerId) {
+  if (state.game.hostId !== myId) return;
+  const game = JSON.parse(JSON.stringify(state.game));
+  const currentTeam = game.teams.team1.includes(playerId) ? 'team1' : 'team2';
+  const newTeam = currentTeam === 'team1' ? 'team2' : 'team1';
+  if (game.teams[newTeam].length >= 8) return alert('The other team is full!');
+  game.teams[currentTeam] = game.teams[currentTeam].filter(id => id !== playerId);
+  game.teams[newTeam].push(playerId);
+  await save(game);
+}
+
 async function kickPlayer(playerId) {
   if (state.game.hostId !== myId) return;
 

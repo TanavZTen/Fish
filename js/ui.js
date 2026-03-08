@@ -224,7 +224,10 @@ function renderLobby(app) {
             ${state.game.players.filter(p => state.game.teams.team1.includes(p.id)).map(p => `
               <div class="team-player ${p.id === myId ? 'you' : ''} ${p.disconnected ? 'disconnected' : ''}">
                 <span>${p.name} ${p.id === myId ? '(You)' : ''} ${p.disconnected ? '(DC)' : ''}</span>
-                ${isHost && p.isBot ? `<button class="btn-small" onclick="window.app.removeBot('${p.id}')">Remove</button>` : ''}
+                ${isHost && p.id !== myId ? `
+                  <button class="btn-small" onclick="window.app.switchTeam('${p.id}')" style="background:rgba(100,160,255,0.1);border-color:rgba(100,160,255,0.3);color:#7eb8f7;">→ Team 2</button>
+                  <button class="btn-small" onclick="window.app.${p.isBot ? 'removeBot' : 'removeLobbyPlayer'}('${p.id}')" style="background:rgba(248,81,73,0.15);border-color:rgba(248,81,73,0.4);color:#ff8080;">Remove</button>
+                ` : ''}
               </div>
             `).join('')}
             ${isHost ? `<button onclick="window.app.addBot('team1')" style="margin-top: 8px;" ${state.game.teams.team1.length >= 8 || state.game.players.length >= 16 ? 'disabled' : ''}>+ Add Bot${state.game.teams.team1.length >= 8 ? ' (Full)' : ''}</button>` : ''}
@@ -235,7 +238,10 @@ function renderLobby(app) {
             ${state.game.players.filter(p => state.game.teams.team2.includes(p.id)).map(p => `
               <div class="team-player ${p.id === myId ? 'you' : ''} ${p.disconnected ? 'disconnected' : ''}">
                 <span>${p.name} ${p.id === myId ? '(You)' : ''} ${p.disconnected ? '(DC)' : ''}</span>
-                ${isHost && p.isBot ? `<button class="btn-small" onclick="window.app.removeBot('${p.id}')">Remove</button>` : ''}
+                ${isHost && p.id !== myId ? `
+                  <button class="btn-small" onclick="window.app.switchTeam('${p.id}')" style="background:rgba(100,160,255,0.1);border-color:rgba(100,160,255,0.3);color:#7eb8f7;">→ Team 1</button>
+                  <button class="btn-small" onclick="window.app.${p.isBot ? 'removeBot' : 'removeLobbyPlayer'}('${p.id}')" style="background:rgba(248,81,73,0.15);border-color:rgba(248,81,73,0.4);color:#ff8080;">Remove</button>
+                ` : ''}
               </div>
             `).join('')}
             ${isHost ? `<button onclick="window.app.addBot('team2')" style="margin-top: 8px;" ${state.game.teams.team2.length >= 8 || state.game.players.length >= 16 ? 'disabled' : ''}>+ Add Bot${state.game.teams.team2.length >= 8 ? ' (Full)' : ''}</button>` : ''}
@@ -1280,6 +1286,8 @@ window.app = {
   voteReplay,
   skipStuckTurn,
   kickPlayer,
+  switchTeam,
+  removeLobbyPlayer,
   manualRefresh: async () => {
     await load();
   }
