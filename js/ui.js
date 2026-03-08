@@ -482,7 +482,7 @@ function renderScoreboard(isMyTurn, currentPlayer) {
         <div class="score-vs-col">
           <div class="score-vs-text">VS</div>
           <div class="score-status ${tied ? 'tied' : t1Leading ? 'team1-up' : 'team2-up'}">
-            ${tied && s1 === 0 ? 'FIRST TO 5 WINS' : tied ? 'TIED' : t1Leading ? 'TEAM 1 LEADS' : 'TEAM 2 LEADS'}
+            ${tied && s1 === 0 ? 'FIRST TO 5 SETS' : tied ? 'TIED' : t1Leading ? 'TEAM 1 LEADS' : 'TEAM 2 LEADS'}
           </div>
         </div>
 
