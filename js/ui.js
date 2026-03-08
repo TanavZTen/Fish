@@ -430,7 +430,7 @@ function renderGameView(app) {
     ${state.showHistoryModal ? renderHistoryModal() : ''}
   `;
   
-  attachGameHandlers(opponents, askableCards);
+  attachGameHandlers(opponents);
 }
 
 function renderCard(card) {
@@ -689,7 +689,7 @@ function renderPlayerActions(isMyTurn, opponents, askableCards) {
                 `;
               }).join('')}
             </div>
-            <p style="text-align:center;font-size:13px;color:var(--gold-light);margin:-4px 0 10px;">Selected: <strong>${filteredCards[state.selectedCardIndex % filteredCards.length]}</strong></p>
+            <p style="text-align:center;font-size:13px;color:var(--gold-light);margin:-4px 0 10px;">Selected: <strong class="card-selected-label">${filteredCards[state.selectedCardIndex % filteredCards.length]}</strong></p>
           ` : `
             <p style="color: #f85149; padding: 20px; text-align: center; background: rgba(74, 28, 28, 0.3); border-radius: 8px; border: 1px solid rgba(248, 81, 73, 0.3);">No cards from "${selectedSet.name}" in your hand</p>
           `}
@@ -986,7 +986,18 @@ function renderHistoryModal() {
   `;
 }
 
-function attachGameHandlers(opponents, askableCards) {
+function refreshAskButton(opponents) {
+  const btn = document.querySelector('button[data-ask-btn]');
+  if (!btn) return;
+  const filteredCards = getFilteredAskableCards(
+    state.game?.players.find(p => p.id === myId)?.hand || []
+  );
+  const canAsk = filteredCards.length > 0 && !!state.selectedOpponent && opponents.length > 0 && !state.isAsking;
+  btn.disabled = !canAsk;
+  if (!state.isAsking) btn.textContent = 'Ask for Card';
+}
+
+function attachGameHandlers(opponents) {
   const oppSelect = document.getElementById('opponent-select');
   const cardDropdown = document.getElementById('card-select-dropdown');
   const setGroupSelect = document.getElementById('set-group-select');
@@ -1018,10 +1029,10 @@ function attachGameHandlers(opponents, askableCards) {
     if (state.selectedOpponent) {
       oppSelect.value = state.selectedOpponent;
     }
-    
+
     oppSelect.onchange = (e) => {
       state.selectedOpponent = e.target.value;
-      // Don't render immediately
+      refreshAskButton(opponents);
     };
   }
   

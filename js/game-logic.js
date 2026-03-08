@@ -782,16 +782,26 @@ async function voteReplay(wantReplay) {
 
 function selectCard(idx) {
   state.selectedCardIndex = idx;
-  // Update just the visual selection without re-rendering the whole page
+  // Swap selected class without a full re-render
   document.querySelectorAll('.card-select-item').forEach((el, i) => {
     el.classList.toggle('selected', i === idx);
   });
-  // Update the label below the grid
+  // Update the "Selected: X" label instantly
   const label = document.querySelector('.card-selected-label');
   if (label) {
-    const me = state.game?.players.find(p => p.id === myId);
-    const filteredCards = getFilteredAskableCards(me?.hand || []);
-    if (filteredCards[idx]) label.textContent = filteredCards[idx];
+    const filteredCards = getFilteredAskableCards(
+      state.game?.players.find(p => p.id === myId)?.hand || []
+    );
+    label.textContent = filteredCards[idx] ?? '';
+  }
+  // Enable/disable Ask button immediately (refreshAskButton defined in ui.js)
+  if (typeof refreshAskButton === 'function') {
+    const opponents = state.game?.players.filter(p => {
+      const myTeam = state.game.teams.team1.includes(myId) ? 'team1' : 'team2';
+      const oppTeam = myTeam === 'team1' ? 'team2' : 'team1';
+      return state.game.teams[oppTeam].includes(p.id) && p.hand.length > 0;
+    }) || [];
+    refreshAskButton(opponents);
   }
 }
 
