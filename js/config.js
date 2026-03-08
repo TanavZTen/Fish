@@ -57,7 +57,8 @@ let state = {
   replayVotes: {},  // Track who wants to replay: {playerId: boolean}
   turnPlayerSince: null,  // { playerId, since } — local stall detection
   hasMarkedConnected: false,  // Ensure we only auto-clear disconnected once per session
-  bannerDismissedFor: null    // Player ID whose AFK/DC banner was manually closed
+  bannerDismissedFor: null,   // Player ID whose AFK/DC banner was manually closed
+  isAsking: false             // Prevent double-click during askForCard save
 };
 
 // Define the 9 set groups for dropdown

@@ -563,8 +563,8 @@ function renderTeamPlayer(p, lastAsk) {
   return `
     <div class="${rowClass}">
       <div class="player-name-row">
-        <span class="player-name">${p.name}${isMe ? ' <span class="you-label">(You)</span>' : ''}</span>
-        ${state.game.settings?.showCounts && hasCards ? `<span class="player-card-count">${p.hand.length}</span>` : ''}
+        <span class="pname">${p.name}${isMe ? ' <span class="you-label">(You)</span>' : ''}</span>
+        <span class="pcount">${hasCards ? p.hand.length + ' cards' : 'no cards'}</span>
       </div>
       <div class="player-badge-row">
         ${badge}
@@ -611,20 +611,6 @@ function renderDisconnectBanner() {
         ${!isMe ? 'The game is waiting.' : 'Refresh the page if you see this by mistake.'}
       </div>
       <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
-        ${!isMe ? `
-          <button onclick="window.app.skipStuckTurn()" style="
-            padding: 6px 16px;
-            background: rgba(248, 81, 73, 0.25);
-            border: 1px solid #f85149;
-            color: #ff8080;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 12px;
-            font-weight: 700;
-            white-space: nowrap;
-            margin: 0;
-          ">Skip Turn</button>
-        ` : ''}
         <button onclick="window.app.dismissBanner('${currentPlayer.id}')" style="
           background: rgba(255,255,255,0.06);
           border: 1px solid rgba(255,255,255,0.15);
@@ -708,8 +694,8 @@ function renderPlayerActions(isMyTurn, opponents, askableCards) {
           <p style="color: #8b949e; padding: 12px; text-align: center;">No cards to ask for</p>
         `}
         
-        <button onclick="window.app.askForCard()" ${filteredCards.length === 0 || !state.selectedOpponent || opponents.length === 0 ? 'disabled' : ''}>
-          Ask for Card
+        <button data-ask-btn onclick="window.app.askForCard()" ${filteredCards.length === 0 || !state.selectedOpponent || opponents.length === 0 || state.isAsking ? 'disabled' : ''}>
+          ${state.isAsking ? 'Asking…' : 'Ask for Card'}
         </button>
       ` : '<p style="color: #8b949e; margin-bottom: 10px;">Waiting for turn...</p>'}
       
@@ -913,14 +899,24 @@ function renderPassTurnModal() {
 
 function renderNotifications() {
   if (state.notifications.length === 0) return '';
-  
-  // ONLY show at top-right, NO center notification
+
   return `
-    <div style="position: fixed; top: 20px; right: 20px; z-index: 10000; display: flex; flex-direction: column; gap: 10px;">
-      ${state.notifications.map((notif, index) => `
-        <div class="notification ${notif.type === 'loss' ? 'notification-loss' : 'notification-gain'}" 
-             style="animation: slideIn 0.3s ease-out, slideOut 0.3s ease-in ${29.7}s;">
-          ${notif.message}
+    <div style="position: fixed; top: 24px; left: 50%; transform: translateX(-50%); z-index: 10000; display: flex; flex-direction: column; align-items: center; gap: 12px; pointer-events: none;">
+      ${state.notifications.map((notif) => `
+        <div class="notification ${notif.type === 'loss' ? 'notification-loss' : 'notification-gain'}"
+             style="pointer-events: all; display: flex; align-items: center; gap: 16px;">
+          <span style="flex:1;">${notif.message}</span>
+          <button onclick="window.app.dismissNotification(${notif.id})" style="
+            background: rgba(255,255,255,0.12);
+            border: 1px solid rgba(255,255,255,0.2);
+            color: inherit;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 18px;
+            line-height: 1;
+            padding: 2px 8px;
+            flex-shrink: 0;
+          ">&times;</button>
         </div>
       `).join('')}
     </div>
@@ -1263,6 +1259,7 @@ window.app = {
   confirmPassTurn,
   toggleHistoryModal,
   dismissBanner,
+  dismissNotification,
   quickCallSet,
   voteReplay,
   skipStuckTurn,

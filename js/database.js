@@ -93,9 +93,9 @@ async function load() {
       // Detect card changes (someone asked you for a card)
       const newHand = state.game.players.find(p => p.id === myId)?.hand || [];
       
-      // Only trigger notifications if game is in progress (not just started)
-      const gameInProgress = state.game.phase === 'game' && state.game.log && state.game.log.length > 3;
-      
+      // Only trigger notifications during an active game
+      const gameInProgress = state.game.phase === 'game';
+
       if (oldHand.length > 0 && newHand.length < oldHand.length && gameInProgress) {
         // Find which card(s) we lost
         const lostCards = oldHand.filter(card => !newHand.includes(card));

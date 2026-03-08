@@ -304,21 +304,27 @@ async function startGame() {
 }
 
 async function askForCard() {
-  // Get filtered askable cards (only from selected set)
+  if (state.isAsking) return; // Prevent double-click during save
+
   const me = state.game.players.find(p => p.id === myId);
   const askableCards = getFilteredAskableCards(me?.hand || []);
-  
+
   if (askableCards.length === 0) {
     return alert('You have no cards in this set to ask for. Try a different set.');
   }
-  
+
   const selectedCard = askableCards[state.selectedCardIndex % askableCards.length];
-  
+
   if (!selectedCard || !state.selectedOpponent) {
     return alert('Select an opponent to ask');
   }
-  
+
+  state.isAsking = true;
   state.shouldRender = false;
+
+  // Show loading state on button immediately
+  const askBtn = document.querySelector('button[data-ask-btn]');
+  if (askBtn) { askBtn.disabled = true; askBtn.textContent = 'Asking…'; }
   
   const game = state.game;
   const opponent = game.players.find(p => p.id === state.selectedOpponent);
@@ -379,12 +385,15 @@ async function askForCard() {
     }
   }
   
-  // Reset card selection index for next turn
+  // On fail: reset opponent (turn changes). On success: keep opponent so you can ask again.
+  if (!hasCard) {
+    state.selectedOpponent = '';
+  }
   state.selectedCardIndex = 0;
-  state.selectedOpponent = '';
-  
+
   await save(game);
-  
+
+  state.isAsking = false;
   state.shouldRender = true;
   
   // Restart timer if enabled
@@ -666,6 +675,11 @@ function toggleHistoryModal() {
 
 function dismissBanner(playerId) {
   state.bannerDismissedFor = playerId;
+  render();
+}
+
+function dismissNotification(id) {
+  state.notifications = state.notifications.filter(n => n.id !== id);
   render();
 }
 
