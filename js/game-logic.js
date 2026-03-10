@@ -678,6 +678,11 @@ function toggleHistoryModal() {
   render();
 }
 
+function dismissAskNotification(id) {
+  state.askNotifications = state.askNotifications.filter(n => n.id !== id);
+  render();
+}
+
 function dismissBanner(playerId) {
   state.bannerDismissedFor = playerId;
   render();

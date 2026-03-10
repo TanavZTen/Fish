@@ -88,35 +88,52 @@ async function load() {
       const gameInProgress = state.game.phase === 'game';
 
       if (oldHand.length > 0 && newHand.length < oldHand.length && gameInProgress) {
-        // Find which card(s) we lost
         const lostCards = oldHand.filter(card => !newHand.includes(card));
+
+        // Build a card→asker map from recent log entries so each card maps to the right person
+        const cardAskerMap = {};
+        for (const entry of state.game.log) {
+          const m = entry.match(/(.+?) asked .+ for (.+?) - SUCCESS/);
+          if (m) cardAskerMap[m[2].trim()] = m[1].trim();
+          if (Object.keys(cardAskerMap).length >= lostCards.length * 2) break;
+        }
+
+        // Push all notifications to state first, then render once
         lostCards.forEach(card => {
-          // Try to find who asked for it from the log
-          const lastLog = state.game.log[0] || '';
-          console.log('Last log entry:', lastLog);
-          
-          // Match patterns like "Shadow asked You for 5♠ - SUCCESS!"
-          const match = lastLog.match(/(.+?) asked .+ for (.+?) - SUCCESS/);
-          
-          let asker = 'someone';
-          if (match && match[1]) {
-            asker = match[1].trim();
-          }
-          
-          console.log('Card lost:', card, 'taken by:', asker);
-          
-          state.cardHistory.unshift({
-            type: 'loss',
-            card: card,
-            to: asker,
-            timestamp: Date.now()
-          });
-          
-          // SPECIFIC PERSON in notification
-          addNotification(`${asker} took ${card} from you!`, 'loss');
+          const asker = cardAskerMap[card] || 'someone';
+          state.cardHistory.unshift({ type: 'loss', card, to: asker, timestamp: Date.now() });
+          const id = Date.now() + Math.random();
+          state.notifications.push({ id, message: `${asker} took ${card} from you!`, type: 'loss', timestamp: Date.now() });
+          setTimeout(() => {
+            state.notifications = state.notifications.filter(n => n.id !== id);
+            if (state.view === 'game') render();
+          }, 30000);
         });
       }
-      
+
+      // Detect ALL new ask log entries since last poll for left-side notifications
+      if (state.game.settings?.showHistory && state.game.phase === 'game') {
+        // Collect every new entry prepended since we last polled
+        const newEntries = [];
+        for (const entry of state.game.log) {
+          if (entry === state.lastSeenLogEntry) break;
+          newEntries.push(entry);
+        }
+        state.lastSeenLogEntry = state.game.log[0] || null;
+
+        const max = state.game.settings?.historyCount || 3;
+        // Process oldest-first so newest ends up at top
+        for (const entry of newEntries.reverse()) {
+          const m = entry.match(/^(.+?) asked (.+?) for (.+?) - (SUCCESS!|FAILED)/);
+          if (m) {
+            const success = m[4] === 'SUCCESS!';
+            const id = Date.now() + Math.random();
+            state.askNotifications.unshift({ id, asker: m[1], target: m[2], card: m[3], success });
+          }
+        }
+        state.askNotifications = state.askNotifications.slice(0, max);
+      }
+
       // Restore selections after update
       state.selectedCard = oldSelectedCard;
       state.selectedOpponent = oldSelectedOpponent;

@@ -293,11 +293,6 @@ function renderSettings() {
       </div>
       
       <div class="setting-row">
-        <label>Show Card Counts</label>
-        <input type="checkbox" id="show-counts" ${state.game.settings?.showCounts ? 'checked' : ''}>
-      </div>
-      
-      <div class="setting-row">
         <label>Starting Player</label>
         <select id="start-player">
           <option value="random" ${state.startPlayer === 'random' ? 'selected' : ''}>Random Player</option>
@@ -312,13 +307,11 @@ function renderSettings() {
 
 function attachSettingsHandlers() {
   const histCheck = document.getElementById('show-history');
-  const countsCheck = document.getElementById('show-counts');
   const histCountSel = document.getElementById('history-count');
   const timeLimitSel = document.getElementById('time-limit');
   const startPlayerSel = document.getElementById('start-player');
   
   if (histCheck) histCheck.onchange = () => toggleSetting('showHistory');
-  if (countsCheck) countsCheck.onchange = () => toggleSetting('showCounts');
   if (histCountSel) histCountSel.onchange = (e) => changeSetting('historyCount', Number(e.target.value));
   if (timeLimitSel) timeLimitSel.onchange = (e) => changeSetting('timeLimit', Number(e.target.value));
   if (startPlayerSel) startPlayerSel.onchange = (e) => { state.startPlayer = e.target.value; };
@@ -430,6 +423,7 @@ function renderGameView(app) {
       </div>
     </div>
     
+    ${renderAskNotifications()}
     ${renderNotifications()}
     ${(state.showCallModal || state.showCounterSetModal) ? renderCallModal() : ''}
     ${state.showPassTurnModal ? renderPassTurnModal() : ''}
@@ -851,15 +845,22 @@ function renderCallModal() {
           <h3 style="margin-bottom:12px;font-size:14px;color:#c9d1d9;">Assign each card to ${state.showCounterSetModal ? 'an OPPOSING player' : 'a teammate'}:</h3>
           ${SETS[state.callSetIndex].cards.map(card => {
             const iHaveIt = me?.hand?.includes(card);
+            // Autofill owned cards
+            if (iHaveIt && !state.callAssignments[card]) state.callAssignments[card] = myId;
+            // Remove self from dropdown (you already know your own cards)
+            const teammates = playersToShow.filter(p => p.id !== myId);
             return `
               <div class="card-assignment-row">
-                <label style="font-size:13px;color:#ffd700;">${card}${iHaveIt ? ' <span style="color:#4ade80;font-size:11px;">(you have it)</span>' : ''}</label>
-                <select class="card-assign-select" data-card="${card}">
-                  <option value="">-- Who has ${card}? --</option>
-                  ${playersToShow.map(p =>
-                    `<option value="${p.id}" ${state.callAssignments[card] === p.id ? 'selected' : ''}>${p.name}${p.id === myId ? ' (You)' : ''}</option>`
-                  ).join('')}
-                </select>
+                <label style="font-size:13px;color:#ffd700;">${card}${iHaveIt ? ' <span style="color:#4ade80;font-size:11px;">✓ you have it</span>' : ''}</label>
+                ${iHaveIt
+                  ? `<span style="font-size:12px;color:#4ade80;padding:6px 10px;background:rgba(74,222,128,0.1);border-radius:6px;border:1px solid rgba(74,222,128,0.3);">Assigned to you</span>`
+                  : `<select class="card-assign-select" data-card="${card}">
+                      <option value="">-- Who has ${card}? --</option>
+                      ${teammates.map(p =>
+                        `<option value="${p.id}" ${state.callAssignments[card] === p.id ? 'selected' : ''}>${p.name}</option>`
+                      ).join('')}
+                    </select>`
+                }
               </div>
             `;
           }).join('')}
@@ -906,6 +907,35 @@ function renderPassTurnModal() {
   `;
 }
 
+function renderAskNotifications() {
+  if (!state.askNotifications.length) return '';
+  return `
+    <div style="position:fixed;top:20px;left:20px;z-index:10000;display:flex;flex-direction:column;gap:10px;">
+      ${state.askNotifications.map(n => `
+        <div style="
+          display:flex;align-items:center;gap:10px;
+          min-width:260px;max-width:360px;
+          padding:12px 14px;border-radius:12px;font-size:13px;font-weight:700;
+          box-shadow:0 8px 32px rgba(0,0,0,0.6);
+          ${n.success
+            ? 'background:linear-gradient(135deg,#2a2200,#3a3000);border:2px solid rgba(212,175,55,0.7);color:#ffd700;'
+            : 'background:linear-gradient(135deg,#0a1a2e,#0d2040);border:2px solid rgba(100,160,255,0.6);color:#7eb8f7;'
+          }">
+          <span style="flex:1;">
+            <span>${n.success ? '✓' : '✗'}</span>
+            <strong>${n.asker}</strong> asked <strong>${n.target}</strong> for <strong>${n.card}</strong>
+            — ${n.success ? 'GOT IT' : 'FAILED'}
+          </span>
+          <button onclick="window.app.dismissAskNotification(${n.id})" style="
+            background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);
+            color:inherit;border-radius:3px;cursor:pointer;font-size:9px;
+            line-height:1;padding:1px 4px;flex-shrink:0;margin:0;opacity:0.6;">&times;</button>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
 function renderNotifications() {
   if (state.notifications.length === 0) return '';
 
@@ -916,17 +946,9 @@ function renderNotifications() {
              style="display: flex; align-items: center; gap: 12px;">
           <span style="flex:1;">${notif.message}</span>
           <button onclick="window.app.dismissNotification(${notif.id})" style="
-            background: rgba(255,255,255,0.12);
-            border: 1px solid rgba(255,255,255,0.2);
-            color: inherit;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 16px;
-            line-height: 1;
-            padding: 2px 8px;
-            flex-shrink: 0;
-            margin: 0;
-          ">&times;</button>
+            background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);
+            color:inherit;border-radius:3px;cursor:pointer;font-size:9px;
+            line-height:1;padding:1px 4px;flex-shrink:0;margin:0;opacity:0.6;">&times;</button>
         </div>
       `).join('')}
     </div>
@@ -1196,55 +1218,55 @@ function attachGameHandlers(opponents) {
 }
 
 function updateCardAssignmentDropdowns() {
-  // Get current modal info
   const me = state.game.players.find(p => p.id === myId);
   const myTeam = state.game.teams.team1.includes(myId) ? 'team1' : 'team2';
   const oppTeam = myTeam === 'team1' ? 'team2' : 'team1';
-  const playersToShow = state.showCounterSetModal 
+  const playersToShow = state.showCounterSetModal
     ? state.game.players.filter(p => state.game.teams[oppTeam].includes(p.id))
     : state.game.players.filter(p => state.game.teams[myTeam].includes(p.id));
-  
-  // Get the container
+
   const container = document.querySelector('.card-assignments-container');
   if (!container) return;
-  
-  // Rebuild just the card assignment rows
+
   const set = SETS[state.callSetIndex];
+
+  // Autofill owned cards before building HTML (same logic as renderCallModal)
+  set.cards.forEach(card => {
+    if (me?.hand?.includes(card) && !state.callAssignments[card]) {
+      state.callAssignments[card] = myId;
+    }
+  });
+
   container.innerHTML = `
-    <h3 style="margin-bottom: 15px; font-size: 16px; color: #c9d1d9;">Assign each card to ${state.showCounterSetModal ? 'an OPPOSING player' : 'a teammate'}:</h3>
+    <h3 style="margin-bottom:12px;font-size:14px;color:#c9d1d9;">Assign each card to ${state.showCounterSetModal ? 'an OPPOSING player' : 'a teammate'}:</h3>
     ${set.cards.map(card => {
       const iHaveIt = me?.hand?.includes(card);
+      const teammates = playersToShow.filter(p => p.id !== myId);
       return `
         <div class="card-assignment-row">
-          <label style="display: block; margin-bottom: 8px; font-weight: 700; font-size: 15px; color: #ffd700;">${card}</label>
-          <select class="card-assign-select" data-card="${card}">
-            <option value="">-- Select who has ${card} --</option>
-            ${playersToShow.map(p => 
-              `<option value="${p.id}" ${state.callAssignments[card] === p.id ? 'selected' : ''}>${p.name}${p.id === myId ? ' (You)' : ''}${iHaveIt && p.id === myId ? ' ✓' : ''}</option>`
-            ).join('')}
-          </select>
+          <label style="font-size:13px;color:#ffd700;">${card}${iHaveIt ? ' <span style="color:#4ade80;font-size:11px;">✓ you have it</span>' : ''}</label>
+          ${iHaveIt
+            ? `<span style="font-size:12px;color:#4ade80;padding:6px 10px;background:rgba(74,222,128,0.1);border-radius:6px;border:1px solid rgba(74,222,128,0.3);">Assigned to you</span>`
+            : `<select class="card-assign-select" data-card="${card}">
+                <option value="">-- Who has ${card}? --</option>
+                ${teammates.map(p =>
+                  `<option value="${p.id}" ${state.callAssignments[card] === p.id ? 'selected' : ''}>${p.name}</option>`
+                ).join('')}
+              </select>`
+          }
         </div>
       `;
     }).join('')}
   `;
-  
-  // Re-attach event listeners to new dropdowns
-  const assignSelects = container.querySelectorAll('.card-assign-select');
-  assignSelects.forEach(sel => {
+
+  // Re-attach change handlers to the new dropdowns
+  container.querySelectorAll('.card-assign-select').forEach(sel => {
     const card = sel.getAttribute('data-card');
-    
-    if (state.callAssignments[card]) {
-      sel.value = state.callAssignments[card];
-    }
-    
     sel.onchange = (e) => {
       state.callAssignments[card] = e.target.value;
-      const currentSetName = SETS[state.callSetIndex].name;
-      if (!state.allSetAssignments[currentSetName]) {
-        state.allSetAssignments[currentSetName] = {};
-      }
-      state.allSetAssignments[currentSetName][card] = e.target.value;
-      // Don't re-render, just update state
+      const setName = SETS[state.callSetIndex].name;
+      if (!state.allSetAssignments[setName]) state.allSetAssignments[setName] = {};
+      state.allSetAssignments[setName][card] = e.target.value;
     };
   });
 }
@@ -1282,6 +1304,7 @@ window.app = {
   toggleHistoryModal,
   dismissBanner,
   dismissNotification,
+  dismissAskNotification,
   quickCallSet,
   voteReplay,
   skipStuckTurn,

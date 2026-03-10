@@ -58,7 +58,9 @@ let state = {
   turnPlayerSince: null,  // { playerId, since } — local stall detection
   hasMarkedConnected: false,  // Ensure we only auto-clear disconnected once per session
   bannerDismissedFor: null,   // Player ID whose AFK/DC banner was manually closed
-  isAsking: false             // Prevent double-click during askForCard save
+  isAsking: false,            // Prevent double-click during askForCard save
+  askNotifications: [],       // Left-side popup notifications for last asks
+  lastSeenLogEntry: null      // Track latest log entry to detect new asks
 };
 
 // Define the 9 set groups for dropdown
